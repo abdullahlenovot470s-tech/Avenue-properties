@@ -272,6 +272,7 @@ export const ManageCatalogPage: React.FC = () => {
     propertyListings,
     buyProperties,
     rentalListings,
+    backendReachable,
     addProject,
     removeProject,
     addBuyProperty,
@@ -670,6 +671,12 @@ export const ManageCatalogPage: React.FC = () => {
             )}
           </div>
         </div>
+
+        {!backendReachable && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 font-body">
+            Backend server is currently unreachable. Showing built-in listings; adding or removing items requires an active server connection.
+          </div>
+        )}
 
         {/* Integrated Filter Pills */}
         <div className="flex flex-wrap gap-2.5 pt-4 border-t border-slate-100">

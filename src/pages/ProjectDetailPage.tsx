@@ -7,6 +7,7 @@ import { PillButton } from '../components/common/PillButton';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { submitInquiry } from '../lib/inquiriesApi';
+import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../services/enquiryWebhook';
 import {
   Heart,
   MapPin,
@@ -41,6 +42,7 @@ export const ProjectDetailPage: React.FC = () => {
   const [tourNotes, setTourNotes] = useState('');
   const [tourBooked, setTourBooked] = useState(false);
   const [tourSubmitting, setTourSubmitting] = useState(false);
+  const [website, setWebsite] = useState('');
 
   // Home Financing / Installment Calculator state
   const [downPaymentPercent, setDownPaymentPercent] = useState(30);
@@ -145,6 +147,9 @@ export const ProjectDetailPage: React.FC = () => {
 
   const handleTourSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (website.trim()) {
+      return;
+    }
     if (!tourName.trim() || !tourEmail.trim() || !tourDate) {
       showToast('Please provide your name, email, and preferred date.', 'error');
       return;
@@ -161,10 +166,25 @@ export const ProjectDetailPage: React.FC = () => {
     });
     setTourSubmitting(false);
 
-    if (!res.success) {
+    if (!res.success && !(res.unreachable && isEnquiryWebhookConfigured())) {
       showToast(res.error || 'Could not submit viewing request. Please try again.', 'error');
       return;
     }
+
+    const siteVisitMessage = `Property: ${project.name} | Preferred Date: ${tourDate}${
+      tourNotes.trim() ? ` | Notes: ${tourNotes.trim()}` : ''
+    }`;
+    void sendEnquiryToWebhook({
+      name: tourName.trim(),
+      email: tourEmail.trim(),
+      phone: '',
+      city: project.location,
+      interest: 'Signature Project Site Visit',
+      budget: project.price,
+      message: siteVisitMessage,
+      source: 'Site Visit',
+      website,
+    });
 
     setTourBooked(true);
     showToast('Viewing scheduled. Our director will confirm within 2 hours.', 'success');
@@ -472,6 +492,16 @@ export const ProjectDetailPage: React.FC = () => {
               </div>
             ) : (
               <form onSubmit={handleTourSubmit} className="space-y-3.5">
+                <input
+                  type="text"
+                  name="website"
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  className="absolute -left-[9999px] w-px h-px overflow-hidden opacity-0 pointer-events-none"
+                />
                 <div>
                   <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1">
                     Preferred Date

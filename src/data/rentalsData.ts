@@ -1,4 +1,4 @@
-import { RentalListing } from '../types';
+import type { RentalListing } from '../types/index.ts';
 
 export function formatRent(amount: number): string {
   if (amount >= 100000) {

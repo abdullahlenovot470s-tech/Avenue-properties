@@ -4,6 +4,7 @@ import { PillButton } from '../components/common/PillButton';
 import { useToast } from '../context/ToastContext';
 import { SITE_CONFIG, handleDemoContactClick, getWhatsAppUrl } from '../config/siteConfig';
 import { submitInquiry } from '../lib/inquiriesApi';
+import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../services/enquiryWebhook';
 import { MapPin, Phone, Mail, Clock, ShieldCheck, Send, CheckCircle2, Building, Navigation } from 'lucide-react';
 
 export const ContactPage: React.FC = () => {
@@ -20,6 +21,7 @@ export const ContactPage: React.FC = () => {
 
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [website, setWebsite] = useState('');
 
   React.useEffect(() => {
     document.title = 'Offices & Contact | Avenue Luxury Properties';
@@ -27,6 +29,9 @@ export const ContactPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (website.trim()) {
+      return;
+    }
     if (!formData.name.trim() || !formData.email.trim() || !formData.phone.trim()) {
       showToast('Please complete all contact fields.', 'error');
       return;
@@ -49,7 +54,18 @@ export const ContactPage: React.FC = () => {
     });
     setLoading(false);
 
-    if (res.success) {
+    if (res.success || (res.unreachable && isEnquiryWebhookConfigured())) {
+      void sendEnquiryToWebhook({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        city: formData.office,
+        interest: formData.subject,
+        budget: '',
+        message: formData.message,
+        source: 'Contact',
+        website,
+      });
       setSubmitted(true);
       showToast('Your message has been received. Our partner will connect shortly.', 'success');
     } else {
@@ -244,6 +260,16 @@ export const ContactPage: React.FC = () => {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  <input
+                    type="text"
+                    name="website"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    tabIndex={-1}
+                    autoComplete="off"
+                    aria-hidden="true"
+                    className="absolute -left-[9999px] w-px h-px overflow-hidden opacity-0 pointer-events-none"
+                  />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[11px] font-display uppercase tracking-wider text-white/80 mb-1">

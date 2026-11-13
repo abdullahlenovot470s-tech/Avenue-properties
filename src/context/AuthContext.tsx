@@ -9,16 +9,17 @@ import {
   signInWithPopup,
   signInWithEmailAndPassword,
   sendEmailVerification,
-  sendPasswordResetEmail,
   signOut,
   onAuthStateChanged,
   User as FirebaseUser,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
+import { parseApiResponse, SERVER_UNREACHABLE_MESSAGE } from '../lib/http';
 
 interface AuthActionResult {
   success: boolean;
   error?: string;
+  message?: string;
   unverified?: boolean;
   previewUrl?: string;
   provider?: string;
@@ -66,17 +67,57 @@ const USER_PHONE_PREFIX = 'avenue_user_phone_';
 const USER_SAVED_PREFIX = 'avenue_user_saved_';
 const EMAIL_SESSION_KEY = 'avenue_email_session_v1';
 const MANAGEMENT_TOKEN_KEY = 'avenue_mgmt_token_v1';
-const MANAGEMENT_ACCOUNT_EMAIL = 'mangament@avenue-properties.come';
+const USER_TOKEN_KEY = 'avenue_user_token_v1';
+
+function isManagementTokenValid(token: string | null): boolean {
+  if (!token || !token.includes('.')) return false;
+  try {
+    const payloadB64 = token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = payloadB64 + '='.repeat((4 - (payloadB64.length % 4)) % 4);
+    const parsed = JSON.parse(atob(padded)) as { role?: string; exp?: number };
+    return (
+      parsed.role === 'management' &&
+      typeof parsed.exp === 'number' &&
+      parsed.exp > Date.now()
+    );
+  } catch {
+    return false;
+  }
+}
+
+function getStoredToken(key: string): string | null {
+  try {
+    return localStorage.getItem(key) || sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function storeSessionToken(key: string, token: string | undefined, persistInLocalStorage: boolean): void {
+  try {
+    if (!token) {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+      return;
+    }
+    if (persistInLocalStorage) {
+      localStorage.setItem(key, token);
+      sessionStorage.removeItem(key);
+    } else {
+      sessionStorage.setItem(key, token);
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // Ignore storage quota errors
+  }
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [managementToken, setManagementToken] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(MANAGEMENT_TOKEN_KEY) || sessionStorage.getItem(MANAGEMENT_TOKEN_KEY);
-    } catch {
-      return null;
-    }
+    const stored = getStoredToken(MANAGEMENT_TOKEN_KEY);
+    return isManagementTokenValid(stored) ? stored : null;
   });
   const [loading, setLoading] = useState(true);
   const [guestSavedIds, setGuestSavedIds] = useState<string[]>(() => {
@@ -104,7 +145,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt?: string;
     },
     persistInLocalStorage = true,
-    mgmtToken?: string
+    mgmtToken?: string,
+    userToken?: string
   ): UserProfile => {
     const storedPhone = localStorage.getItem(`${USER_PHONE_PREFIX}${baseUser.id}`) || '';
     const storedSavedRaw = localStorage.getItem(`${USER_SAVED_PREFIX}${baseUser.id}`);
@@ -117,10 +159,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setGuestSavedIds([]);
     }
 
-    const isMgmtAccount =
-      baseUser.role === 'management' &&
-      baseUser.email.trim().toLowerCase() === MANAGEMENT_ACCOUNT_EMAIL &&
-      Boolean(mgmtToken);
+    const validMgmtToken =
+      baseUser.role === 'management' && isManagementTokenValid(mgmtToken ?? null)
+        ? mgmtToken
+        : undefined;
+    const isMgmtAccount = Boolean(validMgmtToken);
 
     const profile: UserProfile = {
       id: baseUser.id,
@@ -137,28 +180,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (persistInLocalStorage) {
       localStorage.setItem(EMAIL_SESSION_KEY, JSON.stringify(profile));
       sessionStorage.removeItem(EMAIL_SESSION_KEY);
-      if (isMgmtAccount && mgmtToken) {
-        localStorage.setItem(MANAGEMENT_TOKEN_KEY, mgmtToken);
-        sessionStorage.removeItem(MANAGEMENT_TOKEN_KEY);
-      } else {
-        localStorage.removeItem(MANAGEMENT_TOKEN_KEY);
-        sessionStorage.removeItem(MANAGEMENT_TOKEN_KEY);
-      }
     } else {
       sessionStorage.setItem(EMAIL_SESSION_KEY, JSON.stringify(profile));
       localStorage.removeItem(EMAIL_SESSION_KEY);
-      if (isMgmtAccount && mgmtToken) {
-        sessionStorage.setItem(MANAGEMENT_TOKEN_KEY, mgmtToken);
-        localStorage.removeItem(MANAGEMENT_TOKEN_KEY);
-      } else {
-        localStorage.removeItem(MANAGEMENT_TOKEN_KEY);
-        sessionStorage.removeItem(MANAGEMENT_TOKEN_KEY);
-      }
     }
 
-    setManagementToken(isMgmtAccount && mgmtToken ? mgmtToken : null);
+    storeSessionToken(MANAGEMENT_TOKEN_KEY, validMgmtToken, persistInLocalStorage);
+    storeSessionToken(USER_TOKEN_KEY, userToken, persistInLocalStorage);
+
+    setManagementToken(validMgmtToken || null);
     setCurrentUser(profile);
     return profile;
+  };
+
+  const syncGoogleUserWithBackend = async (fbUser: FirebaseUser) => {
+    try {
+      const idToken = await fbUser.getIdToken();
+      const res = await fetch('/api/auth/google-sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ idToken }),
+      });
+      const parsed = await parseApiResponse<{ success?: boolean; userToken?: string }>(res);
+      if (parsed.ok && parsed.data?.userToken) {
+        storeSessionToken(USER_TOKEN_KEY, parsed.data.userToken, true);
+      }
+    } catch {
+      // Backend sync is best-effort so Google Sign-In still works if backend is unreachable
+    }
   };
 
   // Listen to Firebase auth state changes (Google Sign-In or verified Firebase accounts)
@@ -195,44 +247,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setManagementToken(null);
 
           if (fbUser.email) {
-            void fetch('/api/auth/google-sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                id: fbUser.uid,
-                name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Avenue Member',
-                email: fbUser.email,
-                photoURL: fbUser.photoURL || undefined,
-              }),
-            }).catch(() => {});
+            void syncGoogleUserWithBackend(fbUser);
           }
         }
       } else {
         // Restore verified email session if present
-        const savedEmailSession =
-          localStorage.getItem(EMAIL_SESSION_KEY) || sessionStorage.getItem(EMAIL_SESSION_KEY);
-        const savedMgmtToken =
-          localStorage.getItem(MANAGEMENT_TOKEN_KEY) || sessionStorage.getItem(MANAGEMENT_TOKEN_KEY);
+        const savedEmailSession = getStoredToken(EMAIL_SESSION_KEY);
+        const savedMgmtToken = getStoredToken(MANAGEMENT_TOKEN_KEY);
 
         if (savedEmailSession) {
           try {
             const parsed = JSON.parse(savedEmailSession) as UserProfile;
             if (parsed && parsed.emailVerified) {
-              const storedSavedRaw = localStorage.getItem(`${USER_SAVED_PREFIX}${parsed.id}`);
-              const storedPhone = localStorage.getItem(`${USER_PHONE_PREFIX}${parsed.id}`) || '';
-              const isMgmtSession =
-                parsed.role === 'management' &&
-                parsed.email?.toLowerCase() === MANAGEMENT_ACCOUNT_EMAIL &&
-                Boolean(savedMgmtToken);
-              setManagementToken(isMgmtSession && savedMgmtToken ? savedMgmtToken : null);
-              setCurrentUser({
-                ...parsed,
-                role: isMgmtSession ? 'management' : 'client',
-                phone: storedPhone || parsed.phone,
-                savedPropertyIds: storedSavedRaw
-                  ? JSON.parse(storedSavedRaw)
-                  : parsed.savedPropertyIds || [],
-              });
+              const hasValidMgmtToken =
+                parsed.role === 'management' && isManagementTokenValid(savedMgmtToken);
+
+              if (parsed.role === 'management' && !hasValidMgmtToken) {
+                // Expired 8-hour management token: force clean sign-out
+                localStorage.removeItem(EMAIL_SESSION_KEY);
+                sessionStorage.removeItem(EMAIL_SESSION_KEY);
+                localStorage.removeItem(MANAGEMENT_TOKEN_KEY);
+                sessionStorage.removeItem(MANAGEMENT_TOKEN_KEY);
+                setManagementToken(null);
+                setCurrentUser(null);
+              } else {
+                const storedSavedRaw = localStorage.getItem(`${USER_SAVED_PREFIX}${parsed.id}`);
+                const storedPhone = localStorage.getItem(`${USER_PHONE_PREFIX}${parsed.id}`) || '';
+                setManagementToken(hasValidMgmtToken && savedMgmtToken ? savedMgmtToken : null);
+                setCurrentUser({
+                  ...parsed,
+                  role: hasValidMgmtToken ? 'management' : 'client',
+                  phone: storedPhone || parsed.phone,
+                  savedPropertyIds: storedSavedRaw
+                    ? JSON.parse(storedSavedRaw)
+                    : parsed.savedPropertyIds || [],
+                });
+              }
             } else {
               setManagementToken(null);
               setCurrentUser(null);
@@ -263,12 +313,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const credential = await signInWithPopup(auth, googleProvider);
       const fbUser = credential.user;
 
-      // Immediately hydrate currentUser synchronously before navigation to /profile
-      // so Protected Route checks don't race against onAuthStateChanged.
       localStorage.removeItem(EMAIL_SESSION_KEY);
       sessionStorage.removeItem(EMAIL_SESSION_KEY);
       localStorage.removeItem(MANAGEMENT_TOKEN_KEY);
       sessionStorage.removeItem(MANAGEMENT_TOKEN_KEY);
+      localStorage.removeItem(USER_TOKEN_KEY);
+      sessionStorage.removeItem(USER_TOKEN_KEY);
       setManagementToken(null);
 
       const storedPhone = localStorage.getItem(`${USER_PHONE_PREFIX}${fbUser.uid}`) || '';
@@ -296,16 +346,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (fbUser.email) {
-        void fetch('/api/auth/google-sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: fbUser.uid,
-            name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Avenue Member',
-            email: fbUser.email,
-            photoURL: fbUser.photoURL || undefined,
-          }),
-        }).catch(() => {});
+        void syncGoogleUserWithBackend(fbUser);
       }
 
       return { success: true };
@@ -359,19 +400,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail, password }),
       });
-      const data = await response.json();
+      const parsed = await parseApiResponse<{
+        success?: boolean;
+        user?: any;
+        managementToken?: string;
+        userToken?: string;
+        unverified?: boolean;
+        error?: string;
+      }>(response);
 
-      if (response.ok && data.success && data.user) {
-        const profile = hydrateUserSession(data.user, rememberMe, data.managementToken);
+      if (parsed.unreachable || !parsed.data) {
+        return {
+          success: false,
+          error:
+            'Authentication server is temporarily unreachable. Please try again shortly or use Google Sign-In.',
+        };
+      }
+
+      const data = parsed.data;
+
+      if (parsed.ok && data.success && data.user) {
+        const profile = hydrateUserSession(
+          data.user,
+          rememberMe,
+          data.managementToken,
+          data.userToken
+        );
         return { success: true, isManagement: profile.role === 'management' };
       }
 
-      if (response.status === 403 && data.unverified) {
+      if (parsed.status === 403 && data.unverified) {
         return { success: false, unverified: true };
       }
 
       // If account isn't in backend store, optionally check Firebase Email/Password if enabled
-      if (response.status === 401) {
+      if (parsed.status === 401) {
         try {
           const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
           const fbUser = userCredential.user;
@@ -398,7 +461,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error: data.error || 'Sign in failed. Please try again.',
       };
     } catch {
-      return { success: false, error: 'Network error. Please check your connection and try again.' };
+      return {
+        success: false,
+        error:
+          'Unable to reach the authentication server. Please check your connection or use Google Sign-In.',
+      };
     }
   };
 
@@ -418,9 +485,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           password: data.password,
         }),
       });
-      const result = await response.json();
+      const parsed = await parseApiResponse<{
+        success?: boolean;
+        error?: string;
+        previewUrl?: string;
+        provider?: string;
+      }>(response);
 
-      if (!response.ok || !result.success) {
+      if (parsed.unreachable || !parsed.data) {
+        return {
+          success: false,
+          error:
+            'Authentication server is temporarily unreachable. Please try again shortly or use Google Sign-In.',
+        };
+      }
+
+      const result = parsed.data;
+      if (!parsed.ok || !result.success) {
         return {
           success: false,
           error: result.error || 'Registration failed. Please try again.',
@@ -435,7 +516,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       return {
         success: false,
-        error: 'Could not reach authentication server. Please try again.',
+        error: SERVER_UNREACHABLE_MESSAGE,
       };
     }
   };
@@ -451,19 +532,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           code: code.trim(),
         }),
       });
-      const data = await response.json();
+      const parsed = await parseApiResponse<{
+        success?: boolean;
+        user?: any;
+        userToken?: string;
+        error?: string;
+      }>(response);
 
-      if (!response.ok || !data.success || !data.user) {
+      if (parsed.unreachable || !parsed.data) {
+        return { success: false, error: SERVER_UNREACHABLE_MESSAGE };
+      }
+
+      const data = parsed.data;
+      if (!parsed.ok || !data.success || !data.user) {
         return {
           success: false,
           error: data.error || 'Invalid verification code.',
         };
       }
 
-      hydrateUserSession(data.user, true);
+      hydrateUserSession(data.user, true, undefined, data.userToken);
       return { success: true };
     } catch {
-      return { success: false, error: 'Could not verify code right now. Please try again.' };
+      return { success: false, error: SERVER_UNREACHABLE_MESSAGE };
     }
   };
 
@@ -477,8 +568,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: cleanEmail }),
         });
-        const data = await response.json();
-        if (response.ok && data.success) {
+        const parsed = await parseApiResponse<{
+          success?: boolean;
+          error?: string;
+          previewUrl?: string;
+          provider?: string;
+        }>(response);
+
+        if (parsed.unreachable || !parsed.data) {
+          return { success: false, error: SERVER_UNREACHABLE_MESSAGE };
+        }
+
+        const data = parsed.data;
+        if (parsed.ok && data.success) {
           return {
             success: true,
             previewUrl: data.previewUrl,
@@ -487,7 +589,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         return { success: false, error: data.error || 'Failed to resend verification email.' };
       } catch {
-        return { success: false, error: 'Network error while resending email.' };
+        return { success: false, error: SERVER_UNREACHABLE_MESSAGE };
       }
     }
 
@@ -512,9 +614,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: cleanEmail }),
         });
-        const data = await response.json();
-        if (data.verified && data.user) {
-          hydrateUserSession(data.user, true);
+        const parsed = await parseApiResponse<{
+          verified?: boolean;
+          user?: any;
+          userToken?: string;
+        }>(response);
+        if (parsed.ok && parsed.data?.verified && parsed.data.user) {
+          hydrateUserSession(parsed.data.user, true, undefined, parsed.data.userToken);
           return true;
         }
       } catch {
@@ -544,7 +650,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // 7. Send password reset email (OTP code via free email API, with Firebase fallback)
+  // 7. Send password reset email (uniform server response prevents email enumeration)
   const sendPasswordReset = async (email: string): Promise<AuthActionResult> => {
     const cleanEmail = email.trim().toLowerCase();
     try {
@@ -553,29 +659,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail }),
       });
-      const data = await response.json();
+      const parsed = await parseApiResponse<{
+        success?: boolean;
+        message?: string;
+        error?: string;
+        previewUrl?: string;
+        provider?: string;
+      }>(response);
 
-      if (response.ok && data.success) {
+      if (parsed.unreachable || !parsed.data) {
+        return { success: false, error: SERVER_UNREACHABLE_MESSAGE };
+      }
+
+      const data = parsed.data;
+      if (parsed.ok && data.success) {
         return {
           success: true,
+          message:
+            data.message ||
+            'If an account exists for that email address, a password reset code has been sent.',
           previewUrl: data.previewUrl,
           provider: data.provider,
         };
       }
 
-      if (response.status === 404) {
-        // Check if account exists in Firebase Console auth
-        try {
-          await sendPasswordResetEmail(auth, cleanEmail);
-          return { success: true };
-        } catch {
-          return { success: false, error: 'No account found with this email address.' };
-        }
-      }
-
       return { success: false, error: data.error || 'Could not send reset email.' };
     } catch {
-      return { success: false, error: 'Network error while sending password reset email.' };
+      return { success: false, error: SERVER_UNREACHABLE_MESSAGE };
     }
   };
 
@@ -595,35 +705,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           newPassword,
         }),
       });
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        return { success: false, error: data.error || 'Could not reset password.' };
+      const parsed = await parseApiResponse<{ success?: boolean; error?: string }>(response);
+      if (parsed.unreachable || !parsed.data) {
+        return { success: false, error: SERVER_UNREACHABLE_MESSAGE };
+      }
+      if (!parsed.ok || !parsed.data.success) {
+        return { success: false, error: parsed.data.error || 'Could not reset password.' };
       }
       return { success: true };
     } catch {
-      return { success: false, error: 'Network error while resetting password.' };
+      return { success: false, error: SERVER_UNREACHABLE_MESSAGE };
     }
   };
 
-  // 9. Update phone number (strictly optional on Profile)
+  // 9. Update phone number (strictly optional on Profile, authenticated with Bearer token)
   const updateUserPhone = (phone: string) => {
-    if (currentUser) {
-      const updated = { ...currentUser, phone };
-      setCurrentUser(updated);
-      localStorage.setItem(`${USER_PHONE_PREFIX}${currentUser.id}`, phone);
-      if (localStorage.getItem(EMAIL_SESSION_KEY)) {
-        localStorage.setItem(EMAIL_SESSION_KEY, JSON.stringify(updated));
-      } else if (sessionStorage.getItem(EMAIL_SESSION_KEY)) {
-        sessionStorage.setItem(EMAIL_SESSION_KEY, JSON.stringify(updated));
-      }
-      if (currentUser.email) {
-        void fetch('/api/auth/update-phone', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: currentUser.email, phone }),
-        }).catch(() => {});
-      }
+    if (!currentUser) return;
+    const updated = { ...currentUser, phone };
+    setCurrentUser(updated);
+    localStorage.setItem(`${USER_PHONE_PREFIX}${currentUser.id}`, phone);
+    if (localStorage.getItem(EMAIL_SESSION_KEY)) {
+      localStorage.setItem(EMAIL_SESSION_KEY, JSON.stringify(updated));
+    } else if (sessionStorage.getItem(EMAIL_SESSION_KEY)) {
+      sessionStorage.setItem(EMAIL_SESSION_KEY, JSON.stringify(updated));
     }
+
+    void (async () => {
+      try {
+        let token = getStoredToken(USER_TOKEN_KEY);
+        if (!token && auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
+        }
+        if (!token) return;
+
+        await fetch('/api/auth/update-phone', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ phone }),
+        });
+      } catch {
+        // Best-effort sync; local phone update already saved
+      }
+    })();
   };
 
   // 10. Logout
@@ -639,6 +765,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     sessionStorage.removeItem(EMAIL_SESSION_KEY);
     localStorage.removeItem(MANAGEMENT_TOKEN_KEY);
     sessionStorage.removeItem(MANAGEMENT_TOKEN_KEY);
+    localStorage.removeItem(USER_TOKEN_KEY);
+    sessionStorage.removeItem(USER_TOKEN_KEY);
     setManagementToken(null);
     setCurrentUser(null);
   };
@@ -686,8 +814,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isManagement = Boolean(
     currentUser &&
       currentUser.role === 'management' &&
-      currentUser.email.toLowerCase() === MANAGEMENT_ACCOUNT_EMAIL &&
-      managementToken
+      isManagementTokenValid(managementToken)
   );
 
   return (

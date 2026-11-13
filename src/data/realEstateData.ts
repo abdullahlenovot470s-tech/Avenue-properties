@@ -1,5 +1,5 @@
-import { PropertyListing, PortfolioProject, AvenueService, TeamMember, OfficeLocation } from '../types';
-import { SITE_CONFIG } from '../config/siteConfig';
+import type { PropertyListing, PortfolioProject, AvenueService, TeamMember, OfficeLocation } from '../types/index.ts';
+import { SITE_CONFIG } from '../config/siteConfig.ts';
 
 export const HERO_ASSETS = {
   // Direct images.unsplash.com URLs of modern luxury architecture

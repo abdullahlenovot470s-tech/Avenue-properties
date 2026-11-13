@@ -7,23 +7,29 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "User Firebase Auth UID"
+          "description": "User Firebase Auth UID",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
         "name": {
           "type": "string",
-          "description": "Full name"
+          "description": "Full name",
+          "maxLength": 120
         },
         "email": {
           "type": "string",
-          "description": "User registered email"
+          "description": "User registered email",
+          "maxLength": 254
         },
         "photoURL": {
           "type": "string",
-          "description": "Optional Google avatar URL"
+          "description": "Optional Google avatar URL",
+          "maxLength": 1000
         },
         "phone": {
           "type": "string",
-          "description": "Optional phone number"
+          "description": "Optional phone number",
+          "maxLength": 32
         },
         "emailVerified": {
           "type": "boolean",
@@ -31,7 +37,8 @@
         },
         "createdAt": {
           "type": "string",
-          "description": "ISO timestamp of account creation"
+          "description": "ISO timestamp of account creation",
+          "maxLength": 64
         },
         "savedPropertyIds": {
           "type": "array",
@@ -39,12 +46,82 @@
         }
       },
       "required": ["id", "email", "name"]
+    },
+    "BackendAuthUser": {
+      "title": "Server Auth User",
+      "description": "Server-managed account record stored via Admin SDK",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 254 },
+        "emailVerified": { "type": "boolean" },
+        "provider": { "type": "string", "enum": ["email", "google"] },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "name", "email", "emailVerified", "createdAt"]
+    },
+    "Inquiry": {
+      "title": "Client Inquiry",
+      "description": "Submitted property or consultation inquiry managed server-side",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 254 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "office": { "type": "string", "maxLength": 100 },
+        "subject": { "type": "string", "maxLength": 200 },
+        "message": { "type": "string", "maxLength": 5000 },
+        "source": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string", "enum": ["new", "contacted", "resolved"] },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "name", "status", "createdAt"]
+    },
+    "CatalogItem": {
+      "title": "Catalog Item",
+      "description": "Property, project, or rental listing managed server-side",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 }
+      },
+      "required": ["id"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "User",
       "description": "Stores user profiles and shortlists, secured to the owner"
+    },
+    "/auth_users/{emailHash}": {
+      "schema": "BackendAuthUser",
+      "description": "Server-only authentication user records accessed via Firebase Admin SDK"
+    },
+    "/inquiries/{inquiryId}": {
+      "schema": "Inquiry",
+      "description": "Server-only inbound enquiry records accessed via Firebase Admin SDK"
+    },
+    "/catalog_projects/{projectId}": {
+      "schema": "CatalogItem",
+      "description": "Server-only portfolio projects catalog accessed via Firebase Admin SDK"
+    },
+    "/catalog_listings/{listingId}": {
+      "schema": "CatalogItem",
+      "description": "Server-only signature property listings accessed via Firebase Admin SDK"
+    },
+    "/catalog_buy/{buyId}": {
+      "schema": "CatalogItem",
+      "description": "Server-only properties for sale accessed via Firebase Admin SDK"
+    },
+    "/catalog_rent/{rentId}": {
+      "schema": "CatalogItem",
+      "description": "Server-only rental listings accessed via Firebase Admin SDK"
+    },
+    "/catalog_meta/{metaId}": {
+      "schema": "CatalogItem",
+      "description": "Server-only catalog seeding state accessed via Firebase Admin SDK"
     }
   }
 }

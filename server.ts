@@ -1,25 +1,196 @@
 import 'dotenv/config';
 import express from 'express';
-import type { Request, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import nodemailer from 'nodemailer';
 import type { Transporter, TestAccount } from 'nodemailer';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { PORTFOLIO_PROJECTS, PROPERTY_LISTINGS } from './src/data/realEstateData';
-import { BUY_PROPERTIES, type BuyProperty } from './src/data/buyPropertiesData';
-import { RENTAL_LISTINGS } from './src/data/rentalsData';
-import type { PortfolioProject, PropertyListing, RentalListing } from './src/types/index';
+import { initializeApp as initializeAdminApp, getApps as getAdminApps, cert, applicationDefault, type ServiceAccount } from 'firebase-admin/app';
+import { getAuth as getAdminAuth, type Auth as AdminAuth } from 'firebase-admin/auth';
+import { getFirestore as getAdminFirestore, type Firestore } from 'firebase-admin/firestore';
+import { PORTFOLIO_PROJECTS, PROPERTY_LISTINGS } from './src/data/realEstateData.ts';
+import { BUY_PROPERTIES, type BuyProperty } from './src/data/buyPropertiesData.ts';
+import { RENTAL_LISTINGS } from './src/data/rentalsData.ts';
+import type { PortfolioProject, PropertyListing, RentalListing } from './src/types/index.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
-const STORE_PATH = '/tmp/avenue-auth-users.json';
-const CATALOG_PATH = '/tmp/avenue-catalog.json';
-const INQUIRIES_PATH = '/tmp/avenue-inquiries.json';
-const MANAGEMENT_EMAIL = 'mangament@avenue-properties.come';
-const MANAGEMENT_PASSWORD = 'Avenue@developed-by-Abdulah-Hanan';
-const MANAGEMENT_TOKEN_SECRET =
-  process.env.MANAGEMENT_TOKEN_SECRET ||
-  crypto.createHash('sha256').update(`${MANAGEMENT_EMAIL}:${MANAGEMENT_PASSWORD}:avenue`).digest('hex');
+const MANAGEMENT_EMAIL = (process.env.MANAGEMENT_EMAIL || '').trim().toLowerCase();
+const MANAGEMENT_PASSWORD = process.env.MANAGEMENT_PASSWORD || '';
+const ENV_TOKEN_SECRET = (process.env.MANAGEMENT_TOKEN_SECRET || '').trim();
+const TOKEN_SECRET = ENV_TOKEN_SECRET || crypto.randomBytes(32).toString('hex');
+
+if (!ENV_TOKEN_SECRET) {
+  console.warn(
+    '[Security] MANAGEMENT_TOKEN_SECRET is not set; using an ephemeral per-process secret (sessions will reset on restart).'
+  );
+}
+
+const MANAGEMENT_TOKEN_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+const USER_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const MAX_AUTH_ATTEMPTS = 5;
+const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
+
+interface FirebaseAppletConfig {
+  projectId?: string;
+  apiKey?: string;
+  firestoreDatabaseId?: string;
+}
+
+function loadFirebaseAppletConfig(): FirebaseAppletConfig {
+  try {
+    const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
+    if (fs.existsSync(configPath)) {
+      return JSON.parse(fs.readFileSync(configPath, 'utf-8')) as FirebaseAppletConfig;
+    }
+  } catch (err) {
+    console.warn('[Firebase] Could not read firebase-applet-config.json:', err);
+  }
+  return {};
+}
+
+const firebaseAppletConfig = loadFirebaseAppletConfig();
+
+// Initialize Firebase Admin SDK + Firestore (replaces /tmp JSON persistence)
+let firestoreDb: Firestore | null = null;
+let adminAuthInstance: AdminAuth | null = null;
+
+function validateServiceAccountObject(obj: unknown): ServiceAccount | null {
+  if (typeof obj !== 'object' || obj === null) return null;
+  const candidate = obj as Record<string, unknown>;
+  const projectId =
+    typeof candidate.project_id === 'string'
+      ? candidate.project_id.trim()
+      : typeof candidate.projectId === 'string'
+        ? candidate.projectId.trim()
+        : '';
+  const privateKey =
+    typeof candidate.private_key === 'string'
+      ? candidate.private_key.trim()
+      : typeof candidate.privateKey === 'string'
+        ? candidate.privateKey.trim()
+        : '';
+  const clientEmail =
+    typeof candidate.client_email === 'string'
+      ? candidate.client_email.trim()
+      : typeof candidate.clientEmail === 'string'
+        ? candidate.clientEmail.trim()
+        : '';
+
+  if (!projectId || !privateKey || !clientEmail) {
+    return null;
+  }
+
+  return {
+    projectId,
+    clientEmail,
+    privateKey: privateKey.replace(/\\n/g, '\n'),
+  };
+}
+
+function parseServiceAccountConfig(raw: string): ServiceAccount | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  // 1. Raw JSON object
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = validateServiceAccountObject(JSON.parse(trimmed));
+      if (parsed) return parsed;
+    } catch {
+      // Fall through to warning
+    }
+  }
+
+  // 2. Path to a service account JSON file on disk
+  try {
+    if (trimmed.length < 512 && fs.existsSync(trimmed) && fs.statSync(trimmed).isFile()) {
+      const fileContent = fs.readFileSync(trimmed, 'utf-8');
+      const parsed = validateServiceAccountObject(JSON.parse(fileContent));
+      if (parsed) return parsed;
+    }
+  } catch {
+    // Fall through
+  }
+
+  // 3. Base64-encoded service account JSON
+  if (/^[A-Za-z0-9+/=]+$/.test(trimmed) && trimmed.length > 20) {
+    try {
+      const decoded = Buffer.from(trimmed, 'base64').toString('utf-8').trim();
+      if (decoded.startsWith('{')) {
+        const parsed = validateServiceAccountObject(JSON.parse(decoded));
+        if (parsed) return parsed;
+      }
+    } catch {
+      // Fall through
+    }
+  }
+
+  console.warn(
+    '[Persistence] FIREBASE_SERVICE_ACCOUNT_JSON is set but is not a valid Firebase service account JSON object (use FIRESTORE_DATABASE_ID for database IDs). Using ephemeral in-memory store.'
+  );
+  return null;
+}
+
+function initFirebaseAdmin(): void {
+  const serviceAccountRaw = (process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim();
+  const credentialsPath = (process.env.GOOGLE_APPLICATION_CREDENTIALS || '').trim();
+  const useAdc = process.env.FIREBASE_USE_ADC === 'true';
+
+  const serviceAccount = parseServiceAccountConfig(serviceAccountRaw);
+  const hasValidCredentialsFile = Boolean(
+    credentialsPath && fs.existsSync(credentialsPath) && fs.statSync(credentialsPath).isFile()
+  );
+
+  if (credentialsPath && !hasValidCredentialsFile) {
+    console.warn('[Persistence] GOOGLE_APPLICATION_CREDENTIALS path does not exist on disk; ignoring.');
+  }
+
+  if (!serviceAccount && !hasValidCredentialsFile && !useAdc) {
+    if (!serviceAccountRaw) {
+      console.warn(
+        '[Persistence] Firestore admin credentials not configured (set FIREBASE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS). Using ephemeral in-memory store.'
+      );
+    }
+    return;
+  }
+
+  try {
+    let app = getAdminApps()[0];
+    if (!app) {
+      if (serviceAccount) {
+        app = initializeAdminApp({
+          credential: cert(serviceAccount),
+          projectId: serviceAccount.projectId || firebaseAppletConfig.projectId,
+        });
+      } else {
+        app = initializeAdminApp({
+          credential: applicationDefault(),
+          projectId: firebaseAppletConfig.projectId,
+        });
+      }
+    }
+
+    const databaseId =
+      (process.env.FIRESTORE_DATABASE_ID || '').trim() ||
+      firebaseAppletConfig.firestoreDatabaseId ||
+      '(default)';
+
+    firestoreDb = getAdminFirestore(app, databaseId);
+    firestoreDb.settings({ ignoreUndefinedProperties: true });
+    adminAuthInstance = getAdminAuth(app);
+    console.log(`[Persistence] Connected to Firestore database "${databaseId}".`);
+  } catch (err) {
+    console.warn(
+      '[Persistence] Could not initialize Firebase Admin SDK; falling back to in-memory store:',
+      err instanceof Error ? err.message : String(err)
+    );
+    firestoreDb = null;
+    adminAuthInstance = null;
+  }
+}
+
+initFirebaseAdmin();
 
 interface StoredUser {
   id: string;
@@ -36,8 +207,10 @@ interface StoredUser {
   verifyCode?: string;
   verifyToken?: string;
   verifyExpiresAt?: number;
+  verifyAttempts?: number;
   resetCode?: string;
   resetExpiresAt?: number;
+  resetAttempts?: number;
 }
 
 interface ContactInquiryRecord {
@@ -56,61 +229,430 @@ interface ContactInquiryRecord {
   createdAt: string;
 }
 
-const usersByEmail = new Map<string, StoredUser>();
-let inquiriesList: ContactInquiryRecord[] = [];
+type CityCategory = 'Lahore' | 'Islamabad' | 'Karachi' | 'Rawalpindi' | 'Murree & Hills';
 
-function loadUsersFromDisk() {
-  try {
-    if (fs.existsSync(STORE_PATH)) {
-      const raw = fs.readFileSync(STORE_PATH, 'utf-8');
-      const parsed = JSON.parse(raw) as StoredUser[];
-      if (Array.isArray(parsed)) {
-        for (const u of parsed) {
-          if (u && u.email) {
-            usersByEmail.set(u.email.toLowerCase(), u);
-          }
-        }
+interface CatalogStore {
+  projects: PortfolioProject[];
+  listings: PropertyListing[];
+  buy: BuyProperty[];
+  rent: RentalListing[];
+}
+
+const VALID_CITIES: CityCategory[] = ['Lahore', 'Islamabad', 'Karachi', 'Rawalpindi', 'Murree & Hills'];
+
+function normalizeCity(city: string): CityCategory {
+  return VALID_CITIES.includes(city as CityCategory) ? (city as CityCategory) : 'Lahore';
+}
+
+function getDefaultCatalog(): CatalogStore {
+  return {
+    projects: JSON.parse(JSON.stringify(PORTFOLIO_PROJECTS)),
+    listings: JSON.parse(JSON.stringify(PROPERTY_LISTINGS)),
+    buy: JSON.parse(JSON.stringify(BUY_PROPERTIES)),
+    rent: JSON.parse(JSON.stringify(RENTAL_LISTINGS)),
+  };
+}
+
+const LEGACY_REPLACEMENTS: Record<string, string> = {
+  'photo-1600607687644-c7171b42498b': 'photo-1600585154340-be6161a56a0c',
+  'photo-1502005229762-ee1b2b93e083': 'photo-1600210492486-724fe5c67fb0',
+  'photo-1508873696983-2df5703bc20d': 'photo-1512917774080-9991f1c4c750',
+  'photo-1540518614846-7ede433c4550': 'photo-1616486338812-3dadae4b4ace',
+};
+
+function normalizeStockImageUrl(url: string): string {
+  if (!url) return url;
+  const match = url.match(/^https:\/\/images\.unsplash\.com\/(photo-[^?\s'"]+)/);
+  if (match) {
+    const mapped = LEGACY_REPLACEMENTS[match[1]] || match[1];
+    const localPath = path.resolve(process.cwd(), 'public/stock', `${mapped}.jpg`);
+    if (fs.existsSync(localPath)) {
+      return `/stock/${mapped}.jpg`;
+    }
+  }
+  return url;
+}
+
+function normalizeCatalogImages(store: CatalogStore): CatalogStore {
+  return {
+    projects: store.projects.map((p) => ({
+      ...p,
+      image: normalizeStockImageUrl(p.image),
+      gallery: Array.isArray(p.gallery) ? p.gallery.map(normalizeStockImageUrl) : p.gallery,
+    })),
+    listings: store.listings.map((l) => ({
+      ...l,
+      exteriorImage: normalizeStockImageUrl(l.exteriorImage),
+      interiorImages: Array.isArray(l.interiorImages)
+        ? l.interiorImages.map(normalizeStockImageUrl)
+        : l.interiorImages,
+    })),
+    buy: store.buy.map((b) => ({
+      ...b,
+      image: normalizeStockImageUrl(b.image),
+      gallery: Array.isArray(b.gallery) ? b.gallery.map(normalizeStockImageUrl) : b.gallery,
+    })),
+    rent: store.rent.map((r) => ({
+      ...r,
+      image: normalizeStockImageUrl(r.image),
+      gallery: Array.isArray(r.gallery) ? r.gallery.map(normalizeStockImageUrl) : r.gallery,
+    })),
+  };
+}
+
+function stripUndefined<T extends Record<string, unknown>>(obj: T): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+function emailDocId(email: string): string {
+  return crypto.createHash('sha256').update(email.trim().toLowerCase()).digest('hex');
+}
+
+// Ephemeral in-memory fallback store (only used when Firestore Admin credentials are unavailable)
+const memoryUsersByEmail = new Map<string, StoredUser>();
+let memoryInquiries: ContactInquiryRecord[] = [];
+let memoryCatalog: CatalogStore = normalizeCatalogImages(getDefaultCatalog());
+let catalogSeedPromise: Promise<void> | null = null;
+
+async function seedCatalogSection(
+  db: Firestore,
+  collectionName: string,
+  items: Array<{ id: string }>
+): Promise<void> {
+  const baseOrder = Date.now();
+  const batch = db.batch();
+  items.forEach((item, index) => {
+    const ref = db.collection(collectionName).doc(item.id);
+    batch.set(ref, {
+      ...stripUndefined(item as unknown as Record<string, unknown>),
+      _sortOrder: baseOrder - index,
+    });
+  });
+  await batch.commit();
+}
+
+async function ensureCatalogSeeded(): Promise<void> {
+  if (!firestoreDb) return;
+  if (catalogSeedPromise) return catalogSeedPromise;
+
+  catalogSeedPromise = (async () => {
+    const db = firestoreDb!;
+    const metaRef = db.collection('catalog_meta').doc('state');
+    const metaSnap = await metaRef.get();
+    if (metaSnap.exists) return;
+
+    const defaults = normalizeCatalogImages(getDefaultCatalog());
+    await seedCatalogSection(db, 'catalog_projects', defaults.projects);
+    await seedCatalogSection(db, 'catalog_listings', defaults.listings);
+    await seedCatalogSection(db, 'catalog_buy', defaults.buy);
+    await seedCatalogSection(db, 'catalog_rent', defaults.rent);
+    await metaRef.set({ seeded: true, seededAt: new Date().toISOString() });
+  })().catch((err) => {
+    catalogSeedPromise = null;
+    throw err;
+  });
+
+  return catalogSeedPromise;
+}
+
+async function readOrderedCollection<T extends { id: string }>(
+  db: Firestore,
+  collectionName: string
+): Promise<T[]> {
+  const snap = await db.collection(collectionName).orderBy('_sortOrder', 'desc').get();
+  return snap.docs.map((docSnap) => {
+    const data = docSnap.data() as Record<string, unknown>;
+    const { _sortOrder: _ignored, ...rest } = data;
+    return rest as unknown as T;
+  });
+}
+
+// Unified Persistence Helpers (Firestore when configured, in-memory fallback otherwise)
+async function getUserByEmail(email: string): Promise<StoredUser | null> {
+  const clean = email.trim().toLowerCase();
+  if (!clean) return null;
+  if (!firestoreDb) {
+    return memoryUsersByEmail.get(clean) || null;
+  }
+  const snap = await firestoreDb.collection('auth_users').doc(emailDocId(clean)).get();
+  if (!snap.exists) return null;
+  return snap.data() as StoredUser;
+}
+
+async function saveUser(user: StoredUser): Promise<void> {
+  const normalized: StoredUser = { ...user, email: user.email.trim().toLowerCase() };
+  if (!firestoreDb) {
+    memoryUsersByEmail.set(normalized.email, normalized);
+    return;
+  }
+  await firestoreDb
+    .collection('auth_users')
+    .doc(emailDocId(normalized.email))
+    .set(stripUndefined(normalized as unknown as Record<string, unknown>));
+}
+
+async function listUsers(): Promise<StoredUser[]> {
+  if (!firestoreDb) {
+    return Array.from(memoryUsersByEmail.values());
+  }
+  const snap = await firestoreDb.collection('auth_users').get();
+  return snap.docs.map((d) => d.data() as StoredUser);
+}
+
+async function deleteUserById(id: string): Promise<boolean> {
+  if (!firestoreDb) {
+    for (const [key, user] of memoryUsersByEmail.entries()) {
+      if (user.id === id) {
+        memoryUsersByEmail.delete(key);
+        return true;
       }
     }
-  } catch (err) {
-    console.warn('Could not load persisted auth store:', err);
+    return false;
   }
+  const snap = await firestoreDb.collection('auth_users').where('id', '==', id).limit(1).get();
+  if (snap.empty) return false;
+  await snap.docs[0].ref.delete();
+  return true;
 }
 
-function saveUsersToDisk() {
-  try {
-    const list = Array.from(usersByEmail.values());
-    fs.writeFileSync(STORE_PATH, JSON.stringify(list, null, 2), 'utf-8');
-  } catch (err) {
-    console.warn('Could not persist auth store:', err);
+async function listInquiries(): Promise<ContactInquiryRecord[]> {
+  if (!firestoreDb) {
+    return [...memoryInquiries].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   }
+  const snap = await firestoreDb.collection('inquiries').orderBy('createdAt', 'desc').get();
+  return snap.docs.map((d) => d.data() as ContactInquiryRecord);
 }
 
-function loadInquiriesFromDisk() {
-  try {
-    if (fs.existsSync(INQUIRIES_PATH)) {
-      const raw = fs.readFileSync(INQUIRIES_PATH, 'utf-8');
-      const parsed = JSON.parse(raw) as ContactInquiryRecord[];
-      if (Array.isArray(parsed)) {
-        inquiriesList = parsed;
-      }
+async function createInquiry(record: ContactInquiryRecord): Promise<void> {
+  if (!firestoreDb) {
+    memoryInquiries = [record, ...memoryInquiries];
+    return;
+  }
+  await firestoreDb
+    .collection('inquiries')
+    .doc(record.id)
+    .set(stripUndefined(record as unknown as Record<string, unknown>));
+}
+
+async function updateInquiryStatus(
+  id: string,
+  status: ContactInquiryRecord['status']
+): Promise<ContactInquiryRecord | null> {
+  if (!firestoreDb) {
+    const idx = memoryInquiries.findIndex((item) => item.id === id);
+    if (idx === -1) return null;
+    memoryInquiries[idx] = { ...memoryInquiries[idx], status };
+    return memoryInquiries[idx];
+  }
+  const ref = firestoreDb.collection('inquiries').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return null;
+  await ref.update({ status });
+  const updated = { ...(snap.data() as ContactInquiryRecord), status };
+  return updated;
+}
+
+async function deleteInquiry(id: string): Promise<boolean> {
+  if (!firestoreDb) {
+    const before = memoryInquiries.length;
+    memoryInquiries = memoryInquiries.filter((item) => item.id !== id);
+    return memoryInquiries.length !== before;
+  }
+  const ref = firestoreDb.collection('inquiries').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return false;
+  await ref.delete();
+  return true;
+}
+
+async function getCatalog(): Promise<CatalogStore> {
+  if (!firestoreDb) {
+    return memoryCatalog;
+  }
+  await ensureCatalogSeeded();
+  const [projects, listings, buy, rent] = await Promise.all([
+    readOrderedCollection<PortfolioProject>(firestoreDb, 'catalog_projects'),
+    readOrderedCollection<PropertyListing>(firestoreDb, 'catalog_listings'),
+    readOrderedCollection<BuyProperty>(firestoreDb, 'catalog_buy'),
+    readOrderedCollection<RentalListing>(firestoreDb, 'catalog_rent'),
+  ]);
+  return normalizeCatalogImages({ projects, listings, buy, rent });
+}
+
+async function clearCollection(db: Firestore, collectionName: string): Promise<void> {
+  const snap = await db.collection(collectionName).get();
+  if (snap.empty) return;
+  const batch = db.batch();
+  snap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+  await batch.commit();
+}
+
+async function addCatalogProject(item: PortfolioProject): Promise<CatalogStore> {
+  if (!firestoreDb) {
+    memoryCatalog = { ...memoryCatalog, projects: [item, ...memoryCatalog.projects] };
+    return memoryCatalog;
+  }
+  await ensureCatalogSeeded();
+  await firestoreDb
+    .collection('catalog_projects')
+    .doc(item.id)
+    .set({
+      ...stripUndefined(item as unknown as Record<string, unknown>),
+      _sortOrder: Date.now(),
+    });
+  return getCatalog();
+}
+
+async function removeCatalogProject(id: string): Promise<{ removed: boolean; catalog: CatalogStore }> {
+  if (!firestoreDb) {
+    const before = memoryCatalog.projects.length + memoryCatalog.listings.length;
+    memoryCatalog = {
+      ...memoryCatalog,
+      projects: memoryCatalog.projects.filter((p) => p.id !== id),
+      listings: memoryCatalog.listings.filter((l) => l.id !== id),
+    };
+    const after = memoryCatalog.projects.length + memoryCatalog.listings.length;
+    return { removed: before !== after, catalog: memoryCatalog };
+  }
+  await ensureCatalogSeeded();
+  const projRef = firestoreDb.collection('catalog_projects').doc(id);
+  const listRef = firestoreDb.collection('catalog_listings').doc(id);
+  const [projSnap, listSnap] = await Promise.all([projRef.get(), listRef.get()]);
+  if (!projSnap.exists && !listSnap.exists) {
+    return { removed: false, catalog: await getCatalog() };
+  }
+  const ops: Promise<unknown>[] = [];
+  if (projSnap.exists) ops.push(projRef.delete());
+  if (listSnap.exists) ops.push(listRef.delete());
+  await Promise.all(ops);
+  return { removed: true, catalog: await getCatalog() };
+}
+
+async function addCatalogBuy(item: BuyProperty): Promise<CatalogStore> {
+  if (!firestoreDb) {
+    memoryCatalog = { ...memoryCatalog, buy: [item, ...memoryCatalog.buy] };
+    return memoryCatalog;
+  }
+  await ensureCatalogSeeded();
+  await firestoreDb
+    .collection('catalog_buy')
+    .doc(item.id)
+    .set({
+      ...stripUndefined(item as unknown as Record<string, unknown>),
+      _sortOrder: Date.now(),
+    });
+  return getCatalog();
+}
+
+async function removeCatalogBuy(id: string): Promise<{ removed: boolean; catalog: CatalogStore }> {
+  if (!firestoreDb) {
+    const before = memoryCatalog.buy.length;
+    memoryCatalog = {
+      ...memoryCatalog,
+      buy: memoryCatalog.buy.filter((item) => item.id !== id),
+    };
+    return { removed: memoryCatalog.buy.length !== before, catalog: memoryCatalog };
+  }
+  await ensureCatalogSeeded();
+  const ref = firestoreDb.collection('catalog_buy').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    return { removed: false, catalog: await getCatalog() };
+  }
+  await ref.delete();
+  return { removed: true, catalog: await getCatalog() };
+}
+
+async function addCatalogRent(item: RentalListing): Promise<CatalogStore> {
+  if (!firestoreDb) {
+    memoryCatalog = { ...memoryCatalog, rent: [item, ...memoryCatalog.rent] };
+    return memoryCatalog;
+  }
+  await ensureCatalogSeeded();
+  await firestoreDb
+    .collection('catalog_rent')
+    .doc(item.id)
+    .set({
+      ...stripUndefined(item as unknown as Record<string, unknown>),
+      _sortOrder: Date.now(),
+    });
+  return getCatalog();
+}
+
+async function removeCatalogRent(id: string): Promise<{ removed: boolean; catalog: CatalogStore }> {
+  if (!firestoreDb) {
+    const before = memoryCatalog.rent.length;
+    memoryCatalog = {
+      ...memoryCatalog,
+      rent: memoryCatalog.rent.filter((item) => item.id !== id),
+    };
+    return { removed: memoryCatalog.rent.length !== before, catalog: memoryCatalog };
+  }
+  await ensureCatalogSeeded();
+  const ref = firestoreDb.collection('catalog_rent').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    return { removed: false, catalog: await getCatalog() };
+  }
+  await ref.delete();
+  return { removed: true, catalog: await getCatalog() };
+}
+
+async function resetCatalogSection(section: string): Promise<CatalogStore> {
+  const defaults = normalizeCatalogImages(getDefaultCatalog());
+  if (!firestoreDb) {
+    if (section === 'projects') {
+      memoryCatalog = { ...memoryCatalog, projects: defaults.projects, listings: defaults.listings };
+    } else if (section === 'buy') {
+      memoryCatalog = { ...memoryCatalog, buy: defaults.buy };
+    } else if (section === 'rent') {
+      memoryCatalog = { ...memoryCatalog, rent: defaults.rent };
+    } else {
+      memoryCatalog = defaults;
     }
-  } catch (err) {
-    console.warn('Could not load persisted inquiries store:', err);
+    return memoryCatalog;
   }
+
+  const db = firestoreDb;
+  if (section === 'projects') {
+    await Promise.all([clearCollection(db, 'catalog_projects'), clearCollection(db, 'catalog_listings')]);
+    await Promise.all([
+      seedCatalogSection(db, 'catalog_projects', defaults.projects),
+      seedCatalogSection(db, 'catalog_listings', defaults.listings),
+    ]);
+  } else if (section === 'buy') {
+    await clearCollection(db, 'catalog_buy');
+    await seedCatalogSection(db, 'catalog_buy', defaults.buy);
+  } else if (section === 'rent') {
+    await clearCollection(db, 'catalog_rent');
+    await seedCatalogSection(db, 'catalog_rent', defaults.rent);
+  } else {
+    await Promise.all([
+      clearCollection(db, 'catalog_projects'),
+      clearCollection(db, 'catalog_listings'),
+      clearCollection(db, 'catalog_buy'),
+      clearCollection(db, 'catalog_rent'),
+    ]);
+    await Promise.all([
+      seedCatalogSection(db, 'catalog_projects', defaults.projects),
+      seedCatalogSection(db, 'catalog_listings', defaults.listings),
+      seedCatalogSection(db, 'catalog_buy', defaults.buy),
+      seedCatalogSection(db, 'catalog_rent', defaults.rent),
+    ]);
+  }
+  await db.collection('catalog_meta').doc('state').set({ seeded: true, seededAt: new Date().toISOString() });
+  return getCatalog();
 }
 
-function saveInquiriesToDisk() {
-  try {
-    fs.writeFileSync(INQUIRIES_PATH, JSON.stringify(inquiriesList, null, 2), 'utf-8');
-  } catch (err) {
-    console.warn('Could not persist inquiries store:', err);
-  }
-}
-
-loadUsersFromDisk();
-loadInquiriesFromDisk();
-
+// Crypto & Token Helpers
 function hashPassword(password: string, salt: string): string {
   return crypto.scryptSync(password, salt, 64).toString('hex');
 }
@@ -142,53 +684,260 @@ function sanitizeUser(u: StoredUser) {
   };
 }
 
-function createManagementToken(email: string): string {
-  const payload = Buffer.from(
-    JSON.stringify({ email: email.toLowerCase(), role: 'management', iat: Date.now() })
-  ).toString('base64url');
-  const sig = crypto
-    .createHmac('sha256', MANAGEMENT_TOKEN_SECRET)
-    .update(payload)
-    .digest('base64url');
+function signHmacPayload(payloadObj: Record<string, unknown>): string {
+  const payload = Buffer.from(JSON.stringify(payloadObj)).toString('base64url');
+  const sig = crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('base64url');
   return `${payload}.${sig}`;
 }
 
-function verifyManagementToken(token: string): boolean {
-  if (!token || !token.includes('.')) return false;
-  const [payload, sig] = token.split('.');
-  if (!payload || !sig) return false;
-  const expectedSig = crypto
-    .createHmac('sha256', MANAGEMENT_TOKEN_SECRET)
-    .update(payload)
-    .digest('base64url');
+function verifyHmacPayload<T extends Record<string, unknown>>(token: string): T | null {
+  if (!token || !token.includes('.')) return null;
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+  const [payload, sig] = parts;
+  if (!payload || !sig) return null;
+
+  const expectedSig = crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('base64url');
   const sigBuf = Buffer.from(sig);
   const expectedBuf = Buffer.from(expectedSig);
   if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
-    return false;
+    return null;
   }
+
   try {
-    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8')) as {
-      email?: string;
-      role?: string;
-    };
-    return decoded.email === MANAGEMENT_EMAIL && decoded.role === 'management';
+    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8')) as T;
+    if (typeof decoded.exp !== 'number' || Date.now() > decoded.exp) {
+      return null;
+    }
+    return decoded;
   } catch {
-    return false;
+    return null;
   }
 }
 
-function requireManagement(req: Request, res: Response, next: () => void) {
+function createManagementToken(email: string): string {
+  const now = Date.now();
+  return signHmacPayload({
+    email: email.toLowerCase(),
+    role: 'management',
+    iat: now,
+    exp: now + MANAGEMENT_TOKEN_TTL_MS,
+  });
+}
+
+function verifyManagementToken(token: string): boolean {
+  if (!MANAGEMENT_EMAIL) return false;
+  const decoded = verifyHmacPayload<{ email?: string; role?: string; exp?: number }>(token);
+  if (!decoded) return false;
+  return decoded.email === MANAGEMENT_EMAIL && decoded.role === 'management';
+}
+
+function createUserToken(user: { id: string; email: string }): string {
+  const now = Date.now();
+  return signHmacPayload({
+    uid: user.id,
+    email: user.email.toLowerCase(),
+    role: 'client',
+    iat: now,
+    exp: now + USER_TOKEN_TTL_MS,
+  });
+}
+
+function verifyUserToken(token: string): { uid: string; email: string } | null {
+  const decoded = verifyHmacPayload<{ uid?: string; email?: string; role?: string; exp?: number }>(token);
+  if (!decoded || decoded.role !== 'client' || !decoded.uid || !decoded.email) return null;
+  return { uid: decoded.uid, email: decoded.email.toLowerCase() };
+}
+
+function extractBearerToken(req: Request): string {
   const authHeader = String(req.headers.authorization || '');
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-  if (!verifyManagementToken(token)) {
-    return res.status(403).json({
+  return authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+}
+
+function requireManagement(req: Request, res: Response, next: NextFunction) {
+  const token = extractBearerToken(req);
+  if (!token) {
+    return res.status(401).json({
       success: false,
-      error: 'Management access required. Please sign in with the management account.',
+      error: 'Management authentication required. Please sign in again.',
+    });
+  }
+  if (!verifyManagementToken(token)) {
+    return res.status(401).json({
+      success: false,
+      error: 'Management session expired or invalid. Please sign in again.',
     });
   }
   return next();
 }
 
+interface VerifiedFirebaseIdentity {
+  uid: string;
+  email: string;
+  name: string;
+  photoURL?: string;
+  emailVerified: boolean;
+}
+
+async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseIdentity | null> {
+  if (!idToken) return null;
+
+  // 1. Prefer Firebase Admin SDK verification when credentials are available
+  if (adminAuthInstance) {
+    try {
+      const decoded = await adminAuthInstance.verifyIdToken(idToken, true);
+      if (!decoded.email) return null;
+      return {
+        uid: decoded.uid,
+        email: decoded.email.toLowerCase(),
+        name: decoded.name || decoded.email.split('@')[0] || 'Avenue Member',
+        photoURL: decoded.picture || undefined,
+        emailVerified: Boolean(decoded.email_verified),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // 2. Fallback: validate JWT claims against projectId + verify signature/revocation via Identity Toolkit lookup
+  const apiKey = firebaseAppletConfig.apiKey;
+  const projectId = firebaseAppletConfig.projectId;
+  if (!apiKey || !projectId) return null;
+
+  const segments = idToken.split('.');
+  if (segments.length !== 3) return null;
+
+  try {
+    const claims = JSON.parse(Buffer.from(segments[1], 'base64url').toString('utf-8')) as {
+      aud?: string;
+      iss?: string;
+      sub?: string;
+      exp?: number;
+    };
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (
+      claims.aud !== projectId ||
+      claims.iss !== `https://securetoken.google.com/${projectId}` ||
+      !claims.sub ||
+      typeof claims.exp !== 'number' ||
+      claims.exp <= nowSec
+    ) {
+      return null;
+    }
+
+    const lookupRes = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      }
+    );
+    if (!lookupRes.ok) return null;
+    const lookupJson = (await lookupRes.json()) as {
+      users?: Array<{
+        localId?: string;
+        email?: string;
+        emailVerified?: boolean;
+        displayName?: string;
+        photoUrl?: string;
+        disabled?: boolean;
+      }>;
+    };
+    const fbUser = lookupJson.users?.[0];
+    if (!fbUser || fbUser.disabled || !fbUser.localId || !fbUser.email) {
+      return null;
+    }
+    return {
+      uid: fbUser.localId,
+      email: fbUser.email.toLowerCase(),
+      name: fbUser.displayName || fbUser.email.split('@')[0] || 'Avenue Member',
+      photoURL: fbUser.photoUrl || undefined,
+      emailVerified: Boolean(fbUser.emailVerified),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Sliding-Window Rate Limiter & Per-Account Failed Login Lockout
+const rateLimitBuckets = new Map<string, number[]>();
+const loginFailureTracker = new Map<string, { count: number; lockedUntil: number }>();
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamps] of rateLimitBuckets.entries()) {
+    const fresh = timestamps.filter((t) => now - t < 60 * 60 * 1000);
+    if (fresh.length === 0) {
+      rateLimitBuckets.delete(key);
+    } else {
+      rateLimitBuckets.set(key, fresh);
+    }
+  }
+  for (const [email, rec] of loginFailureTracker.entries()) {
+    if (rec.lockedUntil && now > rec.lockedUntil + LOGIN_LOCKOUT_MS) {
+      loginFailureTracker.delete(email);
+    }
+  }
+}, 5 * 60 * 1000).unref();
+
+function getClientIp(req: Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.ip || req.socket.remoteAddress || 'unknown';
+}
+
+function createRateLimiter(options: { bucket: string; windowMs: number; max: number; message: string }) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const key = `${options.bucket}:${getClientIp(req)}`;
+    const now = Date.now();
+    const recent = (rateLimitBuckets.get(key) || []).filter((ts) => now - ts < options.windowMs);
+    if (recent.length >= options.max) {
+      const oldest = recent[0];
+      const retryAfterSec = Math.max(1, Math.ceil((options.windowMs - (now - oldest)) / 1000));
+      res.setHeader('Retry-After', String(retryAfterSec));
+      return res.status(429).json({
+        success: false,
+        error: options.message,
+      });
+    }
+    recent.push(now);
+    rateLimitBuckets.set(key, recent);
+    return next();
+  };
+}
+
+function isLoginLocked(email: string): number {
+  const rec = loginFailureTracker.get(email.toLowerCase());
+  if (!rec) return 0;
+  if (rec.lockedUntil && Date.now() < rec.lockedUntil) {
+    return rec.lockedUntil - Date.now();
+  }
+  if (rec.lockedUntil && Date.now() >= rec.lockedUntil) {
+    loginFailureTracker.delete(email.toLowerCase());
+  }
+  return 0;
+}
+
+function recordLoginFailure(email: string): boolean {
+  const key = email.toLowerCase();
+  const prev = loginFailureTracker.get(key) || { count: 0, lockedUntil: 0 };
+  const nextCount = prev.count + 1;
+  if (nextCount >= MAX_AUTH_ATTEMPTS) {
+    loginFailureTracker.set(key, { count: nextCount, lockedUntil: Date.now() + LOGIN_LOCKOUT_MS });
+    return true;
+  }
+  loginFailureTracker.set(key, { count: nextCount, lockedUntil: 0 });
+  return false;
+}
+
+function clearLoginFailures(email: string): void {
+  loginFailureTracker.delete(email.toLowerCase());
+}
+
+// Email Delivery Helpers
 let cachedEtherealTransporter: Transporter | null = null;
 let cachedEtherealAccount: TestAccount | null = null;
 
@@ -244,7 +993,6 @@ async function sendEmail(params: {
   html: string;
   text: string;
 }): Promise<SendEmailResult> {
-  // 1. Optional Resend free tier API if configured
   if (process.env.RESEND_API_KEY) {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -264,10 +1012,9 @@ async function sendEmail(params: {
       return { sent: true, provider: 'resend' };
     }
     const errBody = await res.text();
-    console.warn('Resend API error, falling back to Ethereal:', errBody);
+    console.warn('Resend API error, falling back to SMTP/Ethereal:', errBody);
   }
 
-  // 2. Nodemailer (configured SMTP or free Ethereal Email API)
   const { transporter, fromAddress, isEthereal } = await getTransporter();
   const info = await transporter.sendMail({
     from: fromAddress,
@@ -294,7 +1041,17 @@ function getBaseUrl(req: Request): string {
   return `${proto}://${host}`;
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function buildVerificationEmailHtml(name: string, code: string, verifyLink: string): string {
+  const safeName = escapeHtml(name);
   return `
     <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 560px; margin: 0 auto; background: #f8fafc; padding: 32px 20px;">
       <div style="background: #1B2A44; color: #ffffff; padding: 28px 32px; border-radius: 20px 20px 0 0;">
@@ -304,7 +1061,7 @@ function buildVerificationEmailHtml(name: string, code: string, verifyLink: stri
       <div style="background: #ffffff; padding: 32px; border-radius: 0 0 20px 20px; border: 1px solid #e2e8f0; border-top: none;">
         <h2 style="color: #1B2A44; margin: 0 0 12px; font-size: 20px;">Verify your email address</h2>
         <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">
-          Assalam o Alaikum ${name},<br/>
+          Assalam o Alaikum ${safeName},<br/>
           Thank you for registering with Avenue. Enter the 6-digit verification code below or click the verification button to activate your account.
         </p>
         <div style="background: #f1f5f9; border: 1px dashed #94a3b8; border-radius: 14px; padding: 18px; text-align: center; margin-bottom: 24px;">
@@ -325,6 +1082,7 @@ function buildVerificationEmailHtml(name: string, code: string, verifyLink: stri
 }
 
 function buildResetEmailHtml(name: string, code: string): string {
+  const safeName = escapeHtml(name);
   return `
     <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 560px; margin: 0 auto; background: #f8fafc; padding: 32px 20px;">
       <div style="background: #1B2A44; color: #ffffff; padding: 28px 32px; border-radius: 20px 20px 0 0;">
@@ -334,7 +1092,7 @@ function buildResetEmailHtml(name: string, code: string): string {
       <div style="background: #ffffff; padding: 32px; border-radius: 0 0 20px 20px; border: 1px solid #e2e8f0; border-top: none;">
         <h2 style="color: #1B2A44; margin: 0 0 12px; font-size: 20px;">Reset your password</h2>
         <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">
-          Assalam o Alaikum ${name},<br/>
+          Assalam o Alaikum ${safeName},<br/>
           We received a request to reset the password for your Avenue client account. Enter the 6-digit code below in the Reset Password window to choose a new password.
         </p>
         <div style="background: #f1f5f9; border: 1px dashed #94a3b8; border-radius: 14px; padding: 18px; text-align: center; margin-bottom: 24px;">
@@ -348,110 +1106,6 @@ function buildResetEmailHtml(name: string, code: string): string {
     </div>
   `;
 }
-
-type CityCategory = 'Lahore' | 'Islamabad' | 'Karachi' | 'Rawalpindi' | 'Murree & Hills';
-
-interface CatalogStore {
-  projects: PortfolioProject[];
-  listings: PropertyListing[];
-  buy: BuyProperty[];
-  rent: RentalListing[];
-}
-
-const VALID_CITIES: CityCategory[] = ['Lahore', 'Islamabad', 'Karachi', 'Rawalpindi', 'Murree & Hills'];
-
-function normalizeCity(city: string): CityCategory {
-  return VALID_CITIES.includes(city as CityCategory) ? (city as CityCategory) : 'Lahore';
-}
-
-function getDefaultCatalog(): CatalogStore {
-  return {
-    projects: JSON.parse(JSON.stringify(PORTFOLIO_PROJECTS)),
-    listings: JSON.parse(JSON.stringify(PROPERTY_LISTINGS)),
-    buy: JSON.parse(JSON.stringify(BUY_PROPERTIES)),
-    rent: JSON.parse(JSON.stringify(RENTAL_LISTINGS)),
-  };
-}
-
-let catalogStore: CatalogStore = getDefaultCatalog();
-
-const LEGACY_REPLACEMENTS: Record<string, string> = {
-  'photo-1600607687644-c7171b42498b': 'photo-1600585154340-be6161a56a0c',
-  'photo-1502005229762-ee1b2b93e083': 'photo-1600210492486-724fe5c67fb0',
-  'photo-1508873696983-2df5703bc20d': 'photo-1512917774080-9991f1c4c750',
-  'photo-1540518614846-7ede433c4550': 'photo-1616486338812-3dadae4b4ace',
-};
-
-function normalizeStockImageUrl(url: string): string {
-  if (!url) return url;
-  const match = url.match(/^https:\/\/images\.unsplash\.com\/(photo-[^?\s'"]+)/);
-  if (match) {
-    const mapped = LEGACY_REPLACEMENTS[match[1]] || match[1];
-    const localPath = path.resolve(process.cwd(), 'public/stock', `${mapped}.jpg`);
-    if (fs.existsSync(localPath)) {
-      return `/stock/${mapped}.jpg`;
-    }
-  }
-  return url;
-}
-
-function normalizeCatalogImages(store: CatalogStore): CatalogStore {
-  return {
-    projects: store.projects.map((p) => ({
-      ...p,
-      image: normalizeStockImageUrl(p.image),
-      gallery: Array.isArray(p.gallery) ? p.gallery.map(normalizeStockImageUrl) : p.gallery,
-    })),
-    listings: store.listings.map((l) => ({
-      ...l,
-      exteriorImage: normalizeStockImageUrl(l.exteriorImage),
-      interiorImages: Array.isArray(l.interiorImages)
-        ? l.interiorImages.map(normalizeStockImageUrl)
-        : l.interiorImages,
-    })),
-    buy: store.buy.map((b) => ({
-      ...b,
-      image: normalizeStockImageUrl(b.image),
-      gallery: Array.isArray(b.gallery) ? b.gallery.map(normalizeStockImageUrl) : b.gallery,
-    })),
-    rent: store.rent.map((r) => ({
-      ...r,
-      image: normalizeStockImageUrl(r.image),
-      gallery: Array.isArray(r.gallery) ? r.gallery.map(normalizeStockImageUrl) : r.gallery,
-    })),
-  };
-}
-
-function loadCatalogFromDisk() {
-  try {
-    if (fs.existsSync(CATALOG_PATH)) {
-      const raw = fs.readFileSync(CATALOG_PATH, 'utf-8');
-      const parsed = JSON.parse(raw) as Partial<CatalogStore>;
-      const defaults = getDefaultCatalog();
-      catalogStore = normalizeCatalogImages({
-        projects: Array.isArray(parsed.projects) ? parsed.projects : defaults.projects,
-        listings: Array.isArray(parsed.listings) ? parsed.listings : defaults.listings,
-        buy: Array.isArray(parsed.buy) ? parsed.buy : defaults.buy,
-        rent: Array.isArray(parsed.rent) ? parsed.rent : defaults.rent,
-      });
-      saveCatalogToDisk();
-    } else {
-      saveCatalogToDisk();
-    }
-  } catch (err) {
-    console.warn('Could not load persisted catalog store:', err);
-  }
-}
-
-function saveCatalogToDisk() {
-  try {
-    fs.writeFileSync(CATALOG_PATH, JSON.stringify(catalogStore, null, 2), 'utf-8');
-  } catch (err) {
-    console.warn('Could not persist catalog store:', err);
-  }
-}
-
-loadCatalogFromDisk();
 
 function parseNumericPKR(input: string | number | undefined, fallback = 50000000): number {
   if (typeof input === 'number' && !Number.isNaN(input) && input > 0) return input;
@@ -483,8 +1137,51 @@ function computeAreaCategory(area: string): BuyProperty['areaCategory'] {
 
 const DEFAULT_FALLBACK_IMAGE = '/stock/photo-1600585154340-be6161a56a0c.jpg';
 
+const loginLimiter = createRateLimiter({
+  bucket: 'login',
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  message: 'Too many login attempts from this IP. Please try again in 15 minutes.',
+});
+
+const signupLimiter = createRateLimiter({
+  bucket: 'signup',
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: 'Too many registration requests. Please try again shortly.',
+});
+
+const verifyCodeLimiter = createRateLimiter({
+  bucket: 'verify-code',
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  message: 'Too many verification attempts. Please try again in 15 minutes.',
+});
+
+const forgotPasswordLimiter = createRateLimiter({
+  bucket: 'forgot-password',
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: 'Too many password reset requests. Please try again in 15 minutes.',
+});
+
+const resetPasswordLimiter = createRateLimiter({
+  bucket: 'reset-password',
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  message: 'Too many reset code attempts. Please try again in 15 minutes.',
+});
+
+const inquiryLimiter = createRateLimiter({
+  bucket: 'inquiries',
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: 'Too many inquiries submitted. Please wait a few minutes and try again.',
+});
+
 async function startServer() {
   const app = express();
+  app.set('trust proxy', 1);
   app.use(express.json({ limit: '10mb' }));
   app.use(
     '/stock',
@@ -494,267 +1191,281 @@ async function startServer() {
     })
   );
 
+  // Health endpoint
+  app.get('/api/health', (_req: Request, res: Response) => {
+    return res.json({ ok: true, persistence: firestoreDb ? 'firestore' : 'memory' });
+  });
+
   // --- Catalog CRUD Routes (Projects, Buy, Rent) ---
-  app.get('/api/catalog', (_req: Request, res: Response) => {
-    return res.json({ success: true, catalog: catalogStore });
-  });
-
-  // Add Project
-  app.post('/api/catalog/projects', requireManagement, (req: Request, res: Response) => {
-    const body = req.body || {};
-    const title = String(body.title || '').trim();
-    const location = String(body.location || '').trim();
-    const category = normalizeCity(String(body.category || 'Lahore'));
-    const valuation = String(body.valuation || '').trim();
-    const size = String(body.size || '').trim() || '1 Kanal';
-    const beds = Math.max(0, Number(body.beds ?? 5) || 0);
-    const baths = Math.max(0, Number(body.baths ?? 5) || 0);
-    const projectDelivered = String(body.projectDelivered || new Date().getFullYear()).trim();
-    const architect = String(body.architect || 'Avenue Design Atelier').trim();
-    const summary =
-      String(body.summary || '').trim() ||
-      `Architectural residence located in ${location || category} with verified title and transfer documentation.`;
-    const image = String(body.image || '').trim() || DEFAULT_FALLBACK_IMAGE;
-    const galleryInput = Array.isArray(body.gallery)
-      ? body.gallery.map((g: unknown) => String(g).trim()).filter(Boolean)
-      : [];
-    const gallery = galleryInput.length > 0 ? galleryInput : [image];
-
-    if (!title || !location || !valuation) {
-      return res.status(400).json({
-        success: false,
-        error: 'Project title, location, and valuation/price are required.',
-      });
+  app.get('/api/catalog', async (_req: Request, res: Response) => {
+    try {
+      const catalog = await getCatalog();
+      return res.json({ success: true, catalog });
+    } catch (err) {
+      console.error('GET /api/catalog error:', err);
+      return res.status(500).json({ success: false, error: 'Could not load property catalog.' });
     }
-
-    const newProject: PortfolioProject = {
-      id: `proj-${crypto.randomBytes(5).toString('hex')}`,
-      title,
-      location,
-      size,
-      beds,
-      baths,
-      projectDelivered,
-      image,
-      summary,
-      architect,
-      valuation,
-      numericValuation: parseNumericPKR(valuation, 100000000),
-      category,
-      gallery,
-    };
-
-    catalogStore.projects = [newProject, ...catalogStore.projects];
-    saveCatalogToDisk();
-
-    return res.status(201).json({ success: true, item: newProject, catalog: catalogStore });
   });
 
-  // Remove Project (checks both projects and listings arrays)
-  app.delete('/api/catalog/projects/:id', requireManagement, (req: Request, res: Response) => {
-    const { id } = req.params;
-    const beforeCount = catalogStore.projects.length + catalogStore.listings.length;
-    catalogStore.projects = catalogStore.projects.filter((p) => p.id !== id);
-    catalogStore.listings = catalogStore.listings.filter((l) => l.id !== id);
-    const afterCount = catalogStore.projects.length + catalogStore.listings.length;
+  app.post('/api/catalog/projects', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const body = req.body || {};
+      const title = String(body.title || '').trim();
+      const location = String(body.location || '').trim();
+      const category = normalizeCity(String(body.category || 'Lahore'));
+      const valuation = String(body.valuation || '').trim();
+      const size = String(body.size || '').trim() || '1 Kanal';
+      const beds = Math.max(0, Number(body.beds ?? 5) || 0);
+      const baths = Math.max(0, Number(body.baths ?? 5) || 0);
+      const projectDelivered = String(body.projectDelivered || new Date().getFullYear()).trim();
+      const architect = String(body.architect || 'Avenue Design Atelier').trim();
+      const summary =
+        String(body.summary || '').trim() ||
+        `Architectural residence located in ${location || category} with verified title and transfer documentation.`;
+      const image = String(body.image || '').trim() || DEFAULT_FALLBACK_IMAGE;
+      const galleryInput = Array.isArray(body.gallery)
+        ? body.gallery.map((g: unknown) => String(g).trim()).filter(Boolean)
+        : [];
+      const gallery = galleryInput.length > 0 ? galleryInput : [image];
 
-    if (beforeCount === afterCount) {
-      return res.status(404).json({ success: false, error: 'Project item not found.' });
+      if (!title || !location || !valuation) {
+        return res.status(400).json({
+          success: false,
+          error: 'Project title, location, and valuation/price are required.',
+        });
+      }
+
+      const newProject: PortfolioProject = {
+        id: `proj-${crypto.randomBytes(5).toString('hex')}`,
+        title,
+        location,
+        size,
+        beds,
+        baths,
+        projectDelivered,
+        image,
+        summary,
+        architect,
+        valuation,
+        numericValuation: parseNumericPKR(valuation, 100000000),
+        category,
+        gallery,
+      };
+
+      const catalog = await addCatalogProject(newProject);
+      return res.status(201).json({ success: true, item: newProject, catalog });
+    } catch (err) {
+      console.error('POST /api/catalog/projects error:', err);
+      return res.status(500).json({ success: false, error: 'Could not add project.' });
     }
-
-    saveCatalogToDisk();
-    return res.json({ success: true, catalog: catalogStore });
   });
 
-  // Add Buy Property
-  app.post('/api/catalog/buy', requireManagement, (req: Request, res: Response) => {
-    const body = req.body || {};
-    const title = String(body.title || '').trim();
-    const city = normalizeCity(String(body.city || 'Lahore'));
-    const location = String(body.location || '').trim();
-    const rawType = String(body.type || 'House').trim();
-    const allowedTypes: BuyProperty['type'][] = ['House', 'Apartment', 'Plot', 'Penthouse'];
-    const type: BuyProperty['type'] = allowedTypes.includes(rawType as BuyProperty['type'])
-      ? (rawType as BuyProperty['type'])
-      : 'House';
-    const price = String(body.price || '').trim();
-    const area = String(body.area || '').trim() || '10 Marla';
-    const beds = type === 'Plot' ? 0 : Math.max(0, Number(body.beds ?? 4) || 0);
-    const baths = type === 'Plot' ? 0 : Math.max(0, Number(body.baths ?? 4) || 0);
-    const image = String(body.image || '').trim() || DEFAULT_FALLBACK_IMAGE;
-    const galleryInput = Array.isArray(body.gallery)
-      ? body.gallery.map((g: unknown) => String(g).trim()).filter(Boolean)
-      : [];
-    const gallery = galleryInput.length > 0 ? galleryInput : [image];
-    const description =
-      String(body.description || '').trim() ||
-      `Verified ${type.toLowerCase()} for sale in ${location || city} with clear society transfer documentation.`;
-    const featuresInput = Array.isArray(body.features)
-      ? body.features.map((f: unknown) => String(f).trim()).filter(Boolean)
-      : String(body.features || '')
-          .split(',')
-          .map((f) => f.trim())
-          .filter(Boolean);
-    const features =
-      featuresInput.length > 0
-        ? featuresInput
-        : ['Verified Clear Title', '24/7 Society Security', 'All Utilities Available'];
-    const possession = String(body.possession || 'Ready to Move').trim();
-    const nocStatus = String(body.nocStatus || 'Society Transfer Ready').trim();
-
-    if (!title || !location || !price) {
-      return res.status(400).json({
-        success: false,
-        error: 'Property title, location, and price are required.',
-      });
+  app.delete('/api/catalog/projects/:id', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id || '');
+      const { removed, catalog } = await removeCatalogProject(id);
+      if (!removed) {
+        return res.status(404).json({ success: false, error: 'Project item not found.' });
+      }
+      return res.json({ success: true, catalog });
+    } catch (err) {
+      console.error('DELETE /api/catalog/projects error:', err);
+      return res.status(500).json({ success: false, error: 'Could not remove project.' });
     }
-
-    const numericPrice = parseNumericPKR(body.numericPrice ?? price, 35000000);
-    const newBuy: BuyProperty = {
-      id: `buy-${crypto.randomBytes(5).toString('hex')}`,
-      title,
-      city,
-      location,
-      type,
-      price,
-      numericPrice,
-      priceRange: computePriceRange(numericPrice),
-      area,
-      areaCategory: computeAreaCategory(area),
-      beds,
-      baths,
-      image,
-      gallery,
-      description,
-      features,
-      possession,
-      nocStatus,
-    };
-
-    catalogStore.buy = [newBuy, ...catalogStore.buy];
-    saveCatalogToDisk();
-
-    return res.status(201).json({ success: true, item: newBuy, catalog: catalogStore });
   });
 
-  // Remove Buy Property
-  app.delete('/api/catalog/buy/:id', requireManagement, (req: Request, res: Response) => {
-    const { id } = req.params;
-    const before = catalogStore.buy.length;
-    catalogStore.buy = catalogStore.buy.filter((item) => item.id !== id);
-    if (catalogStore.buy.length === before) {
-      return res.status(404).json({ success: false, error: 'Property not found.' });
+  app.post('/api/catalog/buy', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const body = req.body || {};
+      const title = String(body.title || '').trim();
+      const city = normalizeCity(String(body.city || 'Lahore'));
+      const location = String(body.location || '').trim();
+      const rawType = String(body.type || 'House').trim();
+      const allowedTypes: BuyProperty['type'][] = ['House', 'Apartment', 'Plot', 'Penthouse'];
+      const type: BuyProperty['type'] = allowedTypes.includes(rawType as BuyProperty['type'])
+        ? (rawType as BuyProperty['type'])
+        : 'House';
+      const price = String(body.price || '').trim();
+      const area = String(body.area || '').trim() || '10 Marla';
+      const beds = type === 'Plot' ? 0 : Math.max(0, Number(body.beds ?? 4) || 0);
+      const baths = type === 'Plot' ? 0 : Math.max(0, Number(body.baths ?? 4) || 0);
+      const image = String(body.image || '').trim() || DEFAULT_FALLBACK_IMAGE;
+      const galleryInput = Array.isArray(body.gallery)
+        ? body.gallery.map((g: unknown) => String(g).trim()).filter(Boolean)
+        : [];
+      const gallery = galleryInput.length > 0 ? galleryInput : [image];
+      const description =
+        String(body.description || '').trim() ||
+        `Verified ${type.toLowerCase()} for sale in ${location || city} with clear society transfer documentation.`;
+      const featuresInput = Array.isArray(body.features)
+        ? body.features.map((f: unknown) => String(f).trim()).filter(Boolean)
+        : String(body.features || '')
+            .split(',')
+            .map((f) => f.trim())
+            .filter(Boolean);
+      const features =
+        featuresInput.length > 0
+          ? featuresInput
+          : ['Verified Clear Title', '24/7 Society Security', 'All Utilities Available'];
+      const possession = String(body.possession || 'Ready to Move').trim();
+      const nocStatus = String(body.nocStatus || 'Society Transfer Ready').trim();
+
+      if (!title || !location || !price) {
+        return res.status(400).json({
+          success: false,
+          error: 'Property title, location, and price are required.',
+        });
+      }
+
+      const numericPrice = parseNumericPKR(body.numericPrice ?? price, 35000000);
+      const newBuy: BuyProperty = {
+        id: `buy-${crypto.randomBytes(5).toString('hex')}`,
+        title,
+        city,
+        location,
+        type,
+        price,
+        numericPrice,
+        priceRange: computePriceRange(numericPrice),
+        area,
+        areaCategory: computeAreaCategory(area),
+        beds,
+        baths,
+        image,
+        gallery,
+        description,
+        features,
+        possession,
+        nocStatus,
+      };
+
+      const catalog = await addCatalogBuy(newBuy);
+      return res.status(201).json({ success: true, item: newBuy, catalog });
+    } catch (err) {
+      console.error('POST /api/catalog/buy error:', err);
+      return res.status(500).json({ success: false, error: 'Could not add property.' });
     }
-    saveCatalogToDisk();
-    return res.json({ success: true, catalog: catalogStore });
   });
 
-  // Add Rental Listing
-  app.post('/api/catalog/rent', requireManagement, (req: Request, res: Response) => {
-    const body = req.body || {};
-    const title = String(body.title || '').trim();
-    const city = normalizeCity(String(body.city || 'Lahore'));
-    const areaSociety = String(body.areaSociety || '').trim();
-    const rawType = String(body.type || 'House').trim();
-    const allowedTypes: RentalListing['type'][] = ['Apartment', 'House', 'Upper Portion', 'Lower Portion'];
-    const type: RentalListing['type'] = allowedTypes.includes(rawType as RentalListing['type'])
-      ? (rawType as RentalListing['type'])
-      : 'House';
-    const monthlyRent = Number(body.monthlyRent);
-    const beds = Math.max(1, Number(body.beds ?? 3) || 3);
-    const baths = Math.max(1, Number(body.baths ?? 3) || 3);
-    const sizeOrFloor = String(body.sizeOrFloor || '').trim() || '10 Marla';
-    const furnished: RentalListing['furnished'] =
-      String(body.furnished || 'Unfurnished') === 'Furnished' ? 'Furnished' : 'Unfurnished';
-    const image = String(body.image || '').trim() || DEFAULT_FALLBACK_IMAGE;
-    const galleryInput = Array.isArray(body.gallery)
-      ? body.gallery.map((g: unknown) => String(g).trim()).filter(Boolean)
-      : [];
-    const gallery = galleryInput.length > 0 ? galleryInput : [image];
-    const availableFrom = String(body.availableFrom || 'Immediate').trim();
-    const securityDeposit = String(body.securityDeposit || "2 months' rent").trim();
-    const advanceRent = String(body.advanceRent || '1 month').trim();
-    const minContractPeriod = String(body.minContractPeriod || '11 months').trim();
-    const amenitiesInput = Array.isArray(body.amenities)
-      ? body.amenities.map((a: unknown) => String(a).trim()).filter(Boolean)
-      : String(body.amenities || '')
-          .split(',')
-          .map((a) => a.trim())
-          .filter(Boolean);
-    const amenities =
-      amenitiesInput.length > 0
-        ? amenitiesInput
-        : ['Electricity & Sui Gas Connected', '24/7 Gated Security', 'Reserved Parking'];
-    const description =
-      String(body.description || '').trim() ||
-      `Well-maintained ${furnished.toLowerCase()} ${type.toLowerCase()} available for lease in ${areaSociety || city}.`;
-
-    if (!title || !areaSociety || !monthlyRent || Number.isNaN(monthlyRent) || monthlyRent <= 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Rental title, society/location, and a valid monthly rent in PKR are required.',
-      });
+  app.delete('/api/catalog/buy/:id', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id || '');
+      const { removed, catalog } = await removeCatalogBuy(id);
+      if (!removed) {
+        return res.status(404).json({ success: false, error: 'Property not found.' });
+      }
+      return res.json({ success: true, catalog });
+    } catch (err) {
+      console.error('DELETE /api/catalog/buy error:', err);
+      return res.status(500).json({ success: false, error: 'Could not remove property.' });
     }
-
-    const newRental: RentalListing = {
-      id: `rent-${crypto.randomBytes(5).toString('hex')}`,
-      title,
-      city,
-      areaSociety,
-      type,
-      monthlyRent: Math.round(monthlyRent),
-      beds,
-      baths,
-      sizeOrFloor,
-      furnished,
-      image,
-      gallery,
-      availableFrom,
-      securityDeposit,
-      advanceRent,
-      minContractPeriod,
-      amenities,
-      description,
-    };
-
-    catalogStore.rent = [newRental, ...catalogStore.rent];
-    saveCatalogToDisk();
-
-    return res.status(201).json({ success: true, item: newRental, catalog: catalogStore });
   });
 
-  // Remove Rental Listing
-  app.delete('/api/catalog/rent/:id', requireManagement, (req: Request, res: Response) => {
-    const { id } = req.params;
-    const before = catalogStore.rent.length;
-    catalogStore.rent = catalogStore.rent.filter((item) => item.id !== id);
-    if (catalogStore.rent.length === before) {
-      return res.status(404).json({ success: false, error: 'Rental listing not found.' });
+  app.post('/api/catalog/rent', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const body = req.body || {};
+      const title = String(body.title || '').trim();
+      const city = normalizeCity(String(body.city || 'Lahore'));
+      const areaSociety = String(body.areaSociety || '').trim();
+      const rawType = String(body.type || 'House').trim();
+      const allowedTypes: RentalListing['type'][] = ['Apartment', 'House', 'Upper Portion', 'Lower Portion'];
+      const type: RentalListing['type'] = allowedTypes.includes(rawType as RentalListing['type'])
+        ? (rawType as RentalListing['type'])
+        : 'House';
+      const monthlyRent = Number(body.monthlyRent);
+      const beds = Math.max(1, Number(body.beds ?? 3) || 3);
+      const baths = Math.max(1, Number(body.baths ?? 3) || 3);
+      const sizeOrFloor = String(body.sizeOrFloor || '').trim() || '10 Marla';
+      const furnished: RentalListing['furnished'] =
+        String(body.furnished || 'Unfurnished') === 'Furnished' ? 'Furnished' : 'Unfurnished';
+      const image = String(body.image || '').trim() || DEFAULT_FALLBACK_IMAGE;
+      const galleryInput = Array.isArray(body.gallery)
+        ? body.gallery.map((g: unknown) => String(g).trim()).filter(Boolean)
+        : [];
+      const gallery = galleryInput.length > 0 ? galleryInput : [image];
+      const availableFrom = String(body.availableFrom || 'Immediate').trim();
+      const securityDeposit = String(body.securityDeposit || "2 months' rent").trim();
+      const advanceRent = String(body.advanceRent || '1 month').trim();
+      const minContractPeriod = String(body.minContractPeriod || '11 months').trim();
+      const amenitiesInput = Array.isArray(body.amenities)
+        ? body.amenities.map((a: unknown) => String(a).trim()).filter(Boolean)
+        : String(body.amenities || '')
+            .split(',')
+            .map((a) => a.trim())
+            .filter(Boolean);
+      const amenities =
+        amenitiesInput.length > 0
+          ? amenitiesInput
+          : ['Electricity & Sui Gas Connected', '24/7 Gated Security', 'Reserved Parking'];
+      const description =
+        String(body.description || '').trim() ||
+        `Well-maintained ${furnished.toLowerCase()} ${type.toLowerCase()} available for lease in ${areaSociety || city}.`;
+
+      if (!title || !areaSociety || !monthlyRent || Number.isNaN(monthlyRent) || monthlyRent <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Rental title, society/location, and a valid monthly rent in PKR are required.',
+        });
+      }
+
+      const newRental: RentalListing = {
+        id: `rent-${crypto.randomBytes(5).toString('hex')}`,
+        title,
+        city,
+        areaSociety,
+        type,
+        monthlyRent: Math.round(monthlyRent),
+        beds,
+        baths,
+        sizeOrFloor,
+        furnished,
+        image,
+        gallery,
+        availableFrom,
+        securityDeposit,
+        advanceRent,
+        minContractPeriod,
+        amenities,
+        description,
+      };
+
+      const catalog = await addCatalogRent(newRental);
+      return res.status(201).json({ success: true, item: newRental, catalog });
+    } catch (err) {
+      console.error('POST /api/catalog/rent error:', err);
+      return res.status(500).json({ success: false, error: 'Could not add rental listing.' });
     }
-    saveCatalogToDisk();
-    return res.json({ success: true, catalog: catalogStore });
   });
 
-  // Reset Catalog Section to Defaults
-  app.post('/api/catalog/reset', requireManagement, (req: Request, res: Response) => {
-    const section = String(req.body?.section || 'all');
-    const defaults = getDefaultCatalog();
-    if (section === 'projects') {
-      catalogStore.projects = defaults.projects;
-      catalogStore.listings = defaults.listings;
-    } else if (section === 'buy') {
-      catalogStore.buy = defaults.buy;
-    } else if (section === 'rent') {
-      catalogStore.rent = defaults.rent;
-    } else {
-      catalogStore = defaults;
+  app.delete('/api/catalog/rent/:id', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id || '');
+      const { removed, catalog } = await removeCatalogRent(id);
+      if (!removed) {
+        return res.status(404).json({ success: false, error: 'Rental listing not found.' });
+      }
+      return res.json({ success: true, catalog });
+    } catch (err) {
+      console.error('DELETE /api/catalog/rent error:', err);
+      return res.status(500).json({ success: false, error: 'Could not remove rental listing.' });
     }
-    saveCatalogToDisk();
-    return res.json({ success: true, catalog: catalogStore });
   });
+
+  app.post('/api/catalog/reset', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const section = String(req.body?.section || 'all');
+      const catalog = await resetCatalogSection(section);
+      return res.json({ success: true, catalog });
+    } catch (err) {
+      console.error('POST /api/catalog/reset error:', err);
+      return res.status(500).json({ success: false, error: 'Could not restore defaults.' });
+    }
+  });
+
+  // --- Auth Routes ---
 
   // 1. Signup with Email Verification
-  app.post('/api/auth/signup', async (req: Request, res: Response) => {
+  app.post('/api/auth/signup', signupLimiter, async (req: Request, res: Response) => {
     try {
       const name = String(req.body?.name || '').trim();
       const email = String(req.body?.email || '').trim().toLowerCase();
@@ -770,14 +1481,14 @@ async function startServer() {
         return res.status(400).json({ success: false, error: 'Password should be at least 8 characters.' });
       }
 
-      if (email === MANAGEMENT_EMAIL) {
+      if (MANAGEMENT_EMAIL && email === MANAGEMENT_EMAIL) {
         return res.status(403).json({
           success: false,
-          error: 'This email is reserved for Avenue Management. Please use the Login page.',
+          error: 'This email cannot be registered here. Please use the Login page.',
         });
       }
 
-      const existing = usersByEmail.get(email);
+      const existing = await getUserByEmail(email);
       if (existing && existing.emailVerified) {
         return res.status(409).json({
           success: false,
@@ -803,10 +1514,10 @@ async function startServer() {
         verifyCode,
         verifyToken,
         verifyExpiresAt,
+        verifyAttempts: 0,
       };
 
-      usersByEmail.set(email, user);
-      saveUsersToDisk();
+      await saveUser(user);
 
       const verifyLink = `${getBaseUrl(req)}/api/auth/verify-link?token=${verifyToken}&email=${encodeURIComponent(email)}`;
       const emailResult = await sendEmail({
@@ -832,10 +1543,10 @@ async function startServer() {
   });
 
   // 2. Resend Verification Email
-  app.post('/api/auth/resend-verification', async (req: Request, res: Response) => {
+  app.post('/api/auth/resend-verification', signupLimiter, async (req: Request, res: Response) => {
     try {
       const email = String(req.body?.email || '').trim().toLowerCase();
-      const user = usersByEmail.get(email);
+      const user = await getUserByEmail(email);
 
       if (!user) {
         return res.status(404).json({
@@ -856,7 +1567,8 @@ async function startServer() {
       user.verifyCode = verifyCode;
       user.verifyToken = verifyToken;
       user.verifyExpiresAt = Date.now() + 15 * 60 * 1000;
-      saveUsersToDisk();
+      user.verifyAttempts = 0;
+      await saveUser(user);
 
       const verifyLink = `${getBaseUrl(req)}/api/auth/verify-link?token=${verifyToken}&email=${encodeURIComponent(email)}`;
       const emailResult = await sendEmail({
@@ -880,230 +1592,373 @@ async function startServer() {
     }
   });
 
-  // 3. Verify Email via 6-digit Code
-  app.post('/api/auth/verify-email', (req: Request, res: Response) => {
-    const email = String(req.body?.email || '').trim().toLowerCase();
-    const code = String(req.body?.code || '').trim();
-    const user = usersByEmail.get(email);
+  // 3. Verify Email via 6-digit Code (with max-attempts limit)
+  app.post('/api/auth/verify-email', verifyCodeLimiter, async (req: Request, res: Response) => {
+    try {
+      const email = String(req.body?.email || '').trim().toLowerCase();
+      const code = String(req.body?.code || '').trim();
+      const user = await getUserByEmail(email);
 
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'Account not found.' });
+      if (!user) {
+        return res.status(404).json({ success: false, error: 'Account not found.' });
+      }
+
+      if (user.emailVerified) {
+        return res.json({
+          success: true,
+          user: sanitizeUser(user),
+          userToken: createUserToken(user),
+        });
+      }
+
+      if (!user.verifyCode || (user.verifyExpiresAt && Date.now() > user.verifyExpiresAt)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Verification code expired or unavailable. Please resend a new one.',
+        });
+      }
+
+      if (!code || user.verifyCode !== code) {
+        const nextAttempts = (user.verifyAttempts || 0) + 1;
+        if (nextAttempts >= MAX_AUTH_ATTEMPTS) {
+          user.verifyCode = undefined;
+          user.verifyToken = undefined;
+          user.verifyExpiresAt = undefined;
+          user.verifyAttempts = 0;
+          await saveUser(user);
+          return res.status(429).json({
+            success: false,
+            error: 'Too many invalid verification attempts. Please request a new verification code.',
+          });
+        }
+        user.verifyAttempts = nextAttempts;
+        await saveUser(user);
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid verification code. Please check your email.',
+        });
+      }
+
+      user.emailVerified = true;
+      user.verifyCode = undefined;
+      user.verifyToken = undefined;
+      user.verifyExpiresAt = undefined;
+      user.verifyAttempts = 0;
+      await saveUser(user);
+
+      return res.json({
+        success: true,
+        user: sanitizeUser(user),
+        userToken: createUserToken(user),
+      });
+    } catch (err) {
+      console.error('Verify email error:', err);
+      return res.status(500).json({ success: false, error: 'Verification failed. Please try again.' });
     }
-
-    if (user.emailVerified) {
-      return res.json({ success: true, user: sanitizeUser(user) });
-    }
-
-    if (!code || user.verifyCode !== code) {
-      return res.status(400).json({ success: false, error: 'Invalid verification code. Please check your email.' });
-    }
-
-    if (user.verifyExpiresAt && Date.now() > user.verifyExpiresAt) {
-      return res.status(400).json({ success: false, error: 'Verification code expired. Please resend a new one.' });
-    }
-
-    user.emailVerified = true;
-    user.verifyCode = undefined;
-    user.verifyToken = undefined;
-    user.verifyExpiresAt = undefined;
-    saveUsersToDisk();
-
-    return res.json({ success: true, user: sanitizeUser(user) });
   });
 
   // 4. Verify Email via Direct Email Link
-  app.get('/api/auth/verify-link', (req: Request, res: Response) => {
-    const email = String(req.query.email || '').trim().toLowerCase();
-    const token = String(req.query.token || '').trim();
-    const user = usersByEmail.get(email);
+  app.get('/api/auth/verify-link', async (req: Request, res: Response) => {
+    try {
+      const email = String(req.query.email || '').trim().toLowerCase();
+      const token = String(req.query.token || '').trim();
+      const user = await getUserByEmail(email);
 
-    if (!user || !token || (user.verifyToken !== token && !user.emailVerified)) {
-      return res.status(400).send(`
+      const isExpired = Boolean(user?.verifyExpiresAt && Date.now() > user.verifyExpiresAt);
+      if (!user || !token || (!user.emailVerified && (user.verifyToken !== token || isExpired))) {
+        return res.status(400).send(`
+          <html>
+            <body style="font-family: sans-serif; background: #E6ECF5; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0;">
+              <div style="background: white; padding: 40px; border-radius: 24px; max-width: 420px; text-align: center; box-shadow: 0 20px 50px rgba(27,42,68,0.1);">
+                <h2 style="color: #1B2A44; margin-top: 0;">Verification Link Invalid</h2>
+                <p style="color: #64748b; font-size: 14px;">This verification link has expired or is invalid. Please request a new code in the app.</p>
+                <a href="/#/login" style="display: inline-block; margin-top: 16px; padding: 12px 24px; background: #1B2A44; color: white; text-decoration: none; border-radius: 999px; font-weight: bold; font-size: 13px;">Go to Login</a>
+              </div>
+            </body>
+          </html>
+        `);
+      }
+
+      user.emailVerified = true;
+      user.verifyCode = undefined;
+      user.verifyToken = undefined;
+      user.verifyExpiresAt = undefined;
+      user.verifyAttempts = 0;
+      await saveUser(user);
+
+      return res.send(`
         <html>
           <body style="font-family: sans-serif; background: #E6ECF5; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0;">
             <div style="background: white; padding: 40px; border-radius: 24px; max-width: 420px; text-align: center; box-shadow: 0 20px 50px rgba(27,42,68,0.1);">
-              <h2 style="color: #1B2A44; margin-top: 0;">Verification Link Invalid</h2>
-              <p style="color: #64748b; font-size: 14px;">This verification link has expired or is invalid. Please request a new code in the app.</p>
-              <a href="/#/login" style="display: inline-block; margin-top: 16px; padding: 12px 24px; background: #1B2A44; color: white; text-decoration: none; border-radius: 999px; font-weight: bold; font-size: 13px;">Go to Login</a>
+              <div style="width: 56px; height: 56px; border-radius: 999px; background: #ecfdf5; color: #10b981; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 28px;">✓</div>
+              <h2 style="color: #1B2A44; margin-top: 0;">Email Verified!</h2>
+              <p style="color: #475569; font-size: 14px; line-height: 1.5;">
+                Your Avenue account (${escapeHtml(email)}) is now active. Return to the app tab and click <strong>"I've verified my email"</strong> or sign in directly below.
+              </p>
+              <a href="/#/login" style="display: inline-block; margin-top: 18px; padding: 12px 28px; background: #1B2A44; color: white; text-decoration: none; border-radius: 999px; font-weight: bold; font-size: 13px;">Sign In to Avenue</a>
             </div>
           </body>
         </html>
       `);
+    } catch (err) {
+      console.error('Verify link error:', err);
+      return res.status(500).send('Verification failed. Please try again.');
     }
-
-    user.emailVerified = true;
-    user.verifyCode = undefined;
-    user.verifyToken = undefined;
-    user.verifyExpiresAt = undefined;
-    saveUsersToDisk();
-
-    return res.send(`
-      <html>
-        <body style="font-family: sans-serif; background: #E6ECF5; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0;">
-          <div style="background: white; padding: 40px; border-radius: 24px; max-width: 420px; text-align: center; box-shadow: 0 20px 50px rgba(27,42,68,0.1);">
-            <div style="width: 56px; height: 56px; border-radius: 999px; background: #ecfdf5; color: #10b981; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 28px;">✓</div>
-            <h2 style="color: #1B2A44; margin-top: 0;">Email Verified!</h2>
-            <p style="color: #475569; font-size: 14px; line-height: 1.5;">
-              Your Avenue account (${email}) is now active. Return to the app tab and click <strong>"I've verified my email"</strong> or sign in directly below.
-            </p>
-            <a href="/#/login" style="display: inline-block; margin-top: 18px; padding: 12px 28px; background: #1B2A44; color: white; text-decoration: none; border-radius: 999px; font-weight: bold; font-size: 13px;">Sign In to Avenue</a>
-          </div>
-        </body>
-      </html>
-    `);
   });
 
   // 5. Check Verification Status
-  app.post('/api/auth/check-verified', (req: Request, res: Response) => {
-    const email = String(req.body?.email || '').trim().toLowerCase();
-    const user = usersByEmail.get(email);
-    if (!user) {
-      return res.json({ verified: false });
+  app.post('/api/auth/check-verified', async (req: Request, res: Response) => {
+    try {
+      const email = String(req.body?.email || '').trim().toLowerCase();
+      const user = await getUserByEmail(email);
+      if (!user || !user.emailVerified) {
+        return res.json({ verified: false });
+      }
+      return res.json({
+        verified: true,
+        user: sanitizeUser(user),
+        userToken: createUserToken(user),
+      });
+    } catch (err) {
+      console.error('Check verified error:', err);
+      return res.status(500).json({ verified: false });
     }
-    return res.json({
-      verified: user.emailVerified,
-      user: user.emailVerified ? sanitizeUser(user) : undefined,
-    });
   });
 
-  // 6. Login with Email & Password
-  app.post('/api/auth/login', (req: Request, res: Response) => {
-    const email = String(req.body?.email || '').trim().toLowerCase();
-    const password = String(req.body?.password || '');
+  // 6. Login with Email & Password (with rate limiting & per-account lockout)
+  app.post('/api/auth/login', loginLimiter, async (req: Request, res: Response) => {
+    try {
+      const email = String(req.body?.email || '').trim().toLowerCase();
+      const password = String(req.body?.password || '');
 
-    if (email === MANAGEMENT_EMAIL) {
-      const providedHash = crypto.createHash('sha256').update(password).digest();
-      const expectedHash = crypto.createHash('sha256').update(MANAGEMENT_PASSWORD).digest();
-      if (!crypto.timingSafeEqual(providedHash, expectedHash)) {
-        return res.status(401).json({
+      if (!email || !password) {
+        return res.status(400).json({
           success: false,
-          error: 'Incorrect email or password. Please verify and try again.',
+          error: 'Email and password are required.',
         });
       }
+
+      const remainingLockMs = isLoginLocked(email);
+      if (remainingLockMs > 0) {
+        const mins = Math.max(1, Math.ceil(remainingLockMs / 60000));
+        return res.status(429).json({
+          success: false,
+          error: `Too many failed login attempts. Please try again in ${mins} minute(s).`,
+        });
+      }
+
+      if (MANAGEMENT_EMAIL && MANAGEMENT_PASSWORD && email === MANAGEMENT_EMAIL) {
+        const providedHash = crypto.createHash('sha256').update(password).digest();
+        const expectedHash = crypto.createHash('sha256').update(MANAGEMENT_PASSWORD).digest();
+        if (!crypto.timingSafeEqual(providedHash, expectedHash)) {
+          const lockedNow = recordLoginFailure(email);
+          return res.status(lockedNow ? 429 : 401).json({
+            success: false,
+            error: lockedNow
+              ? 'Too many failed login attempts. Please try again in 15 minutes.'
+              : 'Incorrect email or password. Please verify and try again.',
+          });
+        }
+
+        clearLoginFailures(email);
+        return res.json({
+          success: true,
+          user: {
+            id: 'mgmt_avenue_admin',
+            name: 'Avenue Management',
+            email: MANAGEMENT_EMAIL,
+            emailVerified: true,
+            role: 'management' as const,
+            createdAt: '2025-01-01T00:00:00.000Z',
+          },
+          managementToken: createManagementToken(MANAGEMENT_EMAIL),
+        });
+      }
+
+      const user = await getUserByEmail(email);
+
+      if (user && user.provider === 'google' && !user.passwordHash) {
+        return res.status(401).json({
+          success: false,
+          error: 'This account uses Google Sign-In. Please click "Continue with Google".',
+        });
+      }
+
+      if (!user || !user.salt || !user.passwordHash || !verifyPassword(password, user.salt, user.passwordHash)) {
+        const lockedNow = recordLoginFailure(email);
+        return res.status(lockedNow ? 429 : 401).json({
+          success: false,
+          error: lockedNow
+            ? 'Too many failed login attempts. Please try again in 15 minutes.'
+            : 'Incorrect email or password. Please verify and try again.',
+        });
+      }
+
+      if (!user.emailVerified) {
+        return res.status(403).json({
+          success: false,
+          unverified: true,
+          email: user.email,
+        });
+      }
+
+      clearLoginFailures(email);
+      user.lastLoginAt = new Date().toISOString();
+      await saveUser(user);
 
       return res.json({
         success: true,
-        user: {
-          id: 'mgmt_avenue_admin',
-          name: 'Avenue Management',
-          email: MANAGEMENT_EMAIL,
-          emailVerified: true,
-          role: 'management' as const,
-          createdAt: '2025-01-01T00:00:00.000Z',
-        },
-        managementToken: createManagementToken(MANAGEMENT_EMAIL),
+        user: sanitizeUser(user),
+        userToken: createUserToken(user),
       });
-    }
-
-    const user = usersByEmail.get(email);
-
-    if (user && user.provider === 'google' && !user.passwordHash) {
-      return res.status(401).json({
+    } catch (err) {
+      console.error('Login error:', err);
+      return res.status(500).json({
         success: false,
-        error: 'This account uses Google Sign-In. Please click "Continue with Google".',
+        error: 'Sign in failed due to a server error. Please try again.',
       });
     }
-
-    if (!user || !user.salt || !user.passwordHash || !verifyPassword(password, user.salt, user.passwordHash)) {
-      return res.status(401).json({
-        success: false,
-        error: 'Incorrect email or password. Please verify and try again.',
-      });
-    }
-
-    if (!user.emailVerified) {
-      return res.status(403).json({
-        success: false,
-        unverified: true,
-        email: user.email,
-      });
-    }
-
-    user.lastLoginAt = new Date().toISOString();
-    saveUsersToDisk();
-
-    return res.json({
-      success: true,
-      user: sanitizeUser(user),
-    });
   });
 
-  // 6b. Sync Google Sign-In Accounts to Backend Registry
-  app.post('/api/auth/google-sync', (req: Request, res: Response) => {
-    const email = String(req.body?.email || '').trim().toLowerCase();
-    const name = String(req.body?.name || '').trim() || 'Avenue Member';
-    const uid = String(req.body?.id || '').trim();
-    const photoURL = req.body?.photoURL ? String(req.body.photoURL).trim() : undefined;
-
-    if (!email || email === MANAGEMENT_EMAIL) {
-      return res.status(400).json({ success: false, error: 'Valid user email required.' });
-    }
-
-    const existing = usersByEmail.get(email);
-    const now = new Date().toISOString();
-    if (existing) {
-      existing.name = name || existing.name;
-      existing.emailVerified = true;
-      if (photoURL) existing.photoURL = photoURL;
-      existing.lastLoginAt = now;
-      if (!existing.provider) existing.provider = 'google';
-      saveUsersToDisk();
-      return res.json({ success: true, user: sanitizeUser(existing) });
-    }
-
-    const newGoogleUser: StoredUser = {
-      id: uid || `usr_${crypto.randomBytes(10).toString('hex')}`,
-      name,
-      email,
-      passwordHash: '',
-      salt: '',
-      emailVerified: true,
-      provider: 'google',
-      photoURL,
-      createdAt: now,
-      lastLoginAt: now,
-    };
-    usersByEmail.set(email, newGoogleUser);
-    saveUsersToDisk();
-    return res.status(201).json({ success: true, user: sanitizeUser(newGoogleUser) });
-  });
-
-  // 6c. Sync User Phone Update
-  app.post('/api/auth/update-phone', (req: Request, res: Response) => {
-    const email = String(req.body?.email || '').trim().toLowerCase();
-    const phone = String(req.body?.phone || '').trim();
-    const user = usersByEmail.get(email);
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'Account not found.' });
-    }
-    user.phone = phone || undefined;
-    saveUsersToDisk();
-    return res.json({ success: true, user: sanitizeUser(user) });
-  });
-
-  // 7. Forgot Password (Send Reset Code)
-  app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
+  // 6b. Sync Google Sign-In Accounts to Backend Registry (verifies Firebase ID token)
+  app.post('/api/auth/google-sync', async (req: Request, res: Response) => {
     try {
-      const email = String(req.body?.email || '').trim().toLowerCase();
-      if (email === MANAGEMENT_EMAIL) {
-        return res.status(403).json({
+      const idToken = extractBearerToken(req) || String(req.body?.idToken || '').trim();
+      const verified = await verifyFirebaseIdToken(idToken);
+      if (!verified) {
+        return res.status(401).json({
           success: false,
-          error: 'Management account credentials cannot be reset here.',
+          error: 'Valid Firebase authentication token is required.',
         });
       }
-      const user = usersByEmail.get(email);
 
-      if (!user) {
-        return res.status(404).json({
+      if (MANAGEMENT_EMAIL && verified.email === MANAGEMENT_EMAIL) {
+        return res.status(403).json({
           success: false,
-          error: 'No account found with this email address.',
+          error: 'Management account cannot be synced via Google Sign-In.',
         });
+      }
+
+      const existing = await getUserByEmail(verified.email);
+      const now = new Date().toISOString();
+      if (existing) {
+        existing.id = existing.id || verified.uid;
+        existing.name = verified.name || existing.name;
+        existing.emailVerified = true;
+        if (verified.photoURL) existing.photoURL = verified.photoURL;
+        existing.lastLoginAt = now;
+        if (!existing.provider) existing.provider = 'google';
+        await saveUser(existing);
+        return res.json({
+          success: true,
+          user: sanitizeUser(existing),
+          userToken: createUserToken(existing),
+        });
+      }
+
+      const newGoogleUser: StoredUser = {
+        id: verified.uid,
+        name: verified.name,
+        email: verified.email,
+        passwordHash: '',
+        salt: '',
+        emailVerified: true,
+        provider: 'google',
+        photoURL: verified.photoURL,
+        createdAt: now,
+        lastLoginAt: now,
+      };
+      await saveUser(newGoogleUser);
+      return res.status(201).json({
+        success: true,
+        user: sanitizeUser(newGoogleUser),
+        userToken: createUserToken(newGoogleUser),
+      });
+    } catch (err) {
+      console.error('Google sync error:', err);
+      return res.status(500).json({ success: false, error: 'Could not sync Google profile.' });
+    }
+  });
+
+  // 6c. Sync User Phone Update (authenticated via userToken or Firebase ID token)
+  app.post('/api/auth/update-phone', async (req: Request, res: Response) => {
+    try {
+      const token = extractBearerToken(req);
+      if (!token) {
+        return res.status(401).json({ success: false, error: 'Authentication required.' });
+      }
+
+      let verifiedEmail: string | null = null;
+      let verifiedUid: string | null = null;
+      let verifiedName: string | undefined;
+
+      const userSession = verifyUserToken(token);
+      if (userSession) {
+        verifiedEmail = userSession.email;
+        verifiedUid = userSession.uid;
+      } else {
+        const fbIdentity = await verifyFirebaseIdToken(token);
+        if (fbIdentity) {
+          verifiedEmail = fbIdentity.email;
+          verifiedUid = fbIdentity.uid;
+          verifiedName = fbIdentity.name;
+        }
+      }
+
+      if (!verifiedEmail) {
+        return res.status(401).json({ success: false, error: 'Invalid or expired authentication token.' });
+      }
+
+      const phone = String(req.body?.phone || '').trim();
+      let user = await getUserByEmail(verifiedEmail);
+      if (!user && verifiedUid) {
+        user = {
+          id: verifiedUid,
+          name: verifiedName || verifiedEmail.split('@')[0] || 'Avenue Member',
+          email: verifiedEmail,
+          passwordHash: '',
+          salt: '',
+          emailVerified: true,
+          provider: 'google',
+          createdAt: new Date().toISOString(),
+        };
+      }
+      if (!user) {
+        return res.status(404).json({ success: false, error: 'Account not found.' });
+      }
+
+      user.phone = phone || undefined;
+      await saveUser(user);
+      return res.json({ success: true, user: sanitizeUser(user) });
+    } catch (err) {
+      console.error('Update phone error:', err);
+      return res.status(500).json({ success: false, error: 'Could not update phone number.' });
+    }
+  });
+
+  // 7. Forgot Password (always returns uniform message to prevent account enumeration)
+  app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req: Request, res: Response) => {
+    const genericResponse = {
+      success: true,
+      message: 'If an account exists for that email address, a password reset code has been sent.',
+    };
+
+    try {
+      const email = String(req.body?.email || '').trim().toLowerCase();
+      if (!email || (MANAGEMENT_EMAIL && email === MANAGEMENT_EMAIL)) {
+        return res.json(genericResponse);
+      }
+
+      const user = await getUserByEmail(email);
+      if (!user) {
+        return res.json(genericResponse);
       }
 
       const resetCode = generateOtpCode();
       user.resetCode = resetCode;
       user.resetExpiresAt = Date.now() + 15 * 60 * 1000;
-      saveUsersToDisk();
+      user.resetAttempts = 0;
+      await saveUser(user);
 
       const emailResult = await sendEmail({
         to: email,
@@ -1112,171 +1967,208 @@ async function startServer() {
         html: buildResetEmailHtml(user.name, resetCode),
       });
 
-      return res.json({
-        success: true,
-        previewUrl: emailResult.previewUrl,
-        provider: emailResult.provider,
-      });
+      if (emailResult.previewUrl) {
+        console.log(`[Email Preview] Password reset preview URL: ${emailResult.previewUrl}`);
+      }
+
+      return res.json(genericResponse);
     } catch (err: unknown) {
       console.error('Forgot password error:', err);
-      return res.status(500).json({
-        success: false,
-        error: 'Could not send password reset email. Please try again.',
-      });
+      return res.json(genericResponse);
     }
   });
 
-  // 8. Reset Password with Code
-  app.post('/api/auth/reset-password', (req: Request, res: Response) => {
-    const email = String(req.body?.email || '').trim().toLowerCase();
-    const code = String(req.body?.code || '').trim();
-    const newPassword = String(req.body?.newPassword || '');
+  // 8. Reset Password with Code (with max-attempts limit)
+  app.post('/api/auth/reset-password', resetPasswordLimiter, async (req: Request, res: Response) => {
+    try {
+      const email = String(req.body?.email || '').trim().toLowerCase();
+      const code = String(req.body?.code || '').trim();
+      const newPassword = String(req.body?.newPassword || '');
 
-    if (email === MANAGEMENT_EMAIL) {
-      return res.status(403).json({
-        success: false,
-        error: 'Management account credentials cannot be reset here.',
-      });
+      if (MANAGEMENT_EMAIL && email === MANAGEMENT_EMAIL) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid or expired reset code.',
+        });
+      }
+
+      const user = await getUserByEmail(email);
+      if (!user || !user.resetCode) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid or expired reset code. Please request a new one.',
+        });
+      }
+
+      if (user.resetExpiresAt && Date.now() > user.resetExpiresAt) {
+        user.resetCode = undefined;
+        user.resetExpiresAt = undefined;
+        user.resetAttempts = 0;
+        await saveUser(user);
+        return res.status(400).json({
+          success: false,
+          error: 'Reset code has expired. Please request a new one.',
+        });
+      }
+
+      if (!code || user.resetCode !== code) {
+        const nextAttempts = (user.resetAttempts || 0) + 1;
+        if (nextAttempts >= MAX_AUTH_ATTEMPTS) {
+          user.resetCode = undefined;
+          user.resetExpiresAt = undefined;
+          user.resetAttempts = 0;
+          await saveUser(user);
+          return res.status(429).json({
+            success: false,
+            error: 'Too many invalid reset attempts. Please request a new password reset code.',
+          });
+        }
+        user.resetAttempts = nextAttempts;
+        await saveUser(user);
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid reset code. Please check your email.',
+        });
+      }
+
+      if (newPassword.length < 8) {
+        return res.status(400).json({
+          success: false,
+          error: 'New password must be at least 8 characters long.',
+        });
+      }
+
+      const salt = crypto.randomBytes(16).toString('hex');
+      user.salt = salt;
+      user.passwordHash = hashPassword(newPassword, salt);
+      user.resetCode = undefined;
+      user.resetExpiresAt = undefined;
+      user.resetAttempts = 0;
+      user.emailVerified = true;
+      await saveUser(user);
+      clearLoginFailures(email);
+
+      return res.json({ success: true });
+    } catch (err) {
+      console.error('Reset password error:', err);
+      return res.status(500).json({ success: false, error: 'Could not reset password right now.' });
     }
-
-    const user = usersByEmail.get(email);
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'Account not found.' });
-    }
-
-    if (!code || user.resetCode !== code) {
-      return res.status(400).json({ success: false, error: 'Invalid reset code. Please check your email.' });
-    }
-
-    if (user.resetExpiresAt && Date.now() > user.resetExpiresAt) {
-      return res.status(400).json({ success: false, error: 'Reset code has expired. Please request a new one.' });
-    }
-
-    if (newPassword.length < 8) {
-      return res.status(400).json({ success: false, error: 'New password must be at least 8 characters long.' });
-    }
-
-    const salt = crypto.randomBytes(16).toString('hex');
-    user.salt = salt;
-    user.passwordHash = hashPassword(newPassword, salt);
-    user.resetCode = undefined;
-    user.resetExpiresAt = undefined;
-    user.emailVerified = true;
-    saveUsersToDisk();
-
-    return res.json({ success: true });
   });
 
   // --- Contact & Inquiry Submissions Routes ---
-  app.post('/api/inquiries', (req: Request, res: Response) => {
-    const body = req.body || {};
-    const name = String(body.name || '').trim();
-    const email = String(body.email || '').trim().toLowerCase();
-    const phone = String(body.phone || '').trim();
-    const office = String(body.office || 'Lahore').trim();
-    const subject = String(body.subject || 'General Inquiry').trim();
-    const message = String(body.message || '').trim();
-    const source = String(body.source || 'Contact Page').trim();
-    const propertyTitle = body.propertyTitle ? String(body.propertyTitle).trim() : undefined;
-    const preferredDate = body.preferredDate ? String(body.preferredDate).trim() : undefined;
-    const timeframe = body.timeframe ? String(body.timeframe).trim() : undefined;
+  app.post('/api/inquiries', inquiryLimiter, async (req: Request, res: Response) => {
+    try {
+      const body = req.body || {};
+      const name = String(body.name || '').trim();
+      const email = String(body.email || '').trim().toLowerCase();
+      const phone = String(body.phone || '').trim();
+      const office = String(body.office || 'Lahore').trim();
+      const subject = String(body.subject || 'General Inquiry').trim();
+      const message = String(body.message || '').trim();
+      const source = String(body.source || 'Contact Page').trim();
+      const propertyTitle = body.propertyTitle ? String(body.propertyTitle).trim() : undefined;
+      const preferredDate = body.preferredDate ? String(body.preferredDate).trim() : undefined;
+      const timeframe = body.timeframe ? String(body.timeframe).trim() : undefined;
 
-    if (!name) {
-      return res.status(400).json({ success: false, error: 'Full name is required.' });
+      if (!name) {
+        return res.status(400).json({ success: false, error: 'Full name is required.' });
+      }
+      if (!email && !phone) {
+        return res.status(400).json({
+          success: false,
+          error: 'Please provide an email address or contact phone number.',
+        });
+      }
+
+      const record: ContactInquiryRecord = {
+        id: `inq-${crypto.randomBytes(5).toString('hex')}`,
+        name,
+        email,
+        phone,
+        office,
+        subject,
+        message,
+        source,
+        propertyTitle,
+        preferredDate,
+        timeframe,
+        status: 'new',
+        createdAt: new Date().toISOString(),
+      };
+
+      await createInquiry(record);
+      return res.status(201).json({ success: true, inquiry: record });
+    } catch (err) {
+      console.error('POST /api/inquiries error:', err);
+      return res.status(500).json({ success: false, error: 'Could not submit inquiry right now.' });
     }
-    if (!email && !phone) {
-      return res.status(400).json({
-        success: false,
-        error: 'Please provide an email address or contact phone number.',
-      });
-    }
-
-    const record: ContactInquiryRecord = {
-      id: `inq-${crypto.randomBytes(5).toString('hex')}`,
-      name,
-      email,
-      phone,
-      office,
-      subject,
-      message,
-      source,
-      propertyTitle,
-      preferredDate,
-      timeframe,
-      status: 'new',
-      createdAt: new Date().toISOString(),
-    };
-
-    inquiriesList = [record, ...inquiriesList];
-    saveInquiriesToDisk();
-
-    return res.status(201).json({ success: true, inquiry: record });
   });
 
   // Management-only endpoints to view & manage Contact Submissions and Registered Accounts
-  app.get('/api/management/records', requireManagement, (_req: Request, res: Response) => {
-    const accounts = Array.from(usersByEmail.values())
-      .map(sanitizeUser)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  app.get('/api/management/records', requireManagement, async (_req: Request, res: Response) => {
+    try {
+      const [users, inquiries] = await Promise.all([listUsers(), listInquiries()]);
+      const accounts = users
+        .map(sanitizeUser)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    const inquiries = [...inquiriesList].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-
-    return res.json({
-      success: true,
-      inquiries,
-      accounts,
-    });
+      return res.json({
+        success: true,
+        inquiries,
+        accounts,
+      });
+    } catch (err) {
+      console.error('GET /api/management/records error:', err);
+      return res.status(500).json({ success: false, error: 'Could not load client records.' });
+    }
   });
 
-  app.patch('/api/management/inquiries/:id', requireManagement, (req: Request, res: Response) => {
-    const { id } = req.params;
-    const status = String(req.body?.status || '').trim();
-    if (!['new', 'contacted', 'resolved'].includes(status)) {
-      return res.status(400).json({ success: false, error: 'Invalid status value.' });
-    }
-
-    const idx = inquiriesList.findIndex((item) => item.id === id);
-    if (idx === -1) {
-      return res.status(404).json({ success: false, error: 'Inquiry not found.' });
-    }
-
-    inquiriesList[idx] = {
-      ...inquiriesList[idx],
-      status: status as ContactInquiryRecord['status'],
-    };
-    saveInquiriesToDisk();
-
-    return res.json({ success: true, inquiry: inquiriesList[idx] });
-  });
-
-  app.delete('/api/management/inquiries/:id', requireManagement, (req: Request, res: Response) => {
-    const { id } = req.params;
-    const before = inquiriesList.length;
-    inquiriesList = inquiriesList.filter((item) => item.id !== id);
-    if (inquiriesList.length === before) {
-      return res.status(404).json({ success: false, error: 'Inquiry not found.' });
-    }
-    saveInquiriesToDisk();
-    return res.json({ success: true });
-  });
-
-  app.delete('/api/management/accounts/:id', requireManagement, (req: Request, res: Response) => {
-    const { id } = req.params;
-    let deleted = false;
-    for (const [key, user] of usersByEmail.entries()) {
-      if (user.id === id) {
-        usersByEmail.delete(key);
-        deleted = true;
-        break;
+  app.patch('/api/management/inquiries/:id', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id || '');
+      const status = String(req.body?.status || '').trim();
+      if (!['new', 'contacted', 'resolved'].includes(status)) {
+        return res.status(400).json({ success: false, error: 'Invalid status value.' });
       }
+
+      const updated = await updateInquiryStatus(id, status as ContactInquiryRecord['status']);
+      if (!updated) {
+        return res.status(404).json({ success: false, error: 'Inquiry not found.' });
+      }
+
+      return res.json({ success: true, inquiry: updated });
+    } catch (err) {
+      console.error('PATCH /api/management/inquiries error:', err);
+      return res.status(500).json({ success: false, error: 'Could not update inquiry.' });
     }
-    if (!deleted) {
-      return res.status(404).json({ success: false, error: 'Account not found.' });
+  });
+
+  app.delete('/api/management/inquiries/:id', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id || '');
+      const deleted = await deleteInquiry(id);
+      if (!deleted) {
+        return res.status(404).json({ success: false, error: 'Inquiry not found.' });
+      }
+      return res.json({ success: true });
+    } catch (err) {
+      console.error('DELETE /api/management/inquiries error:', err);
+      return res.status(500).json({ success: false, error: 'Could not delete inquiry.' });
     }
-    saveUsersToDisk();
-    return res.json({ success: true });
+  });
+
+  app.delete('/api/management/accounts/:id', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id || '');
+      const deleted = await deleteUserById(id);
+      if (!deleted) {
+        return res.status(404).json({ success: false, error: 'Account not found.' });
+      }
+      return res.json({ success: true });
+    } catch (err) {
+      console.error('DELETE /api/management/accounts error:', err);
+      return res.status(500).json({ success: false, error: 'Could not delete account.' });
+    }
   });
 
   // Mount Vite middleware in dev or serve static dist in production

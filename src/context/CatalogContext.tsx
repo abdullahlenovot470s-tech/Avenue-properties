@@ -4,6 +4,7 @@ import { BUY_PROPERTIES, BuyProperty } from '../data/buyPropertiesData';
 import { RENTAL_LISTINGS } from '../data/rentalsData';
 import { PortfolioProject, PropertyListing, RentalListing } from '../types';
 import { useAuth } from './AuthContext';
+import { parseApiResponse, SERVER_UNREACHABLE_MESSAGE } from '../lib/http';
 
 export type CityOption = 'Lahore' | 'Islamabad' | 'Karachi' | 'Rawalpindi' | 'Murree & Hills';
 
@@ -70,6 +71,7 @@ interface CatalogContextType {
   buyProperties: BuyProperty[];
   rentalListings: RentalListing[];
   loading: boolean;
+  backendReachable: boolean;
   refreshCatalog: () => Promise<void>;
   addProject: (input: NewProjectInput) => Promise<ActionResult>;
   removeProject: (id: string) => Promise<ActionResult>;
@@ -88,7 +90,8 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [buyProperties, setBuyProperties] = useState<BuyProperty[]>(BUY_PROPERTIES);
   const [rentalListings, setRentalListings] = useState<RentalListing[]>(RENTAL_LISTINGS);
   const [loading, setLoading] = useState<boolean>(true);
-  const { managementToken } = useAuth();
+  const [backendReachable, setBackendReachable] = useState<boolean>(true);
+  const { managementToken, logout } = useAuth();
 
   const authHeaders = (json = true): Record<string, string> => {
     const headers: Record<string, string> = {};
@@ -108,11 +111,15 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const refreshCatalog = useCallback(async () => {
     try {
       const res = await fetch('/api/catalog');
-      const data = await res.json();
-      if (res.ok && data.success && data.catalog) {
-        applyCatalogPayload(data.catalog);
+      const parsed = await parseApiResponse<{ success?: boolean; catalog?: any }>(res);
+      if (parsed.ok && parsed.data?.success && parsed.data.catalog) {
+        applyCatalogPayload(parsed.data.catalog);
+        setBackendReachable(true);
+      } else {
+        setBackendReachable(false);
       }
     } catch (err) {
+      setBackendReachable(false);
       console.warn('Could not fetch catalog from backend:', err);
     } finally {
       setLoading(false);
@@ -123,128 +130,119 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     refreshCatalog();
   }, [refreshCatalog]);
 
-  const addProject = async (input: NewProjectInput): Promise<ActionResult> => {
+  const executeMutation = async (
+    url: string,
+    options: RequestInit,
+    fallbackError: string
+  ): Promise<ActionResult> => {
     try {
-      const res = await fetch('/api/catalog/projects', {
+      const res = await fetch(url, options);
+      const parsed = await parseApiResponse<{
+        success?: boolean;
+        catalog?: any;
+        error?: string;
+      }>(res);
+
+      if (parsed.unreachable || !parsed.data) {
+        setBackendReachable(false);
+        return { success: false, error: SERVER_UNREACHABLE_MESSAGE };
+      }
+
+      setBackendReachable(true);
+
+      if (parsed.status === 401) {
+        void logout();
+        return {
+          success: false,
+          error: parsed.data.error || 'Management session expired. Please sign in again.',
+        };
+      }
+
+      if (!parsed.ok || !parsed.data.success) {
+        return { success: false, error: parsed.data.error || fallbackError };
+      }
+
+      applyCatalogPayload(parsed.data.catalog);
+      return { success: true };
+    } catch {
+      setBackendReachable(false);
+      return { success: false, error: SERVER_UNREACHABLE_MESSAGE };
+    }
+  };
+
+  const addProject = (input: NewProjectInput) =>
+    executeMutation(
+      '/api/catalog/projects',
+      {
         method: 'POST',
         headers: authHeaders(true),
         body: JSON.stringify(input),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        return { success: false, error: data.error || 'Could not add project.' };
-      }
-      applyCatalogPayload(data.catalog);
-      return { success: true };
-    } catch {
-      return { success: false, error: 'Network error while adding project.' };
-    }
-  };
+      },
+      'Could not add project.'
+    );
 
-  const removeProject = async (id: string): Promise<ActionResult> => {
-    try {
-      const res = await fetch(`/api/catalog/projects/${encodeURIComponent(id)}`, {
+  const removeProject = (id: string) =>
+    executeMutation(
+      `/api/catalog/projects/${encodeURIComponent(id)}`,
+      {
         method: 'DELETE',
         headers: authHeaders(false),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        return { success: false, error: data.error || 'Could not remove project.' };
-      }
-      applyCatalogPayload(data.catalog);
-      return { success: true };
-    } catch {
-      return { success: false, error: 'Network error while removing project.' };
-    }
-  };
+      },
+      'Could not remove project.'
+    );
 
-  const addBuyProperty = async (input: NewBuyInput): Promise<ActionResult> => {
-    try {
-      const res = await fetch('/api/catalog/buy', {
+  const addBuyProperty = (input: NewBuyInput) =>
+    executeMutation(
+      '/api/catalog/buy',
+      {
         method: 'POST',
         headers: authHeaders(true),
         body: JSON.stringify(input),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        return { success: false, error: data.error || 'Could not add property.' };
-      }
-      applyCatalogPayload(data.catalog);
-      return { success: true };
-    } catch {
-      return { success: false, error: 'Network error while adding property.' };
-    }
-  };
+      },
+      'Could not add property.'
+    );
 
-  const removeBuyProperty = async (id: string): Promise<ActionResult> => {
-    try {
-      const res = await fetch(`/api/catalog/buy/${encodeURIComponent(id)}`, {
+  const removeBuyProperty = (id: string) =>
+    executeMutation(
+      `/api/catalog/buy/${encodeURIComponent(id)}`,
+      {
         method: 'DELETE',
         headers: authHeaders(false),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        return { success: false, error: data.error || 'Could not remove property.' };
-      }
-      applyCatalogPayload(data.catalog);
-      return { success: true };
-    } catch {
-      return { success: false, error: 'Network error while removing property.' };
-    }
-  };
+      },
+      'Could not remove property.'
+    );
 
-  const addRentalListing = async (input: NewRentInput): Promise<ActionResult> => {
-    try {
-      const res = await fetch('/api/catalog/rent', {
+  const addRentalListing = (input: NewRentInput) =>
+    executeMutation(
+      '/api/catalog/rent',
+      {
         method: 'POST',
         headers: authHeaders(true),
         body: JSON.stringify(input),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        return { success: false, error: data.error || 'Could not add rental listing.' };
-      }
-      applyCatalogPayload(data.catalog);
-      return { success: true };
-    } catch {
-      return { success: false, error: 'Network error while adding rental listing.' };
-    }
-  };
+      },
+      'Could not add rental listing.'
+    );
 
-  const removeRentalListing = async (id: string): Promise<ActionResult> => {
-    try {
-      const res = await fetch(`/api/catalog/rent/${encodeURIComponent(id)}`, {
+  const removeRentalListing = (id: string) =>
+    executeMutation(
+      `/api/catalog/rent/${encodeURIComponent(id)}`,
+      {
         method: 'DELETE',
         headers: authHeaders(false),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        return { success: false, error: data.error || 'Could not remove rental listing.' };
-      }
-      applyCatalogPayload(data.catalog);
-      return { success: true };
-    } catch {
-      return { success: false, error: 'Network error while removing rental listing.' };
-    }
-  };
+      },
+      'Could not remove rental listing.'
+    );
 
-  const resetCatalog = async (section: 'projects' | 'buy' | 'rent' | 'all'): Promise<ActionResult> => {
-    try {
-      const res = await fetch('/api/catalog/reset', {
+  const resetCatalog = (section: 'projects' | 'buy' | 'rent' | 'all') =>
+    executeMutation(
+      '/api/catalog/reset',
+      {
         method: 'POST',
         headers: authHeaders(true),
         body: JSON.stringify({ section }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        return { success: false, error: data.error || 'Could not restore defaults.' };
-      }
-      applyCatalogPayload(data.catalog);
-      return { success: true };
-    } catch {
-      return { success: false, error: 'Network error while restoring defaults.' };
-    }
-  };
+      },
+      'Could not restore defaults.'
+    );
 
   return (
     <CatalogContext.Provider
@@ -254,6 +252,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
         buyProperties,
         rentalListings,
         loading,
+        backendReachable,
         refreshCatalog,
         addProject,
         removeProject,

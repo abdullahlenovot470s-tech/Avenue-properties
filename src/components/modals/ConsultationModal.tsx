@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, CheckCircle2, Calendar, ShieldCheck, Clock, User, Mail, Phone } from 'lucide-react';
 import { PillButton } from '../common/PillButton';
 import { submitInquiry } from '../../lib/inquiriesApi';
+import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../../services/enquiryWebhook';
 
 interface ConsultationModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [website, setWebsite] = useState('');
 
   const servicesList = [
     'Residential Acquisition Strategy',
@@ -38,6 +40,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (website.trim()) {
+      return;
+    }
     setError('');
     if (!formData.name.trim() || !formData.email.trim() || !formData.phone.trim()) {
       setError('Please fill in your name, email, and phone number.');
@@ -57,7 +62,20 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     });
     setLoading(false);
 
-    if (res.success) {
+    if (res.success || (res.unreachable && isEnquiryWebhookConfigured())) {
+      void sendEnquiryToWebhook({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        city: 'Private Advisory',
+        interest: service,
+        budget: '',
+        message: formData.notes.trim()
+          ? `${formData.notes.trim()} (Timeframe: ${formData.timeframe})`
+          : `Timeframe: ${formData.timeframe}`,
+        source: 'Consultation',
+        website,
+      });
       setSubmitted(true);
     } else {
       setError(res.error || 'Could not submit consultation request.');
@@ -123,6 +141,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               )}
 
               <form onSubmit={handleSubmit} className="space-y-4">
+                <input
+                  type="text"
+                  name="website"
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  className="absolute -left-[9999px] w-px h-px overflow-hidden opacity-0 pointer-events-none"
+                />
                 {/* Service Selection */}
                 <div>
                   <label className="block text-[11px] font-display uppercase tracking-wider text-white/80 mb-1.5">

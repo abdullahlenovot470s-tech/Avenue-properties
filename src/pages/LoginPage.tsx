@@ -222,7 +222,11 @@ export const LoginPage: React.FC = () => {
     if (result.success) {
       setForgotPreviewUrl(result.previewUrl);
       setForgotStep('reset');
-      showToast(`Reset code sent to ${forgotEmail}.`, 'success');
+      showToast(
+        result.message ||
+          'If an account exists for that email address, a password reset code has been sent.',
+        'success'
+      );
     } else {
       setForgotError(result.error || 'Could not send password reset email.');
       showToast(result.error || 'Could not send password reset email.', 'error');
@@ -613,7 +617,7 @@ export const LoginPage: React.FC = () => {
             {forgotStep === 'reset' && (
               <>
                 <p className="text-xs text-slate-500 font-body mt-1">
-                  Enter the 6-digit reset code sent to <strong>{forgotEmail}</strong> along with your new password.
+                  If an account exists for <strong>{forgotEmail}</strong>, a 6-digit reset code has been sent. Enter the code and your new password below.
                 </p>
 
                 {forgotPreviewUrl && (

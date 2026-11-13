@@ -1,3 +1,5 @@
+import { parseApiResponse, SERVER_UNREACHABLE_MESSAGE } from './http';
+
 export interface InquiryPayload {
   name: string;
   email?: string;
@@ -41,19 +43,44 @@ export interface RegisteredAccountRecord {
 
 export async function submitInquiry(
   payload: InquiryPayload
-): Promise<{ success: boolean; error?: string; inquiry?: ContactInquiryRecord }> {
+): Promise<{
+  success: boolean;
+  error?: string;
+  unreachable?: boolean;
+  inquiry?: ContactInquiryRecord;
+}> {
   try {
     const res = await fetch('/api/inquiries', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      return { success: false, error: data.error || 'Could not submit inquiry.' };
+    const parsed = await parseApiResponse<{
+      success?: boolean;
+      error?: string;
+      inquiry?: ContactInquiryRecord;
+    }>(res);
+
+    if (parsed.unreachable || !parsed.data) {
+      return {
+        success: false,
+        unreachable: true,
+        error: SERVER_UNREACHABLE_MESSAGE,
+      };
     }
-    return { success: true, inquiry: data.inquiry };
+
+    if (!parsed.ok || !parsed.data.success) {
+      return {
+        success: false,
+        error: parsed.data.error || 'Could not submit inquiry.',
+      };
+    }
+    return { success: true, inquiry: parsed.data.inquiry };
   } catch {
-    return { success: false, error: 'Network error while submitting your inquiry.' };
+    return {
+      success: false,
+      unreachable: true,
+      error: SERVER_UNREACHABLE_MESSAGE,
+    };
   }
 }

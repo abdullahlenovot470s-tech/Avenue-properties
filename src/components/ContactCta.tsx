@@ -6,6 +6,7 @@ import { CheckCircle2, Send, PhoneCall } from 'lucide-react';
 import { SITE_CONFIG, handleDemoContactClick } from '../config/siteConfig';
 import { useToast } from '../context/ToastContext';
 import { submitInquiry } from '../lib/inquiriesApi';
+import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../services/enquiryWebhook';
 
 export const ContactCta: React.FC = () => {
   const { showToast } = useToast();
@@ -18,9 +19,13 @@ export const ContactCta: React.FC = () => {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [website, setWebsite] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (website.trim()) {
+      return;
+    }
     setError('');
 
     if (!formData.name.trim()) {
@@ -53,7 +58,18 @@ export const ContactCta: React.FC = () => {
     });
     setLoading(false);
 
-    if (res.success) {
+    if (res.success || (res.unreachable && isEnquiryWebhookConfigured())) {
+      void sendEnquiryToWebhook({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        city: 'General Advisory',
+        interest: 'Homepage Quick Question',
+        budget: '',
+        message: 'Submitted via homepage quick contact form.',
+        source: "Let's Talk",
+        website,
+      });
       setSubmitted(true);
       showToast('Inquiry submitted! Our partner will connect shortly.', 'success');
     } else {
@@ -121,6 +137,16 @@ export const ContactCta: React.FC = () => {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  <input
+                    type="text"
+                    name="website"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    tabIndex={-1}
+                    autoComplete="off"
+                    aria-hidden="true"
+                    className="absolute -left-[9999px] w-px h-px overflow-hidden opacity-0 pointer-events-none"
+                  />
                   {error && (
                     <div className="text-xs text-rose-300 bg-rose-500/20 border border-rose-400/30 px-3 py-2 rounded-xl">
                       {error}

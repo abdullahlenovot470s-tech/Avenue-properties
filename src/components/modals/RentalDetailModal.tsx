@@ -5,6 +5,7 @@ import { SafeImage } from '../common/SafeImage';
 import { PillButton } from '../common/PillButton';
 import { useToast } from '../../context/ToastContext';
 import { submitInquiry } from '../../lib/inquiriesApi';
+import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../../services/enquiryWebhook';
 import {
   X,
   MapPin,
@@ -42,6 +43,7 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
   const [tenantPhone, setTenantPhone] = useState('');
   const [visitDate, setVisitDate] = useState('');
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
+  const [website, setWebsite] = useState('');
 
   if (!isOpen || !rental) return null;
 
@@ -49,6 +51,9 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
 
   const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (website.trim()) {
+      return;
+    }
     if (!tenantName.trim() || !tenantPhone.trim() || !visitDate) {
       showToast('Please provide your name, phone number, and preferred date.', 'error');
       return;
@@ -66,10 +71,22 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
     });
     setBookingSubmitting(false);
 
-    if (!res.success) {
+    if (!res.success && !(res.unreachable && isEnquiryWebhookConfigured())) {
       showToast(res.error || 'Could not submit viewing request. Please try again.', 'error');
       return;
     }
+
+    void sendEnquiryToWebhook({
+      name: tenantName.trim(),
+      email: '',
+      phone: tenantPhone.trim(),
+      city: rental.city,
+      interest: `Rent - ${rental.type}`,
+      budget: formatRent(rental.monthlyRent),
+      message: `Property: ${rental.title} | Preferred Date: ${visitDate}`,
+      source: 'Site Visit',
+      website,
+    });
 
     setBookingSubmitted(true);
     showToast(`Viewing request registered for ${rental.title}. An Avenue leasing advisor will contact you.`, 'success');
@@ -277,6 +294,16 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
                 </div>
               ) : (
                 <form onSubmit={handleBookingSubmit} className="space-y-4">
+                  <input
+                    type="text"
+                    name="website"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    tabIndex={-1}
+                    autoComplete="off"
+                    aria-hidden="true"
+                    className="absolute -left-[9999px] w-px h-px overflow-hidden opacity-0 pointer-events-none"
+                  />
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-[#2F4B73]" />
                     <h4 className="font-display font-bold text-xs uppercase tracking-widest text-[#1B2A44]">
