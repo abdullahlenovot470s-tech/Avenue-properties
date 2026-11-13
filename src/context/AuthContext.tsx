@@ -33,7 +33,12 @@ interface AuthContextType {
   isManagement: boolean;
   managementToken: string | null;
   loading: boolean;
-  loginWithGoogle: () => Promise<{ success: boolean; error?: string; popupBlocked?: boolean }>;
+  loginWithGoogle: () => Promise<{
+    success: boolean;
+    error?: string;
+    popupBlocked?: boolean;
+    isManagement?: boolean;
+  }>;
   loginWithEmail: (
     email: string,
     password: string,
@@ -69,20 +74,29 @@ const EMAIL_SESSION_KEY = 'avenue_email_session_v1';
 const MANAGEMENT_TOKEN_KEY = 'avenue_mgmt_token_v1';
 const USER_TOKEN_KEY = 'avenue_user_token_v1';
 
-function isManagementTokenValid(token: string | null): boolean {
-  if (!token || !token.includes('.')) return false;
+function parseManagementTokenPayload(
+  token: string | null
+): { email?: string; role?: string; exp?: number } | null {
+  if (!token || !token.includes('.')) return null;
   try {
     const payloadB64 = token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
     const padded = payloadB64 + '='.repeat((4 - (payloadB64.length % 4)) % 4);
-    const parsed = JSON.parse(atob(padded)) as { role?: string; exp?: number };
-    return (
-      parsed.role === 'management' &&
-      typeof parsed.exp === 'number' &&
-      parsed.exp > Date.now()
-    );
+    return JSON.parse(atob(padded)) as { email?: string; role?: string; exp?: number };
   } catch {
+    return null;
+  }
+}
+
+function isManagementTokenValid(token: string | null, expectedEmail?: string | null): boolean {
+  const parsed = parseManagementTokenPayload(token);
+  if (!parsed) return false;
+  if (parsed.role !== 'management' || typeof parsed.exp !== 'number' || parsed.exp <= Date.now()) {
     return false;
   }
+  if (expectedEmail) {
+    return String(parsed.email || '').toLowerCase() === expectedEmail.trim().toLowerCase();
+  }
+  return true;
 }
 
 function getStoredToken(key: string): string | null {
@@ -130,6 +144,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const guestSavedRef = useRef<string[]>(guestSavedIds);
+  const googleSyncInFlightRef = useRef<{ uid: string; promise: Promise<{ isManagement: boolean }> } | null>(
+    null
+  );
   useEffect(() => {
     guestSavedRef.current = guestSavedIds;
   }, [guestSavedIds]);
@@ -193,29 +210,82 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return profile;
   };
 
-  const syncGoogleUserWithBackend = async (fbUser: FirebaseUser) => {
-    try {
-      const idToken = await fbUser.getIdToken();
-      const res = await fetch('/api/auth/google-sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({ idToken }),
-      });
-      const parsed = await parseApiResponse<{ success?: boolean; userToken?: string }>(res);
-      if (parsed.ok && parsed.data?.userToken) {
-        storeSessionToken(USER_TOKEN_KEY, parsed.data.userToken, true);
-      }
-    } catch {
-      // Backend sync is best-effort so Google Sign-In still works if backend is unreachable
+  const syncGoogleUserWithBackend = async (fbUser: FirebaseUser): Promise<{ isManagement: boolean }> => {
+    const existingSync = googleSyncInFlightRef.current;
+    if (existingSync && existingSync.uid === fbUser.uid) {
+      return existingSync.promise;
     }
+
+    const runSync = (async (): Promise<{ isManagement: boolean }> => {
+      try {
+        const idToken = await fbUser.getIdToken();
+        const res = await fetch('/api/auth/google-sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ idToken }),
+        });
+        const parsed = await parseApiResponse<{
+          success?: boolean;
+          isManagement?: boolean;
+          managementToken?: string;
+          userToken?: string;
+        }>(res);
+
+        if (parsed.ok && parsed.data?.success) {
+          if (parsed.data.userToken) {
+            storeSessionToken(USER_TOKEN_KEY, parsed.data.userToken, true);
+          }
+
+          const mgmtToken = parsed.data.managementToken;
+          if (parsed.data.isManagement && mgmtToken && isManagementTokenValid(mgmtToken, fbUser.email)) {
+            storeSessionToken(MANAGEMENT_TOKEN_KEY, mgmtToken, true);
+            setManagementToken(mgmtToken);
+            setCurrentUser((prev) =>
+              prev && prev.id === fbUser.uid ? { ...prev, role: 'management' } : prev
+            );
+            return { isManagement: true };
+          }
+
+          storeSessionToken(MANAGEMENT_TOKEN_KEY, undefined, true);
+          setManagementToken(null);
+          setCurrentUser((prev) =>
+            prev && prev.id === fbUser.uid ? { ...prev, role: 'client' } : prev
+          );
+          return { isManagement: false };
+        }
+      } catch {
+        // Backend sync failed or timed out; fall back to valid cached token for same email if present
+      }
+
+      const cachedToken = getStoredToken(MANAGEMENT_TOKEN_KEY);
+      if (cachedToken && isManagementTokenValid(cachedToken, fbUser.email)) {
+        setManagementToken(cachedToken);
+        setCurrentUser((prev) =>
+          prev && prev.id === fbUser.uid ? { ...prev, role: 'management' } : prev
+        );
+        return { isManagement: true };
+      }
+
+      setManagementToken(null);
+      return { isManagement: false };
+    })().finally(() => {
+      if (googleSyncInFlightRef.current?.uid === fbUser.uid) {
+        googleSyncInFlightRef.current = null;
+      }
+    });
+
+    googleSyncInFlightRef.current = { uid: fbUser.uid, promise: runSync };
+    return runSync;
   };
 
   // Listen to Firebase auth state changes (Google Sign-In or verified Firebase accounts)
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+    let active = true;
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (!active) return;
       setFirebaseUser(fbUser);
 
       if (fbUser) {
@@ -233,6 +303,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setGuestSavedIds([]);
           }
 
+          const storedMgmtToken = getStoredToken(MANAGEMENT_TOKEN_KEY);
+          const hasMatchingMgmtToken =
+            isGoogle && Boolean(storedMgmtToken && isManagementTokenValid(storedMgmtToken, fbUser.email));
+
+          setManagementToken(hasMatchingMgmtToken ? storedMgmtToken : null);
           setCurrentUser({
             id: fbUser.uid,
             name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Avenue Member',
@@ -240,14 +315,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             photoURL: fbUser.photoURL || undefined,
             phone: storedPhone || undefined,
             emailVerified: true,
-            role: 'client',
+            role: hasMatchingMgmtToken ? 'management' : 'client',
             createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
             savedPropertyIds: savedIds,
           });
-          setManagementToken(null);
 
           if (fbUser.email) {
-            void syncGoogleUserWithBackend(fbUser);
+            await syncGoogleUserWithBackend(fbUser);
           }
         }
       } else {
@@ -260,7 +334,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const parsed = JSON.parse(savedEmailSession) as UserProfile;
             if (parsed && parsed.emailVerified) {
               const hasValidMgmtToken =
-                parsed.role === 'management' && isManagementTokenValid(savedMgmtToken);
+                parsed.role === 'management' && isManagementTokenValid(savedMgmtToken, parsed.email);
 
               if (parsed.role === 'management' && !hasValidMgmtToken) {
                 // Expired 8-hour management token: force clean sign-out
@@ -297,10 +371,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      setLoading(false);
+      if (active) {
+        setLoading(false);
+      }
     });
 
-    return () => unsubscribe();
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   // 1. Google Sign-in with popup (no redirect inside iframe)
@@ -308,6 +387,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     success: boolean;
     error?: string;
     popupBlocked?: boolean;
+    isManagement?: boolean;
   }> => {
     try {
       const credential = await signInWithPopup(auth, googleProvider);
@@ -345,11 +425,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         savedPropertyIds: savedIds,
       });
 
+      let isMgmt = false;
       if (fbUser.email) {
-        void syncGoogleUserWithBackend(fbUser);
+        const syncResult = await syncGoogleUserWithBackend(fbUser);
+        isMgmt = syncResult.isManagement;
       }
 
-      return { success: true };
+      return { success: true, isManagement: isMgmt };
     } catch (error: any) {
       console.warn('Google sign-in popup error:', error?.code, error?.message);
 

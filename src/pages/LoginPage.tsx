@@ -96,8 +96,14 @@ export const LoginPage: React.FC = () => {
     setGoogleLoading(false);
 
     if (result.success) {
-      showToast('Assalam o Alaikum! Welcome back to Avenue.', 'success');
-      navigate(from, { replace: true });
+      const hasExplicitFrom = Boolean((location.state as any)?.from?.pathname);
+      if (result.isManagement) {
+        showToast('Signed in to Avenue Management.', 'success');
+        navigate(hasExplicitFrom ? from : '/manage', { replace: true });
+      } else {
+        showToast('Assalam o Alaikum! Welcome back to Avenue.', 'success');
+        navigate(from, { replace: true });
+      }
     } else {
       const msg = result.error || 'Google sign-in could not be completed.';
       setError(msg);

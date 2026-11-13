@@ -23,12 +23,15 @@ import {
   CheckCircle2,
   Edit2,
   X,
+  SlidersHorizontal,
+  Users,
 } from 'lucide-react';
 
 export const ProfilePage: React.FC = () => {
   const {
     currentUser,
     isAuthenticated,
+    isManagement,
     logout,
     savedPropertyIds,
     toggleSaveProperty,
@@ -201,7 +204,7 @@ export const ProfilePage: React.FC = () => {
               <div className="flex flex-wrap items-center gap-2">
                 <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-slate-100 text-[#1B2A44] text-[10px] font-display uppercase tracking-widest font-semibold border border-slate-200">
                   <ShieldCheck className="w-3.5 h-3.5 text-[#2F4B73]" />
-                  <span>Avenue Client</span>
+                  <span>{isManagement ? 'Avenue Management' : 'Avenue Client'}</span>
                 </div>
                 {currentUser.emailVerified && (
                   <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-display uppercase tracking-widest font-semibold border border-emerald-200">
@@ -214,13 +217,33 @@ export const ProfilePage: React.FC = () => {
                 {currentUser.name}
               </h1>
               <p className="text-xs text-slate-500 font-body">
-                Verified Investor & Property Holder
+                {isManagement
+                  ? 'Authorized Portal Administrator'
+                  : 'Verified Investor & Property Holder'}
               </p>
             </div>
           </div>
 
-          {/* Logout Action */}
-          <div className="flex items-center gap-3">
+          {/* Management Quick Links & Logout Action */}
+          <div className="flex flex-wrap items-center gap-3">
+            {isManagement && (
+              <>
+                <Link
+                  to="/manage"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] text-white font-display text-xs uppercase tracking-wider font-semibold transition-all"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span>Manage Inventory</span>
+                </Link>
+                <Link
+                  to="/records"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 text-[#1B2A44] font-display text-xs uppercase tracking-wider font-semibold transition-all"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Client Records</span>
+                </Link>
+              </>
+            )}
             <button
               onClick={handleLogout}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-slate-200 hover:border-rose-300 hover:bg-rose-50 text-rose-600 font-display text-xs uppercase tracking-wider font-semibold transition-all cursor-pointer"

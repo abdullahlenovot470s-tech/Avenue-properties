@@ -17,6 +17,23 @@ import type { PortfolioProject, PropertyListing, RentalListing } from './src/typ
 const PORT = Number(process.env.PORT) || 3000;
 const MANAGEMENT_EMAIL = (process.env.MANAGEMENT_EMAIL || '').trim().toLowerCase();
 const MANAGEMENT_PASSWORD = process.env.MANAGEMENT_PASSWORD || '';
+const DEFAULT_MANAGEMENT_GOOGLE_EMAIL = 'abdullah.lenovot470s@gmail.com';
+const MANAGEMENT_GOOGLE_EMAILS = new Set(
+  [
+    DEFAULT_MANAGEMENT_GOOGLE_EMAIL,
+    MANAGEMENT_EMAIL,
+    ...String(process.env.MANAGEMENT_GOOGLE_EMAILS || '')
+      .split(',')
+      .map((entry) => entry.trim().toLowerCase()),
+  ].filter(Boolean)
+);
+
+function isManagementEmail(email: string): boolean {
+  const clean = email.trim().toLowerCase();
+  if (!clean) return false;
+  return (Boolean(MANAGEMENT_EMAIL) && clean === MANAGEMENT_EMAIL) || MANAGEMENT_GOOGLE_EMAILS.has(clean);
+}
+
 const ENV_TOKEN_SECRET = (process.env.MANAGEMENT_TOKEN_SECRET || '').trim();
 const TOKEN_SECRET = ENV_TOKEN_SECRET || crypto.randomBytes(32).toString('hex');
 
@@ -726,10 +743,9 @@ function createManagementToken(email: string): string {
 }
 
 function verifyManagementToken(token: string): boolean {
-  if (!MANAGEMENT_EMAIL) return false;
   const decoded = verifyHmacPayload<{ email?: string; role?: string; exp?: number }>(token);
-  if (!decoded) return false;
-  return decoded.email === MANAGEMENT_EMAIL && decoded.role === 'management';
+  if (!decoded || typeof decoded.email !== 'string') return false;
+  return isManagementEmail(decoded.email) && decoded.role === 'management';
 }
 
 function createUserToken(user: { id: string; email: string }): string {
@@ -777,6 +793,7 @@ interface VerifiedFirebaseIdentity {
   name: string;
   photoURL?: string;
   emailVerified: boolean;
+  signInProvider?: string;
 }
 
 async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseIdentity | null> {
@@ -793,6 +810,7 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseI
         name: decoded.name || decoded.email.split('@')[0] || 'Avenue Member',
         photoURL: decoded.picture || undefined,
         emailVerified: Boolean(decoded.email_verified),
+        signInProvider: decoded.firebase?.sign_in_provider,
       };
     } catch {
       return null;
@@ -813,6 +831,9 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseI
       iss?: string;
       sub?: string;
       exp?: number;
+      firebase?: {
+        sign_in_provider?: string;
+      };
     };
     const nowSec = Math.floor(Date.now() / 1000);
     if (
@@ -854,6 +875,7 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseI
       name: fbUser.displayName || fbUser.email.split('@')[0] || 'Avenue Member',
       photoURL: fbUser.photoUrl || undefined,
       emailVerified: Boolean(fbUser.emailVerified),
+      signInProvider: claims.firebase?.sign_in_provider,
     };
   } catch {
     return null;
@@ -1481,10 +1503,10 @@ async function startServer() {
         return res.status(400).json({ success: false, error: 'Password should be at least 8 characters.' });
       }
 
-      if (MANAGEMENT_EMAIL && email === MANAGEMENT_EMAIL) {
+      if (isManagementEmail(email)) {
         return res.status(403).json({
           success: false,
-          error: 'This email cannot be registered here. Please use the Login page.',
+          error: 'This email cannot be registered here. Please use Google Sign-In or Management Login.',
         });
       }
 
@@ -1832,15 +1854,19 @@ async function startServer() {
         });
       }
 
-      if (MANAGEMENT_EMAIL && verified.email === MANAGEMENT_EMAIL) {
+      const isMgmtGoogleAccount = isManagementEmail(verified.email);
+      if (isMgmtGoogleAccount && (!verified.emailVerified || verified.signInProvider !== 'google.com')) {
         return res.status(403).json({
           success: false,
-          error: 'Management account cannot be synced via Google Sign-In.',
+          error: 'Verified Google Sign-In is required for management access.',
         });
       }
 
       const existing = await getUserByEmail(verified.email);
       const now = new Date().toISOString();
+      let syncedUser: StoredUser;
+      let statusCode = 200;
+
       if (existing) {
         existing.id = existing.id || verified.uid;
         existing.name = verified.name || existing.name;
@@ -1849,30 +1875,42 @@ async function startServer() {
         existing.lastLoginAt = now;
         if (!existing.provider) existing.provider = 'google';
         await saveUser(existing);
-        return res.json({
+        syncedUser = existing;
+      } else {
+        syncedUser = {
+          id: verified.uid,
+          name: verified.name,
+          email: verified.email,
+          passwordHash: '',
+          salt: '',
+          emailVerified: true,
+          provider: 'google',
+          photoURL: verified.photoURL,
+          createdAt: now,
+          lastLoginAt: now,
+        };
+        await saveUser(syncedUser);
+        statusCode = 201;
+      }
+
+      if (isMgmtGoogleAccount) {
+        return res.status(statusCode).json({
           success: true,
-          user: sanitizeUser(existing),
-          userToken: createUserToken(existing),
+          isManagement: true,
+          user: {
+            ...sanitizeUser(syncedUser),
+            role: 'management' as const,
+          },
+          managementToken: createManagementToken(verified.email),
+          userToken: createUserToken(syncedUser),
         });
       }
 
-      const newGoogleUser: StoredUser = {
-        id: verified.uid,
-        name: verified.name,
-        email: verified.email,
-        passwordHash: '',
-        salt: '',
-        emailVerified: true,
-        provider: 'google',
-        photoURL: verified.photoURL,
-        createdAt: now,
-        lastLoginAt: now,
-      };
-      await saveUser(newGoogleUser);
-      return res.status(201).json({
+      return res.status(statusCode).json({
         success: true,
-        user: sanitizeUser(newGoogleUser),
-        userToken: createUserToken(newGoogleUser),
+        isManagement: false,
+        user: sanitizeUser(syncedUser),
+        userToken: createUserToken(syncedUser),
       });
     } catch (err) {
       console.error('Google sync error:', err);
@@ -1945,7 +1983,7 @@ async function startServer() {
 
     try {
       const email = String(req.body?.email || '').trim().toLowerCase();
-      if (!email || (MANAGEMENT_EMAIL && email === MANAGEMENT_EMAIL)) {
+      if (!email || isManagementEmail(email)) {
         return res.json(genericResponse);
       }
 
@@ -1985,7 +2023,7 @@ async function startServer() {
       const code = String(req.body?.code || '').trim();
       const newPassword = String(req.body?.newPassword || '');
 
-      if (MANAGEMENT_EMAIL && email === MANAGEMENT_EMAIL) {
+      if (isManagementEmail(email)) {
         return res.status(400).json({
           success: false,
           error: 'Invalid or expired reset code.',
@@ -2109,6 +2147,7 @@ async function startServer() {
     try {
       const [users, inquiries] = await Promise.all([listUsers(), listInquiries()]);
       const accounts = users
+        .filter((u) => !isManagementEmail(u.email))
         .map(sanitizeUser)
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 

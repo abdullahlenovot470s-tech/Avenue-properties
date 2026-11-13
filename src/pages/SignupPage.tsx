@@ -116,8 +116,13 @@ export const SignupPage: React.FC = () => {
     setGoogleLoading(false);
 
     if (result.success) {
-      showToast('Welcome to Avenue!', 'success');
-      navigate('/profile', { replace: true });
+      if (result.isManagement) {
+        showToast('Signed in to Avenue Management.', 'success');
+        navigate('/manage', { replace: true });
+      } else {
+        showToast('Welcome to Avenue!', 'success');
+        navigate('/profile', { replace: true });
+      }
     } else {
       const msg = result.error || 'Google sign-in could not be completed.';
       setGoogleError(msg);

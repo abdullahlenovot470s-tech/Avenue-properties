@@ -7,8 +7,9 @@ Avenue is a full-stack luxury real estate portal for architectural residences, s
 Copy `.env.example` to `.env` for local development or configure these variables in your hosting platform's environment settings (never commit real secrets to source control):
 
 ### Required for Production & Persistence
-- `MANAGEMENT_EMAIL` — Email address allowed to sign in to `/manage` and `/records`.
-- `MANAGEMENT_PASSWORD` — Password for the management account.
+- `MANAGEMENT_EMAIL` — Email address allowed to sign in to `/manage` and `/records` (with `MANAGEMENT_PASSWORD` or Google Sign-In).
+- `MANAGEMENT_GOOGLE_EMAILS` — Optional comma-separated Google email addresses granted management access when signing in with verified Google OAuth.
+- `MANAGEMENT_PASSWORD` — Password for email/password management portal login.
 - `MANAGEMENT_TOKEN_SECRET` — Long random string (`openssl rand -hex 32`) used to sign 8-hour management tokens and client session tokens.
 - `FIREBASE_SERVICE_ACCOUNT_JSON` (or `GOOGLE_APPLICATION_CREDENTIALS` / `FIREBASE_USE_ADC=true`) — Credentials for Firebase Admin SDK so registered accounts, property catalog edits, and client enquiries persist in Firestore instead of an in-memory fallback.
 - `FIRESTORE_DATABASE_ID` — Optional override for the Firestore database ID configured in `firebase-applet-config.json`.
