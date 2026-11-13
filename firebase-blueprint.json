@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile with saved properties and preferences",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "User Firebase Auth UID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name"
+        },
+        "email": {
+          "type": "string",
+          "description": "User registered email"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Optional Google avatar URL"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Optional phone number"
+        },
+        "emailVerified": {
+          "type": "boolean",
+          "description": "Whether user email is verified"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of account creation"
+        },
+        "savedPropertyIds": {
+          "type": "array",
+          "description": "Shortlisted property and project IDs"
+        }
+      },
+      "required": ["id", "email", "name"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Stores user profiles and shortlists, secured to the owner"
+    }
+  }
+}

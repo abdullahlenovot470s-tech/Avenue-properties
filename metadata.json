@@ -1,0 +1,6 @@
+{
+  "name": "Avenue Luxury Properties",
+  "description": "Discover your architectural legacy. Avenue presents premium residences, property acquisitions, and architectural portfolios.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
