@@ -25,11 +25,12 @@ import { useToast } from '../context/ToastContext';
 import { SafeImage } from '../components/common/SafeImage';
 import { formatRent } from '../data/rentalsData';
 import type { ProjectStatus, BuyStatus, RentStatus, PropertyStatus } from '../types';
+import { BRAND_CONFIG } from '../config/brand.config';
 
 type FilterView = 'all' | 'projects' | 'buy' | 'rent';
 type SectionKey = 'projects' | 'buy' | 'rent';
 
-const CITIES: CityOption[] = ['Lahore', 'Islamabad', 'Karachi', 'Rawalpindi', 'Murree & Hills'];
+const CITIES: CityOption[] = [...BRAND_CONFIG.locale.mainCities];
 
 const PROJECT_STATUSES: ProjectStatus[] = ['Available', 'Under Offer', 'Sold'];
 const BUY_STATUSES: BuyStatus[] = ['Available', 'Under Offer', 'Sold'];
@@ -39,10 +40,10 @@ const MAX_PHOTOS = 4;
 const MAX_PAYLOAD_BYTES = 800 * 1024; // 800 KB limit matching server.ts
 
 const SAMPLE_PHOTOS = [
-  { label: 'Modern Residence', url: '/stock/photo-1600596542815-ffad4c1539a9.jpg' },
-  { label: 'Luxury Estate', url: '/stock/photo-1580587771525-78b9dba3b914.jpg' },
-  { label: 'Apartment', url: '/stock/photo-1545324418-cc1a3fa10c00.jpg' },
-  { label: 'Hillside Home', url: '/stock/photo-1518780664697-55e3ad937233.jpg' },
+  { label: 'Modern Residence', url: BRAND_CONFIG.images.fallbackVilla },
+  { label: 'Luxury Estate', url: BRAND_CONFIG.images.serviceVilla },
+  { label: 'Apartment', url: BRAND_CONFIG.images.buy3 },
+  { label: 'Hillside Home', url: BRAND_CONFIG.images.projectAspen },
 ];
 
 function estimateUtf8Bytes(value: unknown): number {
@@ -152,7 +153,7 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
       return;
     }
     if (!isValidImageInput(trimmed)) {
-      setLocalError('Enter a valid https:// image URL or local /stock/ path.');
+      setLocalError('Enter a valid https:// image URL or local /brand/ path.');
       return;
     }
     if (photos.length >= MAX_PHOTOS) {
@@ -255,7 +256,7 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
         <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold">
           Property Photos (Up to {MAX_PHOTOS})
         </label>
-        <span className="text-[11px] font-display font-semibold text-[#2F4B73]">
+        <span className="text-[11px] font-display font-semibold text-accent">
           {photos.length} of {MAX_PHOTOS} photos
         </span>
       </div>
@@ -267,7 +268,7 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
             <div
               key={`${idx}-${photoUrl.slice(0, 32)}`}
               className={`relative rounded-xl overflow-hidden border bg-slate-100 ${
-                idx === 0 ? 'border-[#1B2A44] ring-1 ring-[#1B2A44]/20' : 'border-slate-200'
+                idx === 0 ? 'border-brand ring-1 ring-brand/20' : 'border-slate-200'
               }`}
             >
               <div className="aspect-[16/10] w-full overflow-hidden">
@@ -290,14 +291,14 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
 
               <div className="p-1.5 bg-white border-t border-slate-100 flex items-center justify-between gap-1">
                 {idx === 0 ? (
-                  <span className="px-2 py-0.5 rounded-full bg-[#1B2A44] text-white text-[10px] font-display uppercase tracking-wider font-semibold">
+                  <span className="px-2 py-0.5 rounded-full bg-brand text-brand-contrast text-[10px] font-display uppercase tracking-wider font-semibold">
                     Main Photo
                   </span>
                 ) : (
                   <button
                     type="button"
                     onClick={() => handleSetMain(idx)}
-                    className="w-full py-0.5 px-2 rounded-full bg-slate-100 hover:bg-[#1B2A44] text-[#1B2A44] hover:text-white text-[10px] font-display uppercase tracking-wider font-semibold transition-colors cursor-pointer"
+                    className="w-full py-0.5 px-2 rounded-full bg-slate-100 hover:bg-brand text-brand hover:text-brand-contrast text-[10px] font-display uppercase tracking-wider font-semibold transition-colors cursor-pointer"
                   >
                     Set as main photo
                   </button>
@@ -333,19 +334,19 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
                   handleAddUrl();
                 }
               }}
-              className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-[#2F4B73]"
+              className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-accent"
             />
             <button
               type="button"
               onClick={handleAddUrl}
-              className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-[#1B2A44] text-[#1B2A44] hover:text-white text-[11px] font-display uppercase tracking-wider font-semibold transition-colors cursor-pointer shrink-0"
+              className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-brand text-brand hover:text-brand-contrast text-[11px] font-display uppercase tracking-wider font-semibold transition-colors cursor-pointer shrink-0"
             >
               Add URL
             </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
-            <label className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-[10px] font-display uppercase tracking-wider font-semibold text-[#1B2A44] cursor-pointer transition-colors">
+            <label className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-[10px] font-display uppercase tracking-wider font-semibold text-brand cursor-pointer transition-colors">
               <Upload className="w-3 h-3" />
               <span>Upload Photo</span>
               <input
@@ -363,7 +364,7 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
                 onClick={() => handleAddSample(sample.url)}
                 className={`px-2 py-1 rounded-full text-[10px] font-body border cursor-pointer transition-colors ${
                   photos[0] === sample.url
-                    ? 'bg-[#1B2A44] text-white border-[#1B2A44]'
+                    ? 'bg-brand text-brand-contrast border-brand'
                     : photos.includes(sample.url)
                     ? 'bg-slate-200 text-slate-800 border-slate-300'
                     : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
@@ -430,7 +431,7 @@ const InventoryItemsPanel: React.FC<InventoryItemsPanelProps> = ({
   <div className="lg:col-span-7 bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200/80 space-y-4">
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
       <div>
-        <h3 className="font-display font-bold text-sm sm:text-base text-[#1B2A44] uppercase tracking-tight">
+        <h3 className="font-display font-bold text-sm sm:text-base text-brand uppercase tracking-tight">
           {sectionTitle} ({items.length})
         </h3>
         <p className="text-[11px] text-slate-500 font-body">
@@ -445,7 +446,7 @@ const InventoryItemsPanel: React.FC<InventoryItemsPanelProps> = ({
         placeholder={searchPlaceholder}
         value={searchValue}
         onChange={(e) => onSearchChange(e.target.value)}
-        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:border-[#2F4B73]"
+        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:border-accent"
       />
       <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
     </div>
@@ -461,7 +462,7 @@ const InventoryItemsPanel: React.FC<InventoryItemsPanelProps> = ({
               key={item.id}
               className={`flex flex-col gap-2.5 p-3 rounded-2xl border bg-white transition-all ${
                 isEditing
-                  ? 'border-[#1B2A44] ring-1 ring-[#1B2A44]/20'
+                  ? 'border-brand ring-1 ring-brand/20'
                   : 'border-slate-200 hover:border-slate-300'
               }`}
             >
@@ -472,7 +473,7 @@ const InventoryItemsPanel: React.FC<InventoryItemsPanelProps> = ({
                   </div>
                   <div className="min-w-0 space-y-0.5">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[10px] font-display uppercase tracking-wider text-[#2F4B73] font-bold">
+                      <span className="text-[10px] font-display uppercase tracking-wider text-accent font-bold">
                         {item.city}
                       </span>
                       <span
@@ -483,7 +484,7 @@ const InventoryItemsPanel: React.FC<InventoryItemsPanelProps> = ({
                         {item.status}
                       </span>
                     </div>
-                    <h4 className="font-display font-bold text-sm text-[#1B2A44] truncate">
+                    <h4 className="font-display font-bold text-sm text-brand truncate">
                       {item.title}
                     </h4>
                     <div className="flex items-center gap-1 text-[11px] text-slate-500 truncate">
@@ -491,7 +492,7 @@ const InventoryItemsPanel: React.FC<InventoryItemsPanelProps> = ({
                       <span className="truncate">{item.location}</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                      <span className="font-display font-bold text-[#1B2A44]">{item.priceLabel}</span>
+                      <span className="font-display font-bold text-brand">{item.priceLabel}</span>
                       <span className="text-slate-400">·</span>
                       <span className="text-slate-500">{item.meta}</span>
                     </div>
@@ -501,7 +502,7 @@ const InventoryItemsPanel: React.FC<InventoryItemsPanelProps> = ({
                 <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                   <Link
                     to={item.link}
-                    className="px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 hover:border-[#1B2A44] text-[11px] font-display uppercase tracking-wider font-semibold text-[#1B2A44] transition-colors"
+                    className="px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 hover:border-brand text-[11px] font-display uppercase tracking-wider font-semibold text-brand transition-colors"
                   >
                     View
                   </Link>
@@ -511,8 +512,8 @@ const InventoryItemsPanel: React.FC<InventoryItemsPanelProps> = ({
                     onClick={() => onEdit(item.id)}
                     className={`px-3 py-1.5 rounded-full border text-[11px] font-display uppercase tracking-wider font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
                       isEditing
-                        ? 'bg-[#1B2A44] text-white border-[#1B2A44]'
-                        : 'bg-slate-50 hover:bg-[#1B2A44] text-[#1B2A44] hover:text-white border-slate-200 hover:border-[#1B2A44]'
+                        ? 'bg-brand text-brand-contrast border-brand'
+                        : 'bg-slate-50 hover:bg-brand text-brand hover:text-brand-contrast border-slate-200 hover:border-brand'
                     }`}
                   >
                     <Pencil className="w-3 h-3" />
@@ -562,7 +563,7 @@ const InventoryItemsPanel: React.FC<InventoryItemsPanelProps> = ({
       </div>
     ) : (
       <div className="py-10 text-center space-y-1.5 border border-dashed border-slate-200 bg-white rounded-2xl">
-        <p className="font-display font-bold text-xs text-[#1B2A44] uppercase">
+        <p className="font-display font-bold text-xs text-brand uppercase">
           No Listings Found
         </p>
         <p className="text-[11px] text-slate-500 font-body">
@@ -576,13 +577,13 @@ const InventoryItemsPanel: React.FC<InventoryItemsPanelProps> = ({
 const createDefaultProjForm = () => ({
   title: '',
   location: '',
-  category: 'Lahore' as CityOption,
+  category: BRAND_CONFIG.locale.defaultCity as CityOption,
   valuation: '',
   size: '1 Kanal',
   beds: '5',
   baths: '6',
   projectDelivered: String(new Date().getFullYear()),
-  architect: 'Avenue Design Atelier',
+  architect: BRAND_CONFIG.identity.architectDefault as string,
   summary: '',
   status: 'Available' as ProjectStatus,
   gallery: [] as string[],
@@ -590,7 +591,7 @@ const createDefaultProjForm = () => ({
 
 const createDefaultBuyForm = () => ({
   title: '',
-  city: 'Lahore' as CityOption,
+  city: BRAND_CONFIG.locale.defaultCity as CityOption,
   location: '',
   type: 'House' as 'House' | 'Apartment' | 'Plot',
   price: '',
@@ -607,7 +608,7 @@ const createDefaultBuyForm = () => ({
 
 const createDefaultRentForm = () => ({
   title: '',
-  city: 'Lahore' as CityOption,
+  city: BRAND_CONFIG.locale.defaultCity as CityOption,
   areaSociety: '',
   type: 'House' as 'Apartment' | 'House' | 'Upper Portion' | 'Lower Portion',
   monthlyRent: '',
@@ -700,7 +701,7 @@ export const ManageCatalogPage: React.FC = () => {
   const [rentForm, setRentForm] = useState(createDefaultRentForm);
 
   useEffect(() => {
-    document.title = 'Manage Inventory | Avenue Luxury Properties';
+    document.title = `Manage Inventory | ${BRAND_CONFIG.identity.brandName}`;
   }, []);
 
   useEffect(() => {
@@ -826,7 +827,7 @@ export const ManageCatalogPage: React.FC = () => {
         beds: String(portfolio.beds ?? 0),
         baths: String(portfolio.baths ?? 0),
         projectDelivered: String(portfolio.projectDelivered || new Date().getFullYear()),
-        architect: portfolio.architect || 'Avenue Design Atelier',
+        architect: portfolio.architect || BRAND_CONFIG.identity.architectDefault,
         summary: portfolio.summary || '',
         status: portfolio.status || 'Available',
         gallery: photos,
@@ -846,7 +847,7 @@ export const ManageCatalogPage: React.FC = () => {
         beds: String(listing.beds ?? 0),
         baths: String(listing.baths ?? 0),
         projectDelivered: String(listing.yearBuilt || new Date().getFullYear()),
-        architect: listing.architect || listing.architecturalStyle || 'Avenue Design Atelier',
+        architect: listing.architect || listing.architecturalStyle || BRAND_CONFIG.identity.architectDefault,
         summary: listing.description || '',
         status: listing.status || 'Available',
         gallery: photos,
@@ -1078,7 +1079,7 @@ export const ManageCatalogPage: React.FC = () => {
     if (!rentForm.title.trim()) fieldErrors.title = 'Rental title is required.';
     if (!rentForm.areaSociety.trim()) fieldErrors.areaSociety = 'Area / society is required.';
     if (!Number.isFinite(numericRent) || numericRent <= 0) {
-      fieldErrors.monthlyRent = 'Enter a valid monthly rent in PKR greater than 0.';
+      fieldErrors.monthlyRent = `Enter a valid monthly rent in ${BRAND_CONFIG.locale.currencyCode} greater than 0.`;
     }
     setRentFieldErrors(fieldErrors);
 
@@ -1194,14 +1195,14 @@ export const ManageCatalogPage: React.FC = () => {
       <nav aria-label="Breadcrumb" className="px-2">
         <ol className="flex items-center gap-2 text-xs font-display uppercase tracking-widest text-slate-500">
           <li>
-            <Link to="/" className="hover:text-[#1B2A44] transition-colors">
+            <Link to="/" className="hover:text-brand transition-colors">
               Home
             </Link>
           </li>
           <li>
             <ChevronRight className="w-3 h-3 text-slate-400" />
           </li>
-          <li className="text-[#1B2A44] font-bold" aria-current="page">
+          <li className="text-brand font-bold" aria-current="page">
             Manage Inventory
           </li>
         </ol>
@@ -1211,10 +1212,10 @@ export const ManageCatalogPage: React.FC = () => {
       <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-10 shadow-xl border border-slate-100 space-y-6">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div className="space-y-2">
-            <span className="text-[11px] font-display uppercase tracking-widest text-[#2F4B73] font-bold block">
+            <span className="text-[11px] font-display uppercase tracking-widest text-accent font-bold block">
               Centralized Property Manager
             </span>
-            <h1 className="font-display font-extrabold text-2xl sm:text-4xl text-[#1B2A44] uppercase tracking-tight leading-none">
+            <h1 className="font-display font-extrabold text-2xl sm:text-4xl text-brand uppercase tracking-tight leading-none">
               MANAGE INVENTORY
             </h1>
             <p className="font-body text-xs sm:text-sm text-slate-600 max-w-2xl">
@@ -1225,7 +1226,7 @@ export const ManageCatalogPage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2.5">
             <Link
               to="/records"
-              className="px-4 py-2 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] text-white text-xs font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 transition-colors"
+              className="px-4 py-2 rounded-full bg-brand hover:bg-accent text-brand-contrast text-xs font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 transition-colors"
             >
               <Users className="w-3.5 h-3.5" />
               <span>Client Records</span>
@@ -1251,7 +1252,7 @@ export const ManageCatalogPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setConfirmResetSection('all')}
-                className="px-4 py-2 rounded-full border border-slate-200 hover:border-[#1B2A44] text-slate-700 text-xs font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                className="px-4 py-2 rounded-full border border-slate-200 hover:border-brand text-slate-700 text-xs font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Restore All Defaults</span>
@@ -1273,7 +1274,7 @@ export const ManageCatalogPage: React.FC = () => {
             onClick={() => switchView('all')}
             className={`px-5 py-2.5 rounded-full font-display text-xs uppercase tracking-wider font-bold flex items-center gap-2 transition-all cursor-pointer ${
               activeView === 'all'
-                ? 'bg-[#1B2A44] text-white shadow-md'
+                ? 'bg-brand text-brand-contrast shadow-md'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
@@ -1288,7 +1289,7 @@ export const ManageCatalogPage: React.FC = () => {
             onClick={() => switchView('projects')}
             className={`px-5 py-2.5 rounded-full font-display text-xs uppercase tracking-wider font-bold flex items-center gap-2 transition-all cursor-pointer ${
               activeView === 'projects'
-                ? 'bg-[#1B2A44] text-white shadow-md'
+                ? 'bg-brand text-brand-contrast shadow-md'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
@@ -1301,7 +1302,7 @@ export const ManageCatalogPage: React.FC = () => {
             onClick={() => switchView('buy')}
             className={`px-5 py-2.5 rounded-full font-display text-xs uppercase tracking-wider font-bold flex items-center gap-2 transition-all cursor-pointer ${
               activeView === 'buy'
-                ? 'bg-[#1B2A44] text-white shadow-md'
+                ? 'bg-brand text-brand-contrast shadow-md'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
@@ -1314,7 +1315,7 @@ export const ManageCatalogPage: React.FC = () => {
             onClick={() => switchView('rent')}
             className={`px-5 py-2.5 rounded-full font-display text-xs uppercase tracking-wider font-bold flex items-center gap-2 transition-all cursor-pointer ${
               activeView === 'rent'
-                ? 'bg-[#1B2A44] text-white shadow-md'
+                ? 'bg-brand text-brand-contrast shadow-md'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
@@ -1329,14 +1330,14 @@ export const ManageCatalogPage: React.FC = () => {
         <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-8 shadow-xl border border-slate-100 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#1B2A44] text-white flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-full bg-brand text-brand-contrast flex items-center justify-center shrink-0">
                 <Building2 className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-[10px] font-display uppercase tracking-widest text-[#2F4B73] font-bold block">
+                <span className="text-[10px] font-display uppercase tracking-widest text-accent font-bold block">
                   01 · Projects Page
                 </span>
-                <h2 className="font-display font-extrabold text-xl text-[#1B2A44] uppercase tracking-tight">
+                <h2 className="font-display font-extrabold text-xl text-brand uppercase tracking-tight">
                   Projects Add, Edit &amp; Delete
                 </h2>
               </div>
@@ -1373,7 +1374,7 @@ export const ManageCatalogPage: React.FC = () => {
 
               <Link
                 to="/projects"
-                className="px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-[#1B2A44] text-[11px] font-display uppercase tracking-wider font-semibold text-[#1B2A44] flex items-center gap-1.5 transition-colors"
+                className="px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-brand text-[11px] font-display uppercase tracking-wider font-semibold text-brand flex items-center gap-1.5 transition-colors"
               >
                 <span>View Projects</span>
                 <ExternalLink className="w-3 h-3" />
@@ -1390,13 +1391,13 @@ export const ManageCatalogPage: React.FC = () => {
             >
               {editingProjId && (
                 <div className="flex items-center justify-between gap-2 rounded-xl bg-slate-100 border border-slate-200 px-3 py-2">
-                  <span className="text-[11px] font-display uppercase tracking-wider font-bold text-[#1B2A44] truncate">
+                  <span className="text-[11px] font-display uppercase tracking-wider font-bold text-brand truncate">
                     Editing: {projForm.title || 'Project'}
                   </span>
                   <button
                     type="button"
                     onClick={cancelEditProject}
-                    className="text-[11px] font-display uppercase tracking-wider text-slate-600 hover:text-[#1B2A44] font-semibold cursor-pointer shrink-0"
+                    className="text-[11px] font-display uppercase tracking-wider text-slate-600 hover:text-brand font-semibold cursor-pointer shrink-0"
                   >
                     Cancel
                   </button>
@@ -1426,7 +1427,7 @@ export const ManageCatalogPage: React.FC = () => {
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:bg-white focus:outline-none ${
                     projFieldErrors.title
                       ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500'
-                      : 'border-slate-200 bg-slate-50 focus:border-[#2F4B73]'
+                      : 'border-slate-200 bg-slate-50 focus:border-accent'
                   }`}
                 />
                 {projFieldErrors.title && (
@@ -1480,7 +1481,7 @@ export const ManageCatalogPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. PKR 12.5 Crore"
+                    placeholder={`e.g. ${BRAND_CONFIG.locale.currencyCode} 12.5 Crore`}
                     value={projForm.valuation}
                     onChange={(e) => {
                       setProjForm({ ...projForm, valuation: e.target.value });
@@ -1491,7 +1492,7 @@ export const ManageCatalogPage: React.FC = () => {
                     className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:bg-white focus:outline-none ${
                       projFieldErrors.valuation
                         ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500'
-                        : 'border-slate-200 bg-slate-50 focus:border-[#2F4B73]'
+                        : 'border-slate-200 bg-slate-50 focus:border-accent'
                     }`}
                   />
                   {projFieldErrors.valuation && (
@@ -1506,7 +1507,7 @@ export const ManageCatalogPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Sector F-6/3, Islamabad"
+                    placeholder={`e.g. Central District, ${BRAND_CONFIG.locale.defaultCity}`}
                     value={projForm.location}
                     onChange={(e) => {
                       setProjForm({ ...projForm, location: e.target.value });
@@ -1517,7 +1518,7 @@ export const ManageCatalogPage: React.FC = () => {
                     className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:bg-white focus:outline-none ${
                       projFieldErrors.location
                         ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500'
-                        : 'border-slate-200 bg-slate-50 focus:border-[#2F4B73]'
+                        : 'border-slate-200 bg-slate-50 focus:border-accent'
                     }`}
                   />
                   {projFieldErrors.location && (
@@ -1601,7 +1602,7 @@ export const ManageCatalogPage: React.FC = () => {
                   placeholder="Brief architectural highlights..."
                   value={projForm.summary}
                   onChange={(e) => setProjForm({ ...projForm, summary: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-[#2F4B73]"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-accent"
                 />
               </div>
 
@@ -1616,7 +1617,7 @@ export const ManageCatalogPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={submittingProj}
-                  className="flex-1 py-3.5 px-6 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] text-white font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                  className="flex-1 py-3.5 px-6 rounded-full bg-brand hover:bg-accent text-brand-contrast font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                 >
                   {editingProjId ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                   <span>
@@ -1663,14 +1664,14 @@ export const ManageCatalogPage: React.FC = () => {
         <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-8 shadow-xl border border-slate-100 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#1B2A44] text-white flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-full bg-brand text-brand-contrast flex items-center justify-center shrink-0">
                 <Home className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-[10px] font-display uppercase tracking-widest text-[#2F4B73] font-bold block">
+                <span className="text-[10px] font-display uppercase tracking-widest text-accent font-bold block">
                   02 · Buy Page
                 </span>
-                <h2 className="font-display font-extrabold text-xl text-[#1B2A44] uppercase tracking-tight">
+                <h2 className="font-display font-extrabold text-xl text-brand uppercase tracking-tight">
                   Buy Listings Add, Edit &amp; Delete
                 </h2>
               </div>
@@ -1707,7 +1708,7 @@ export const ManageCatalogPage: React.FC = () => {
 
               <Link
                 to="/buy"
-                className="px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-[#1B2A44] text-[11px] font-display uppercase tracking-wider font-semibold text-[#1B2A44] flex items-center gap-1.5 transition-colors"
+                className="px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-brand text-[11px] font-display uppercase tracking-wider font-semibold text-brand flex items-center gap-1.5 transition-colors"
               >
                 <span>View Buy</span>
                 <ExternalLink className="w-3 h-3" />
@@ -1724,13 +1725,13 @@ export const ManageCatalogPage: React.FC = () => {
             >
               {editingBuyId && (
                 <div className="flex items-center justify-between gap-2 rounded-xl bg-slate-100 border border-slate-200 px-3 py-2">
-                  <span className="text-[11px] font-display uppercase tracking-wider font-bold text-[#1B2A44] truncate">
+                  <span className="text-[11px] font-display uppercase tracking-wider font-bold text-brand truncate">
                     Editing: {buyForm.title || 'Buy Listing'}
                   </span>
                   <button
                     type="button"
                     onClick={cancelEditBuy}
-                    className="text-[11px] font-display uppercase tracking-wider text-slate-600 hover:text-[#1B2A44] font-semibold cursor-pointer shrink-0"
+                    className="text-[11px] font-display uppercase tracking-wider text-slate-600 hover:text-brand font-semibold cursor-pointer shrink-0"
                   >
                     Cancel
                   </button>
@@ -1760,7 +1761,7 @@ export const ManageCatalogPage: React.FC = () => {
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:bg-white focus:outline-none ${
                     buyFieldErrors.title
                       ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500'
-                      : 'border-slate-200 bg-slate-50 focus:border-[#2F4B73]'
+                      : 'border-slate-200 bg-slate-50 focus:border-accent'
                   }`}
                 />
                 {buyFieldErrors.title && (
@@ -1829,7 +1830,7 @@ export const ManageCatalogPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. PKR 8.5 Crore"
+                    placeholder={`e.g. ${BRAND_CONFIG.locale.currencyCode} 8.5 Crore`}
                     value={buyForm.price}
                     onChange={(e) => {
                       setBuyForm({ ...buyForm, price: e.target.value });
@@ -1840,7 +1841,7 @@ export const ManageCatalogPage: React.FC = () => {
                     className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:bg-white focus:outline-none ${
                       buyFieldErrors.price
                         ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500'
-                        : 'border-slate-200 bg-slate-50 focus:border-[#2F4B73]'
+                        : 'border-slate-200 bg-slate-50 focus:border-accent'
                     }`}
                   />
                   {buyFieldErrors.price && (
@@ -1867,7 +1868,7 @@ export const ManageCatalogPage: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Block K, DHA Phase 6, Lahore"
+                  placeholder={`e.g. Phase 6, ${BRAND_CONFIG.locale.defaultCity}`}
                   value={buyForm.location}
                   onChange={(e) => {
                     setBuyForm({ ...buyForm, location: e.target.value });
@@ -1878,7 +1879,7 @@ export const ManageCatalogPage: React.FC = () => {
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:bg-white focus:outline-none ${
                     buyFieldErrors.location
                       ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500'
-                      : 'border-slate-200 bg-slate-50 focus:border-[#2F4B73]'
+                      : 'border-slate-200 bg-slate-50 focus:border-accent'
                   }`}
                 />
                 {buyFieldErrors.location && (
@@ -1949,7 +1950,7 @@ export const ManageCatalogPage: React.FC = () => {
                   placeholder="Key highlights of this property..."
                   value={buyForm.description}
                   onChange={(e) => setBuyForm({ ...buyForm, description: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-[#2F4B73]"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-accent"
                 />
               </div>
 
@@ -1964,7 +1965,7 @@ export const ManageCatalogPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={submittingBuy}
-                  className="flex-1 py-3.5 px-6 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] text-white font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                  className="flex-1 py-3.5 px-6 rounded-full bg-brand hover:bg-accent text-brand-contrast font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                 >
                   {editingBuyId ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                   <span>
@@ -2011,14 +2012,14 @@ export const ManageCatalogPage: React.FC = () => {
         <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-8 shadow-xl border border-slate-100 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#1B2A44] text-white flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-full bg-brand text-brand-contrast flex items-center justify-center shrink-0">
                 <Key className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-[10px] font-display uppercase tracking-widest text-[#2F4B73] font-bold block">
+                <span className="text-[10px] font-display uppercase tracking-widest text-accent font-bold block">
                   03 · Rent Page
                 </span>
-                <h2 className="font-display font-extrabold text-xl text-[#1B2A44] uppercase tracking-tight">
+                <h2 className="font-display font-extrabold text-xl text-brand uppercase tracking-tight">
                   Rent Listings Add, Edit &amp; Delete
                 </h2>
               </div>
@@ -2055,7 +2056,7 @@ export const ManageCatalogPage: React.FC = () => {
 
               <Link
                 to="/rent"
-                className="px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-[#1B2A44] text-[11px] font-display uppercase tracking-wider font-semibold text-[#1B2A44] flex items-center gap-1.5 transition-colors"
+                className="px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-brand text-[11px] font-display uppercase tracking-wider font-semibold text-brand flex items-center gap-1.5 transition-colors"
               >
                 <span>View Rent</span>
                 <ExternalLink className="w-3 h-3" />
@@ -2072,13 +2073,13 @@ export const ManageCatalogPage: React.FC = () => {
             >
               {editingRentId && (
                 <div className="flex items-center justify-between gap-2 rounded-xl bg-slate-100 border border-slate-200 px-3 py-2">
-                  <span className="text-[11px] font-display uppercase tracking-wider font-bold text-[#1B2A44] truncate">
+                  <span className="text-[11px] font-display uppercase tracking-wider font-bold text-brand truncate">
                     Editing: {rentForm.title || 'Rental Listing'}
                   </span>
                   <button
                     type="button"
                     onClick={cancelEditRent}
-                    className="text-[11px] font-display uppercase tracking-wider text-slate-600 hover:text-[#1B2A44] font-semibold cursor-pointer shrink-0"
+                    className="text-[11px] font-display uppercase tracking-wider text-slate-600 hover:text-brand font-semibold cursor-pointer shrink-0"
                   >
                     Cancel
                   </button>
@@ -2108,7 +2109,7 @@ export const ManageCatalogPage: React.FC = () => {
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:bg-white focus:outline-none ${
                     rentFieldErrors.title
                       ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500'
-                      : 'border-slate-200 bg-slate-50 focus:border-[#2F4B73]'
+                      : 'border-slate-200 bg-slate-50 focus:border-accent'
                   }`}
                 />
                 {rentFieldErrors.title && (
@@ -2182,7 +2183,7 @@ export const ManageCatalogPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1">
-                    Monthly Rent (PKR) *
+                    Monthly Rent ({BRAND_CONFIG.locale.currencyCode}) *
                   </label>
                   <input
                     type="number"
@@ -2198,7 +2199,7 @@ export const ManageCatalogPage: React.FC = () => {
                     className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:bg-white focus:outline-none ${
                       rentFieldErrors.monthlyRent
                         ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500'
-                        : 'border-slate-200 bg-slate-50 focus:border-[#2F4B73]'
+                        : 'border-slate-200 bg-slate-50 focus:border-accent'
                     }`}
                   />
                   {rentFieldErrors.monthlyRent && (
@@ -2233,7 +2234,7 @@ export const ManageCatalogPage: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Sector F-10/3, Islamabad"
+                  placeholder={`e.g. Sector F-10/3, ${BRAND_CONFIG.locale.mainCities[1] || BRAND_CONFIG.locale.defaultCity}`}
                   value={rentForm.areaSociety}
                   onChange={(e) => {
                     setRentForm({ ...rentForm, areaSociety: e.target.value });
@@ -2244,7 +2245,7 @@ export const ManageCatalogPage: React.FC = () => {
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:bg-white focus:outline-none ${
                     rentFieldErrors.areaSociety
                       ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500'
-                      : 'border-slate-200 bg-slate-50 focus:border-[#2F4B73]'
+                      : 'border-slate-200 bg-slate-50 focus:border-accent'
                   }`}
                 />
                 {rentFieldErrors.areaSociety && (
@@ -2302,7 +2303,7 @@ export const ManageCatalogPage: React.FC = () => {
                   placeholder="Lease highlights and nearby landmarks..."
                   value={rentForm.description}
                   onChange={(e) => setRentForm({ ...rentForm, description: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-[#2F4B73]"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-accent"
                 />
               </div>
 
@@ -2317,7 +2318,7 @@ export const ManageCatalogPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={submittingRent}
-                  className="flex-1 py-3.5 px-6 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] text-white font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                  className="flex-1 py-3.5 px-6 rounded-full bg-brand hover:bg-accent text-brand-contrast font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                 >
                   {editingRentId ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                   <span>

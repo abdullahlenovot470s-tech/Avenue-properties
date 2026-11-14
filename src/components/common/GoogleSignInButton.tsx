@@ -39,7 +39,7 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
       type="button"
       onClick={onClick}
       disabled={loading}
-      className={`w-full py-3.5 px-6 rounded-full bg-white hover:bg-slate-50 text-[#1B2A44] font-display font-bold text-xs uppercase tracking-wider transition-all shadow-md hover:shadow-lg border border-slate-200 flex items-center justify-center gap-3 cursor-pointer active:scale-[0.99] disabled:opacity-70 ${className}`}
+      className={`w-full py-3.5 px-6 rounded-full bg-white hover:bg-slate-50 text-brand font-display font-bold text-xs uppercase tracking-wider transition-all shadow-md hover:shadow-lg border border-slate-200 flex items-center justify-center gap-3 cursor-pointer active:scale-[0.99] disabled:opacity-70 ${className}`}
     >
       <GoogleGLogo className="w-4 h-4 shrink-0" />
       <span>{loading ? 'Connecting with Google...' : text}</span>

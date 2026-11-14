@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCatalog } from '../context/CatalogContext';
 import { PortfolioProject } from '../types';
+import { BRAND_CONFIG } from '../config/brand.config';
 import { SafeImage } from './common/SafeImage';
 import { PillButton } from './common/PillButton';
 import { ArrowLeft, ArrowRight, MapPin, Maximize2, Calendar, CheckCircle2, ArrowUpRight } from 'lucide-react';
@@ -12,7 +13,7 @@ interface PortfolioProps {
   onOpenConsultation: () => void;
 }
 
-export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject, onOpenConsultation }) => {
+export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject }) => {
   const navigate = useNavigate();
   const { portfolioProjects } = useCatalog();
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -38,7 +39,6 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject, onOpenCon
     setCurrentIndex((prev) => (prev >= portfolioProjects.length - 1 ? 0 : prev + 1));
   };
 
-  // Other projects for thumbnails
   const thumbnailProjects = portfolioProjects
     .map((p, idx) => ({ ...p, originalIdx: idx }))
     .filter((_, idx) => idx !== safeIndex);
@@ -48,15 +48,14 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject, onOpenCon
       id="portfolio"
       className="relative w-full py-6 sm:py-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
     >
-      {/* White Section Card with Giant Watermark */}
       <div className="relative w-full bg-white rounded-[24px] sm:rounded-[32px] overflow-hidden p-4 sm:p-8 md:p-12 shadow-xl border border-slate-100">
-        {/* GIANT GHOST WATERMARK WORD "PROJECTS" */}
+        {/* Giant Watermark */}
         <div className="absolute top-6 -left-8 md:-left-12 z-0 pointer-events-none select-none overflow-hidden max-w-full">
           <span
-            className="font-display font-black leading-none uppercase tracking-tighter text-[#E2E8F0]/35 select-none"
+            className="font-display font-black leading-none uppercase tracking-tighter text-watermark/35 select-none"
             style={{ fontSize: 'clamp(4rem, 14vw, 8rem)' }}
           >
-            PROJECTS
+            {BRAND_CONFIG.copy.portfolioSection.watermark}
           </span>
         </div>
 
@@ -82,10 +81,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject, onOpenCon
                   className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                 />
 
-                {/* Gradient Scrim for Legibility */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0e1726]/90 via-[#0e1726]/30 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/90 via-brand-dark/30 to-transparent" />
 
-                {/* Mobile Glass Overlay (< lg): title, location, area only + small arrow */}
+                {/* Mobile Glass Overlay (< lg) */}
                 <div className="flex lg:hidden absolute inset-x-3 bottom-3 glass-panel rounded-xl p-3 text-white shadow-lg border border-white/25 items-end justify-between">
                   <div className="min-w-0 pr-2">
                     <h3 className="font-display font-bold text-[0.95rem] uppercase tracking-tight text-white leading-tight truncate">
@@ -105,7 +103,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject, onOpenCon
                   </div>
                 </div>
 
-                {/* Desktop Glass Overlay Card (1024px and up) */}
+                {/* Desktop Glass Overlay Card */}
                 <div className="hidden lg:block absolute inset-x-6 bottom-6 glass-panel rounded-3xl p-6 text-white shadow-xl border border-white/25">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] font-display uppercase tracking-widest text-white/70">
@@ -156,38 +154,36 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject, onOpenCon
             </AnimatePresence>
           </div>
 
-          {/* Right Column: Title, View All, Prev/Next Arrows, and Two Thumbnails */}
+          {/* Right Column */}
           <div className="lg:col-span-6 flex flex-col space-y-6 sm:space-y-8">
-            {/* Header with Title, Button & Controls */}
             <div className="flex flex-col space-y-3 sm:space-y-4">
               <div className="flex flex-row items-center justify-between gap-4">
-                <h2 className="font-display font-extrabold text-xl sm:text-3xl lg:text-4xl text-[#1B2A44] uppercase tracking-tight">
-                  SIGNATURE PORTFOLIO
+                <h2 className="font-display font-extrabold text-xl sm:text-3xl lg:text-4xl text-brand uppercase tracking-tight">
+                  {BRAND_CONFIG.copy.portfolioSection.heading}
                 </h2>
               </div>
 
               <div className="flex items-center justify-between gap-4 pt-1">
                 <button
                   onClick={() => navigate('/projects')}
-                  className="text-xs font-display uppercase tracking-wider text-[#1B2A44] hover:text-[#2F4B73] font-bold flex items-center gap-1"
+                  className="text-xs font-display uppercase tracking-wider text-brand hover:text-accent font-bold flex items-center gap-1"
                 >
                   <span>VIEW ALL PROPERTIES</span>
                   <ArrowUpRight className="w-3.5 h-3.5" />
                 </button>
 
-                {/* Prev / Next Circular Arrow Buttons (Keep arrows) */}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handlePrev}
                     aria-label="Previous portfolio item"
-                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-[#1B2A44] flex items-center justify-center text-[#1B2A44] hover:bg-[#1B2A44]/10 transition-colors cursor-pointer"
+                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-brand flex items-center justify-center text-brand hover:bg-brand/10 transition-colors cursor-pointer"
                   >
                     <ArrowLeft className="w-4 h-4" />
                   </button>
                   <button
                     onClick={handleNext}
                     aria-label="Next portfolio item"
-                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1B2A44] flex items-center justify-center text-white hover:bg-[#2F4B73] transition-colors shadow-sm cursor-pointer"
+                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-brand flex items-center justify-center text-brand-contrast hover:bg-accent hover:text-accent-contrast transition-colors shadow-sm cursor-pointer"
                   >
                     <ArrowRight className="w-4 h-4" />
                   </button>
@@ -195,7 +191,6 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject, onOpenCon
               </div>
             </div>
 
-            {/* Two Landscape Thumbnail Project Cards (2-column on mobile & desktop) */}
             <div className="grid grid-cols-2 gap-2.5 sm:gap-6 pt-1">
               {thumbnailProjects.map((project) => (
                 <div
@@ -211,7 +206,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject, onOpenCon
                     height={600}
                     className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#1B2A44]/85 via-black/20 to-transparent group-hover:from-[#1B2A44]/95 transition-colors" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-brand/85 via-black/20 to-transparent group-hover:from-brand/95 transition-colors" />
 
                   <div className="absolute inset-x-2.5 sm:inset-x-4 bottom-2.5 sm:bottom-4 text-white">
                     <span className="text-[0.65rem] sm:text-[10px] font-display uppercase tracking-widest text-white/70 block truncate">
@@ -228,9 +223,11 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject, onOpenCon
               ))}
             </div>
 
-            {/* Architectural Statement */}
-            <div className="p-3.5 sm:p-5 rounded-2xl bg-[#E6ECF5]/40 border border-[#E6ECF5] text-[0.72rem] sm:text-[13px] text-[#1B2A44]/90 leading-relaxed font-body">
-              <span className="font-semibold text-[#1B2A44]">Avenue Legal Guarantee:</span> Every residence in our signature portfolio undergoes rigorous LDA / CDA / KDA approval verification, clear fard and registry review, and structural inspection before representation.
+            <div className="p-3.5 sm:p-5 rounded-2xl bg-surface/40 border border-surface text-[0.72rem] sm:text-[13px] text-brand/90 leading-relaxed font-body">
+              <span className="font-semibold text-brand">
+                {BRAND_CONFIG.copy.portfolioSection.guaranteeTitle}
+              </span>{' '}
+              {BRAND_CONFIG.copy.portfolioSection.guaranteeBody}
             </div>
           </div>
         </div>

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
 import { SERVICES_OFFERED, HERO_ASSETS } from '../data/realEstateData';
 import { SafeImage } from '../components/common/SafeImage';
 import { PillButton } from '../components/common/PillButton';
-import { Check, ShieldCheck, ArrowRight, Layers, Briefcase, FileCheck, Landmark } from 'lucide-react';
+import { BRAND_CONFIG } from '../config/brand.config';
+import { Check, ShieldCheck, Layers, FileCheck, Landmark } from 'lucide-react';
 
 interface ServicesPageProps {
   onOpenConsultation: (serviceTitle?: string) => void;
@@ -13,9 +13,11 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
   const [activeTab, setActiveTab] = useState<string>(SERVICES_OFFERED[0].id);
 
   const selectedService = SERVICES_OFFERED.find((s) => s.id === activeTab) || SERVICES_OFFERED[0];
+  const shortBrand = BRAND_CONFIG.identity.brandShortName;
+  const primaryCities = BRAND_CONFIG.locale.mainCities.slice(0, 3).join(', ');
 
   React.useEffect(() => {
-    document.title = 'Services & Advisory | Avenue Luxury Properties';
+    document.title = `Services & Advisory | ${BRAND_CONFIG.identity.brandName}`;
   }, []);
 
   return (
@@ -24,7 +26,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
       <section className="relative w-full bg-white rounded-[24px] sm:rounded-[32px] overflow-hidden p-6 sm:p-10 md:p-14 shadow-xl border border-slate-100">
         <div className="absolute top-4 right-0 pointer-events-none select-none overflow-hidden max-w-full z-0">
           <span
-            className="font-display font-black leading-none uppercase tracking-tighter text-[#E2E8F0]/30 select-none"
+            className="font-display font-black leading-none uppercase tracking-tighter text-watermark/30 select-none"
             style={{ fontSize: 'clamp(4rem, 12vw, 7.5rem)' }}
           >
             SERVICES
@@ -32,20 +34,20 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
         </div>
 
         <div className="relative z-10 max-w-3xl space-y-4">
-          <span className="text-[11px] font-display uppercase tracking-widest text-[#2F4B73] font-bold block">
+          <span className="text-[11px] font-display uppercase tracking-widest text-accent font-bold block">
             End-To-End Advisory Practice
           </span>
-          <h1 className="font-display font-extrabold text-2xl sm:text-4xl lg:text-5xl text-[#1B2A44] uppercase tracking-tight leading-none">
+          <h1 className="font-display font-extrabold text-2xl sm:text-4xl lg:text-5xl text-brand uppercase tracking-tight leading-none">
             STRATEGIC PROPERTY & ARCHITECTURAL ADVISORY.
           </h1>
-          <p className="font-body text-sm sm:text-base text-[#1B2A44]/80 leading-relaxed font-light">
-            We operate at the intersection of modern architecture and family property preservation, providing Pakistani buyers and overseas families with absolute transparency, verified documentation, and private advisory access.
+          <p className="font-body text-sm sm:text-base text-brand/80 leading-relaxed font-light">
+            We operate at the intersection of modern architecture and family property preservation, providing {BRAND_CONFIG.locale.nationalityAdjective} buyers and overseas families with absolute transparency, verified documentation, and private advisory access.
           </p>
         </div>
       </section>
 
       {/* Interactive 3-Pillar Explorer */}
-      <section className="bg-[#2F4B73] rounded-[28px] sm:rounded-[36px] p-6 sm:p-12 md:p-16 text-white shadow-2xl relative overflow-hidden">
+      <section className="bg-accent rounded-[28px] sm:rounded-[36px] p-6 sm:p-12 md:p-16 text-accent-contrast shadow-2xl relative overflow-hidden">
         {/* Navigation Tabs for Services */}
         <div className="flex flex-wrap gap-2.5 pb-8 border-b border-white/15">
           {SERVICES_OFFERED.map((s) => (
@@ -54,8 +56,8 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
               onClick={() => setActiveTab(s.id)}
               className={`px-5 py-2.5 rounded-full font-display text-xs uppercase tracking-wider font-semibold transition-all cursor-pointer ${
                 activeTab === s.id
-                  ? 'bg-white text-[#1B2A44] shadow-md scale-102'
-                  : 'glass-card-subtle text-white/80 hover:text-white hover:bg-white/15'
+                  ? 'bg-white text-brand shadow-md scale-102'
+                  : 'glass-card-subtle text-accent-contrast/80 hover:text-accent-contrast hover:bg-white/15'
               }`}
             >
               {s.number}. {s.title}
@@ -66,24 +68,24 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
         {/* Active Service Detailed Presentation */}
         <div className="pt-10 grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
           <div className="lg:col-span-7 space-y-6">
-            <span className="text-[10px] font-display uppercase tracking-widest text-white/60 block">
+            <span className="text-[10px] font-display uppercase tracking-widest text-accent-contrast/60 block">
               Pillar {selectedService.number}
             </span>
             <h2 className="font-display font-extrabold text-2xl sm:text-4xl uppercase tracking-tight">
               {selectedService.title}
             </h2>
-            <p className="font-body text-xs sm:text-sm text-white/80 leading-relaxed font-light">
+            <p className="font-body text-xs sm:text-sm text-accent-contrast/80 leading-relaxed font-light">
               {selectedService.description}
             </p>
 
             {/* Scope Details */}
             <div className="space-y-3 pt-2">
-              <h4 className="text-xs font-display uppercase tracking-wider text-white/90">
+              <h4 className="text-xs font-display uppercase tracking-wider text-accent-contrast/90">
                 Core Engagement Scope:
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {selectedService.expandedDetails.map((item, idx) => (
-                  <div key={idx} className="flex items-start gap-2.5 text-xs text-white/80">
+                  <div key={idx} className="flex items-start gap-2.5 text-xs text-accent-contrast/80">
                     <Check className="w-4 h-4 text-emerald-300 shrink-0 mt-0.5" />
                     <span>{item}</span>
                   </div>
@@ -93,7 +95,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
 
             {/* Deliverables List */}
             {selectedService.deliverables && (
-              <div className="p-5 rounded-2xl glass-panel border border-white/20 mt-4">
+              <div className="p-5 rounded-2xl glass-panel border border-white/20 mt-4 text-white">
                 <div className="flex items-center gap-2 text-xs font-display uppercase tracking-widest text-amber-200 mb-2">
                   <FileCheck className="w-4 h-4 text-amber-300" />
                   <span>Key Practice Deliverables</span>
@@ -115,7 +117,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
                 size="md"
                 onClick={() => onOpenConsultation(selectedService.title)}
               >
-                Retain Avenue for {selectedService.title}
+                Retain {shortBrand} for {selectedService.title}
               </PillButton>
             </div>
           </div>
@@ -129,10 +131,10 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
               height={600}
               className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#1B2A44]/90 via-transparent to-transparent flex items-end p-6">
+            <div className="absolute inset-0 bg-gradient-to-t from-brand/90 via-transparent to-transparent flex items-end p-6">
               <div className="text-white">
                 <span className="text-[10px] font-display uppercase tracking-widest text-white/70 block">
-                  Avenue Advisory Standard
+                  {shortBrand} Advisory Standard
                 </span>
                 <span className="text-sm font-display font-bold">
                   Strict Confidentiality Assured
@@ -146,23 +148,23 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
       {/* Additional Specialized Services Grid */}
       <section className="bg-white rounded-[28px] sm:rounded-[36px] p-8 sm:p-14 md:p-16 shadow-xl border border-slate-100">
         <div className="mb-10">
-          <span className="text-[11px] font-display uppercase tracking-widest text-[#2F4B73] font-bold block mb-1">
+          <span className="text-[11px] font-display uppercase tracking-widest text-accent font-bold block mb-1">
             Specialised Capabilities
           </span>
-          <h2 className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-[#1B2A44] uppercase tracking-tight">
+          <h2 className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-brand uppercase tracking-tight">
             FAMILY OFFICES & OVERSEAS DESK
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 font-body mt-1 max-w-xl">
-            Tailored property solutions designed for family groups, corporate investors, and overseas Pakistanis.
+            Tailored property solutions designed for family groups, corporate investors, and overseas clients.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100 space-y-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#1B2A44] text-white flex items-center justify-center">
+            <div className="w-10 h-10 rounded-2xl bg-brand text-brand-contrast flex items-center justify-center">
               <Landmark className="w-5 h-5" />
             </div>
-            <h3 className="font-display font-bold text-base text-[#1B2A44] uppercase">
+            <h3 className="font-display font-bold text-base text-brand uppercase">
               Family Property Management
             </h3>
             <p className="text-xs text-slate-600 font-body leading-relaxed">
@@ -171,22 +173,22 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
           </div>
 
           <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100 space-y-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#1B2A44] text-white flex items-center justify-center">
+            <div className="w-10 h-10 rounded-2xl bg-brand text-brand-contrast flex items-center justify-center">
               <Layers className="w-5 h-5" />
             </div>
-            <h3 className="font-display font-bold text-base text-[#1B2A44] uppercase">
+            <h3 className="font-display font-bold text-base text-brand uppercase">
               Architect & Builder Coordination
             </h3>
             <p className="text-xs text-slate-600 font-body leading-relaxed">
-              For clients constructing custom houses, we connect you with PCATP-licensed architects and trusted construction contractors in Lahore, Islamabad, and Karachi.
+              For clients constructing custom houses, we connect you with licensed architects and trusted construction contractors across {primaryCities}.
             </p>
           </div>
 
           <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100 space-y-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#1B2A44] text-white flex items-center justify-center">
+            <div className="w-10 h-10 rounded-2xl bg-brand text-brand-contrast flex items-center justify-center">
               <ShieldCheck className="w-5 h-5" />
             </div>
-            <h3 className="font-display font-bold text-base text-[#1B2A44] uppercase">
+            <h3 className="font-display font-bold text-base text-brand uppercase">
               Discreet Private Sales
             </h3>
             <p className="text-xs text-slate-600 font-body leading-relaxed">

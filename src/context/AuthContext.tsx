@@ -22,6 +22,7 @@ import {
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from '../lib/firebase';
 import { parseApiResponse, SERVER_UNREACHABLE_MESSAGE } from '../lib/http';
+import { BRAND_CONFIG } from '../config/brand.config';
 
 interface AuthActionResult {
   success: boolean;
@@ -74,12 +75,22 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const GUEST_SAVED_KEY = 'avenue_guest_saved_homes_v3';
-const USER_PHONE_PREFIX = 'avenue_user_phone_';
-const USER_SAVED_PREFIX = 'avenue_user_saved_';
-const EMAIL_SESSION_KEY = 'avenue_email_session_v1';
-const MANAGEMENT_TOKEN_KEY = 'avenue_mgmt_token_v1';
-const USER_TOKEN_KEY = 'avenue_user_token_v1';
+const STORAGE_PREFIX = BRAND_CONFIG.identity.storageKeyPrefix;
+const GUEST_SAVED_KEY = `${STORAGE_PREFIX}_guest_saved_homes_v3`;
+const USER_PHONE_PREFIX = `${STORAGE_PREFIX}_user_phone_`;
+const USER_SAVED_PREFIX = `${STORAGE_PREFIX}_user_saved_`;
+const EMAIL_SESSION_KEY = `${STORAGE_PREFIX}_email_session_v1`;
+const MANAGEMENT_TOKEN_KEY = `${STORAGE_PREFIX}_mgmt_token_v1`;
+const USER_TOKEN_KEY = `${STORAGE_PREFIX}_user_token_v1`;
+const MANAGEMENT_PORTAL_EMAIL = BRAND_CONFIG.contact.managementGoogleEmail.trim().toLowerCase();
+const DEFAULT_MEMBER_NAME = `${BRAND_CONFIG.identity.brandShortName} Member`;
+
+function isVerifiedFirebaseManagementUser(fbUser: FirebaseUser | null): boolean {
+  if (!fbUser || !fbUser.email) return false;
+  return Boolean(
+    fbUser.emailVerified && fbUser.email.trim().toLowerCase() === MANAGEMENT_PORTAL_EMAIL
+  );
+}
 
 function parseManagementTokenPayload(
   token: string | null
@@ -160,7 +171,7 @@ function mapFirebaseAuthError(code: string | undefined, fallback: string): strin
     case 'auth/user-not-found':
       return 'Incorrect email or password. Please verify and try again.';
     case 'auth/user-disabled':
-      return 'This account has been disabled. Please contact Avenue support.';
+      return `This account has been disabled. Please contact ${BRAND_CONFIG.identity.brandShortName} support.`;
     case 'auth/too-many-requests':
       return 'Too many attempts detected. Please wait a few minutes and try again.';
     case 'auth/network-request-failed':
@@ -227,7 +238,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const userPath = `users/${uid}`;
     const userRef = doc(db, 'users', uid);
     const provider = providerOverride || resolveFirebaseProvider(fbUser);
-    const cleanName = (fbUser.displayName || fbUser.email.split('@')[0] || 'Avenue Member')
+    const cleanName = (fbUser.displayName || fbUser.email.split('@')[0] || DEFAULT_MEMBER_NAME)
       .trim()
       .slice(0, 120);
     const cleanEmail = fbUser.email.trim().toLowerCase().slice(0, 254);
@@ -378,26 +389,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const syncGoogleUserWithBackend = async (fbUser: FirebaseUser): Promise<{ isManagement: boolean }> => {
     const existingSync = googleSyncInFlightRef.current;
     if (existingSync && existingSync.uid === fbUser.uid) {
-      return existingSync.promise;
+      const result = await existingSync.promise;
+      setCurrentUser((prev) =>
+        prev && prev.id === fbUser.uid
+          ? { ...prev, role: result.isManagement ? 'management' : prev.role || 'client' }
+          : prev
+      );
+      return result;
     }
 
+    const requestSyncWithToken = async (forceRefresh: boolean) => {
+      const idToken = await fbUser.getIdToken(forceRefresh);
+      const res = await fetch('/api/auth/google-sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ idToken }),
+      });
+      return parseApiResponse<{
+        success?: boolean;
+        isManagement?: boolean;
+        managementToken?: string;
+        userToken?: string;
+      }>(res);
+    };
+
     const runSync = (async (): Promise<{ isManagement: boolean }> => {
+      let backendExplicitlyResponded = false;
       try {
-        const idToken = await fbUser.getIdToken();
-        const res = await fetch('/api/auth/google-sync', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({ idToken }),
-        });
-        const parsed = await parseApiResponse<{
-          success?: boolean;
-          isManagement?: boolean;
-          managementToken?: string;
-          userToken?: string;
-        }>(res);
+        let parsed = await requestSyncWithToken(false);
+        if (parsed.status === 401 && !parsed.unreachable) {
+          parsed = await requestSyncWithToken(true);
+        }
+
+        if (!parsed.unreachable && parsed.data) {
+          backendExplicitlyResponded = true;
+        }
 
         if (parsed.ok && parsed.data?.success) {
           if (parsed.data.userToken) {
@@ -422,12 +451,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return { isManagement: false };
         }
       } catch {
-        // Backend sync failed or timed out; fall back to valid cached token for same email if present
+        // Backend sync failed or timed out; fall back below
       }
 
       const cachedToken = getStoredToken(MANAGEMENT_TOKEN_KEY);
       if (cachedToken && isManagementTokenValid(cachedToken, fbUser.email)) {
         setManagementToken(cachedToken);
+        setCurrentUser((prev) =>
+          prev && prev.id === fbUser.uid ? { ...prev, role: 'management' } : prev
+        );
+        return { isManagement: true };
+      }
+
+      if (!backendExplicitlyResponded && isVerifiedFirebaseManagementUser(fbUser)) {
+        setManagementToken(null);
         setCurrentUser((prev) =>
           prev && prev.id === fbUser.uid ? { ...prev, role: 'management' } : prev
         );
@@ -468,18 +505,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
 
           const storedMgmtToken = getStoredToken(MANAGEMENT_TOKEN_KEY);
-          const hasMatchingMgmtToken =
-            isGoogle && Boolean(storedMgmtToken && isManagementTokenValid(storedMgmtToken, fbUser.email));
+          const hasMatchingMgmtToken = Boolean(
+            storedMgmtToken && isManagementTokenValid(storedMgmtToken, fbUser.email)
+          );
+          const initialIsMgmt = hasMatchingMgmtToken || isVerifiedFirebaseManagementUser(fbUser);
 
           setManagementToken(hasMatchingMgmtToken ? storedMgmtToken : null);
           setCurrentUser({
             id: fbUser.uid,
-            name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Avenue Member',
+            name: fbUser.displayName || fbUser.email?.split('@')[0] || DEFAULT_MEMBER_NAME,
             email: fbUser.email || '',
             photoURL: fbUser.photoURL || undefined,
             phone: storedPhone || undefined,
             emailVerified: true,
-            role: hasMatchingMgmtToken ? 'management' : 'client',
+            role: initialIsMgmt ? 'management' : 'client',
             createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
             savedPropertyIds: savedIds,
           });
@@ -573,32 +612,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       localStorage.removeItem(EMAIL_SESSION_KEY);
       sessionStorage.removeItem(EMAIL_SESSION_KEY);
-      localStorage.removeItem(MANAGEMENT_TOKEN_KEY);
-      sessionStorage.removeItem(MANAGEMENT_TOKEN_KEY);
       localStorage.removeItem(USER_TOKEN_KEY);
       sessionStorage.removeItem(USER_TOKEN_KEY);
-      setManagementToken(null);
+      const cachedMgmt = getStoredToken(MANAGEMENT_TOKEN_KEY);
+      if (cachedMgmt && !isManagementTokenValid(cachedMgmt, fbUser.email)) {
+        localStorage.removeItem(MANAGEMENT_TOKEN_KEY);
+        sessionStorage.removeItem(MANAGEMENT_TOKEN_KEY);
+        setManagementToken(null);
+      }
 
-      const firestoreSynced = await syncUserProfileToFirestore(fbUser, 'google');
+      const [firestoreSynced, syncResult] = await Promise.all([
+        syncUserProfileToFirestore(fbUser, 'google'),
+        fbUser.email ? syncGoogleUserWithBackend(fbUser) : Promise.resolve({ isManagement: false }),
+      ]);
 
+      const isMgmt = syncResult.isManagement;
       setFirebaseUser(fbUser);
       setCurrentUser({
         id: fbUser.uid,
-        name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Avenue Member',
+        name: fbUser.displayName || fbUser.email?.split('@')[0] || DEFAULT_MEMBER_NAME,
         email: fbUser.email || '',
         photoURL: fbUser.photoURL || undefined,
         phone: firestoreSynced.phone,
         emailVerified: true,
-        role: 'client',
+        role: isMgmt ? 'management' : 'client',
         createdAt: firestoreSynced.createdAt,
         savedPropertyIds: firestoreSynced.savedPropertyIds,
       });
-
-      let isMgmt = false;
-      if (fbUser.email) {
-        const syncResult = await syncGoogleUserWithBackend(fbUser);
-        isMgmt = syncResult.isManagement;
-      }
 
       return { success: true, isManagement: isMgmt };
     } catch (error: any) {
@@ -697,21 +737,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
 
           await fbUser.getIdToken(true);
-          const firestoreSynced = await syncUserProfileToFirestore(fbUser, 'email');
+          const [firestoreSynced, syncResult] = await Promise.all([
+            syncUserProfileToFirestore(fbUser, 'email'),
+            syncGoogleUserWithBackend(fbUser),
+          ]);
           setFirebaseUser(fbUser);
           setCurrentUser({
             id: fbUser.uid,
-            name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Avenue Member',
+            name: fbUser.displayName || fbUser.email?.split('@')[0] || DEFAULT_MEMBER_NAME,
             email: fbUser.email || cleanEmail,
             photoURL: fbUser.photoURL || undefined,
             phone: firestoreSynced.phone,
             emailVerified: true,
-            role: 'client',
+            role: syncResult.isManagement ? 'management' : 'client',
             createdAt: firestoreSynced.createdAt,
             savedPropertyIds: firestoreSynced.savedPropertyIds,
           });
 
-          const syncResult = await syncGoogleUserWithBackend(fbUser);
           return { success: true, isManagement: syncResult.isManagement };
         } catch (fbError: any) {
           return {
@@ -743,20 +785,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         await fbUser.getIdToken(true);
-        const firestoreSynced = await syncUserProfileToFirestore(fbUser, 'email');
+        const [firestoreSynced, syncResult] = await Promise.all([
+          syncUserProfileToFirestore(fbUser, 'email'),
+          syncGoogleUserWithBackend(fbUser),
+        ]);
         setFirebaseUser(fbUser);
         setCurrentUser({
           id: fbUser.uid,
-          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Avenue Member',
+          name: fbUser.displayName || fbUser.email?.split('@')[0] || DEFAULT_MEMBER_NAME,
           email: fbUser.email || cleanEmail,
           photoURL: fbUser.photoURL || undefined,
           phone: firestoreSynced.phone,
           emailVerified: true,
-          role: 'client',
+          role: syncResult.isManagement ? 'management' : 'client',
           createdAt: firestoreSynced.createdAt,
           savedPropertyIds: firestoreSynced.savedPropertyIds,
         });
-        return { success: true, isManagement: false };
+        return { success: true, isManagement: syncResult.isManagement };
       } catch (fbError: any) {
         return {
           success: false,
@@ -954,20 +999,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (auth.currentUser.emailVerified) {
           const fb = auth.currentUser;
           await fb.getIdToken(true);
-          const firestoreSynced = await syncUserProfileToFirestore(fb);
+          const [firestoreSynced, syncResult] = await Promise.all([
+            syncUserProfileToFirestore(fb),
+            syncGoogleUserWithBackend(fb),
+          ]);
           setFirebaseUser(fb);
           setCurrentUser({
             id: fb.uid,
-            name: fb.displayName || fb.email?.split('@')[0] || 'Avenue Member',
+            name: fb.displayName || fb.email?.split('@')[0] || DEFAULT_MEMBER_NAME,
             email: fb.email || cleanEmail || '',
             photoURL: fb.photoURL || undefined,
             phone: firestoreSynced.phone,
             emailVerified: true,
-            role: 'client',
+            role: syncResult.isManagement ? 'management' : 'client',
             createdAt: firestoreSynced.createdAt,
             savedPropertyIds: firestoreSynced.savedPropertyIds,
           });
-          await syncGoogleUserWithBackend(fb);
           return true;
         }
       } catch {
@@ -1215,7 +1262,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isManagement = Boolean(
     currentUser &&
       currentUser.role === 'management' &&
-      isManagementTokenValid(managementToken)
+      (isManagementTokenValid(managementToken, currentUser.email) ||
+        isVerifiedFirebaseManagementUser(firebaseUser))
   );
 
   return (

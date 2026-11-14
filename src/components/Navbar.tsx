@@ -4,6 +4,7 @@ import { Menu, X, User, Heart, LogOut, ChevronDown, SlidersHorizontal, Users } f
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { PillButton } from './common/PillButton';
+import { BRAND_CONFIG } from '../config/brand.config';
 
 export const Navbar: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
@@ -16,7 +17,6 @@ export const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -27,7 +27,6 @@ export const Navbar: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Close mobile menu on route change
   useEffect(() => {
     setMobileMenuOpen(false);
     setUserDropdownOpen(false);
@@ -45,9 +44,9 @@ export const Navbar: React.FC = () => {
     { label: 'Home', path: '/' },
     { label: 'About', path: '/about' },
     { label: 'Services', path: '/services' },
-    { label: 'Projects', path: '/projects' },
-    { label: 'Buy', path: '/buy' },
-    { label: 'Rent', path: '/rent' },
+    ...(BRAND_CONFIG.features.showProjectsPage ? [{ label: 'Projects', path: '/projects' }] : []),
+    ...(BRAND_CONFIG.features.showBuyPage ? [{ label: 'Buy', path: '/buy' }] : []),
+    ...(BRAND_CONFIG.features.showRentPage ? [{ label: 'Rent', path: '/rent' }] : []),
     ...(isManagement
       ? [
           { label: 'Manage Inventory', path: '/manage' },
@@ -64,7 +63,7 @@ export const Navbar: React.FC = () => {
   };
 
   const getUserInitials = (name?: string) => {
-    if (!name) return 'AV';
+    if (!name) return BRAND_CONFIG.identity.brandInitials;
     const parts = name.trim().split(' ');
     if (parts.length >= 2) {
       return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
@@ -81,15 +80,11 @@ export const Navbar: React.FC = () => {
             : 'absolute top-0 left-0 right-0 pt-5 px-3 sm:px-6 md:px-8'
         }`}
       >
-        {/* 
-          Transparent glass bar:
-          bg-[#1B2A44]/45 (unscrolled) / bg-[#1B2A44]/85 with backdrop-blur-xl (scrolled)
-        */}
         <div
           className={`max-w-[1440px] mx-auto flex items-center justify-between transition-all duration-300 rounded-full px-5 sm:px-6 py-2.5 sm:py-3 border border-white/20 ${
             scrolled
-              ? 'bg-[#101B2E]/95 backdrop-blur-2xl shadow-2xl'
-              : 'bg-[#142036]/90 backdrop-blur-xl shadow-xl'
+              ? 'bg-brand-nav-scrolled/95 backdrop-blur-2xl shadow-2xl'
+              : 'bg-brand-nav/90 backdrop-blur-xl shadow-xl'
           }`}
         >
           {/* Brand Wordmark on Left */}
@@ -98,11 +93,11 @@ export const Navbar: React.FC = () => {
             className="flex items-center gap-2 group whitespace-nowrap shrink-0 select-none"
           >
             <span className="font-display font-bold text-xl sm:text-2xl tracking-tighter text-white">
-              Avenue
+              {BRAND_CONFIG.identity.logoText}
             </span>
           </Link>
 
-          {/* Centered Desktop Nav Links: text white, text-sm, font-medium, clear hover state */}
+          {/* Centered Desktop Nav Links */}
           <nav className="hidden lg:flex items-center gap-4 lg:gap-5 xl:gap-6">
             {navLinks.map((link, idx) => {
               const isActive =
@@ -119,7 +114,6 @@ export const Navbar: React.FC = () => {
                   }`}
                 >
                   <span>{link.label}</span>
-                  {/* Subtle active indicator dot */}
                   {isActive && (
                     <span className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-white" />
                   )}
@@ -128,10 +122,9 @@ export const Navbar: React.FC = () => {
             })}
           </nav>
 
-          {/* Top Right Zone: Login text link + Sign Up pill button with even spacing */}
+          {/* Top Right Zone */}
           <div className="flex items-center gap-4 sm:gap-5">
             {isAuthenticated && currentUser ? (
-              /* User logged in: Circular avatar with glass dropdown */
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setUserDropdownOpen(!userDropdownOpen)}
@@ -149,7 +142,7 @@ export const Navbar: React.FC = () => {
                       className="w-8 h-8 rounded-full object-cover border border-white/30"
                     />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-[#1B2A44] text-white border border-white/30 flex items-center justify-center font-display font-bold text-xs tracking-wider">
+                    <div className="w-8 h-8 rounded-full bg-brand text-brand-contrast border border-white/30 flex items-center justify-center font-display font-bold text-xs tracking-wider">
                       {getUserInitials(currentUser.name)}
                     </div>
                   )}
@@ -160,7 +153,6 @@ export const Navbar: React.FC = () => {
                   />
                 </button>
 
-                {/* Dropdown */}
                 {userDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-56 rounded-2xl glass-panel-dark text-white p-2 shadow-2xl border border-white/20 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 z-50">
                     <div className="px-3 py-2.5 border-b border-white/10 mb-1">
@@ -231,7 +223,6 @@ export const Navbar: React.FC = () => {
                 )}
               </div>
             ) : (
-              /* User logged out: "Login" text link and filled pill "Sign Up" button */
               <div className="hidden sm:flex items-center gap-4">
                 <Link
                   to="/login"
@@ -251,7 +242,6 @@ export const Navbar: React.FC = () => {
               </div>
             )}
 
-            {/* Mobile Hamburger Toggle */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="lg:hidden w-9 h-9 rounded-full glass-panel flex items-center justify-center text-white hover:bg-white/20 transition-colors cursor-pointer"
@@ -263,27 +253,26 @@ export const Navbar: React.FC = () => {
         </div>
       </header>
 
-      {/* Mobile Drawer Menu: Full-screen slate-blue menu */}
+      {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden bg-[#2F4B73] text-white flex flex-col justify-between p-6 sm:p-8 animate-in fade-in duration-200">
-          <div className="flex items-center justify-between border-b border-white/15 pb-4">
+        <div className="fixed inset-0 z-50 lg:hidden bg-accent text-accent-contrast flex flex-col justify-between p-6 sm:p-8 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between border-b border-current/15 pb-4">
             <Link
               to="/"
               onClick={() => setMobileMenuOpen(false)}
-              className="font-display font-bold text-2xl tracking-tighter text-white"
+              className="font-display font-bold text-2xl tracking-tighter text-current"
             >
-              Avenue
+              {BRAND_CONFIG.identity.logoText}
             </Link>
             <button
               onClick={() => setMobileMenuOpen(false)}
-              className="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-white cursor-pointer"
+              className="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-current cursor-pointer"
               aria-label="Close menu"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Navigation Links */}
           <div className="flex flex-col gap-5 py-6">
             {navLinks.map((link, idx) => (
               <NavLink
@@ -292,20 +281,19 @@ export const Navbar: React.FC = () => {
                 onClick={() => setMobileMenuOpen(false)}
                 className={({ isActive }: { isActive: boolean }) =>
                   `text-2xl font-display uppercase tracking-wider transition-colors flex items-center justify-between ${
-                    isActive ? 'text-white font-bold' : 'text-white/75 hover:text-white'
+                    isActive ? 'text-current font-bold' : 'text-current/75 hover:text-current'
                   }`
                 }
               >
                 <span>{link.label}</span>
                 {location.pathname === link.path && (
-                  <span className="w-2 h-2 rounded-full bg-white" />
+                  <span className="w-2 h-2 rounded-full bg-current" />
                 )}
               </NavLink>
             ))}
           </div>
 
-          {/* Bottom actions for mobile */}
-          <div className="pt-6 border-t border-white/15 flex flex-col gap-3">
+          <div className="pt-6 border-t border-current/15 flex flex-col gap-3">
             {isAuthenticated && currentUser ? (
               <>
                 <div className="flex items-center gap-3 p-3 rounded-2xl glass-card-subtle mb-1">
@@ -317,13 +305,13 @@ export const Navbar: React.FC = () => {
                       className="w-10 h-10 rounded-full object-cover border border-white/30 shrink-0"
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-[#1B2A44] flex items-center justify-center font-display font-bold text-sm text-white shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-brand flex items-center justify-center font-display font-bold text-sm text-brand-contrast shrink-0">
                       {getUserInitials(currentUser.name)}
                     </div>
                   )}
                   <div>
-                    <div className="font-display font-bold text-sm text-white">{currentUser.name}</div>
-                    <div className="text-xs text-white/60 font-body">{currentUser.email}</div>
+                    <div className="font-display font-bold text-sm text-current">{currentUser.name}</div>
+                    <div className="text-xs text-current/65 font-body">{currentUser.email}</div>
                   </div>
                 </div>
 
@@ -351,7 +339,7 @@ export const Navbar: React.FC = () => {
                 <Link
                   to="/login"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="w-full py-3 px-6 rounded-full glass-panel text-center font-display uppercase tracking-widest text-xs font-bold hover:bg-white/20 transition-all text-white"
+                  className="w-full py-3 px-6 rounded-full glass-panel text-center font-display uppercase tracking-widest text-xs font-bold hover:bg-white/20 transition-all text-current"
                 >
                   Login to Account
                 </Link>

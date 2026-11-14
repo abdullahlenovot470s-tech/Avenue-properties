@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { HERO_ASSETS, HERO_STATS } from '../data/realEstateData';
-import localHeroImg from '../assets/images/hero_luxury_villa_dusk_1794379157123.jpg';
+import { BRAND_CONFIG } from '../config/brand.config';
 import { PillButton } from './common/PillButton';
 
 interface HeroProps {
@@ -9,11 +9,11 @@ interface HeroProps {
 }
 
 export const Hero: React.FC<HeroProps> = ({ onOpenConsultation }) => {
-  const [heroSrc, setHeroSrc] = useState(HERO_ASSETS.heroImage);
+  const [heroSrc, setHeroSrc] = useState<string>(HERO_ASSETS.heroImage);
 
   const handleHeroImgError = () => {
-    if (heroSrc !== localHeroImg) {
-      setHeroSrc(localHeroImg);
+    if (heroSrc !== HERO_ASSETS.heroFallback) {
+      setHeroSrc(HERO_ASSETS.heroFallback);
     }
   };
 
@@ -22,11 +22,11 @@ export const Hero: React.FC<HeroProps> = ({ onOpenConsultation }) => {
       id="hero"
       className="relative w-full pt-2 pb-5 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
     >
-      <div className="relative w-full min-h-[34rem] md:min-h-[85svh] max-h-[760px] rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-2xl flex flex-col justify-end p-5 sm:p-8 md:p-10 text-white bg-[#1B2A44]">
+      <div className="relative w-full min-h-[34rem] md:min-h-[85svh] max-h-[760px] rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-2xl flex flex-col justify-end p-5 sm:p-8 md:p-10 text-white bg-brand">
         {/* High-priority above-the-fold hero background image */}
         <img
           src={heroSrc}
-          alt="Modern luxury architectural villa with open dusk sky"
+          alt={`${BRAND_CONFIG.identity.brandShortName} architectural residence showcase`}
           referrerPolicy="no-referrer"
           loading="eager"
           decoding="sync"
@@ -36,7 +36,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenConsultation }) => {
           style={{ objectPosition: '65% center' }}
         />
 
-        {/* Giant "AVENUE" Watermark */}
+        {/* Giant Brand Watermark */}
         <div className="absolute inset-x-0 top-28 sm:top-32 md:top-36 pointer-events-none select-none overflow-hidden flex justify-center z-0 px-4">
           <span
             className="font-display font-bold uppercase tracking-tighter text-center"
@@ -49,15 +49,15 @@ export const Hero: React.FC<HeroProps> = ({ onOpenConsultation }) => {
               WebkitTextFillColor: 'transparent',
             }}
           >
-            AVENUE
+            {BRAND_CONFIG.identity.watermarkText}
           </span>
         </div>
 
         {/* Contrast Gradients */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#1B2A44]/85 via-[#1B2A44]/40 to-transparent pointer-events-none z-0" />
-        <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#1B2A44]/70 to-transparent pointer-events-none z-0" />
+        <div className="absolute inset-0 bg-gradient-to-r from-brand/85 via-brand/40 to-transparent pointer-events-none z-0" />
+        <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-brand/70 to-transparent pointer-events-none z-0" />
 
-        {/* Flexible spacer ensuring document flow separation from top bar */}
+        {/* Flexible spacer */}
         <div className="w-full h-24 sm:h-28 lg:h-24 shrink-0 flex-1" />
 
         {/* Content in normal document flow */}
@@ -77,11 +77,11 @@ export const Hero: React.FC<HeroProps> = ({ onOpenConsultation }) => {
                 letterSpacing: '-0.01em',
               }}
             >
-              DISCOVER YOUR ARCHITECTURAL LEGACY.
+              {`${BRAND_CONFIG.copy.hero.titleLine1} ${BRAND_CONFIG.copy.hero.titleLine2} ${BRAND_CONFIG.copy.hero.titleLine3}`}
             </h1>
 
             <p className="mt-2.5 sm:mt-3 font-body text-white/80 font-light leading-relaxed max-w-md line-clamp-2 text-xs sm:text-base">
-              Premium residences built for modern family living, bringing timeless architecture and complete peace of mind to Pakistan's most distinguished addresses.
+              {BRAND_CONFIG.copy.hero.subtitle}
             </p>
 
             <div className="mt-4 sm:mt-5">
@@ -91,12 +91,12 @@ export const Hero: React.FC<HeroProps> = ({ onOpenConsultation }) => {
                 className="!text-xs sm:!text-sm !py-2 sm:!py-2.5 !px-5"
                 onClick={onOpenConsultation}
               >
-                Consultation
+                {BRAND_CONFIG.copy.hero.ctaButtonLabel}
               </PillButton>
             </div>
           </motion.div>
 
-          {/* Right: Two Compact Stat Cards Side by Side */}
+          {/* Right: Stat Cards */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -111,9 +111,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenConsultation }) => {
               >
                 <div
                   className="font-display font-bold tracking-tight text-white group-hover:scale-105 transition-transform text-lg sm:text-2xl"
-                  style={{
-                    lineHeight: 1.1,
-                  }}
+                  style={{ lineHeight: 1.1 }}
                 >
                   {stat.value}
                 </div>

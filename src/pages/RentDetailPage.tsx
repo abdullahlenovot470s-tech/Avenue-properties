@@ -25,6 +25,7 @@ import {
   FileText,
   Key,
 } from 'lucide-react';
+import { BRAND_CONFIG } from '../config/brand.config';
 
 export const RentDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -52,17 +53,17 @@ export const RentDetailPage: React.FC = () => {
   useEffect(() => {
     setActivePhotoIdx(0);
     if (listing) {
-      document.title = `${listing.title} | Homes for Rent | Avenue`;
+      document.title = `${listing.title} | Homes for Rent | ${BRAND_CONFIG.identity.brandShortName}`;
     } else {
-      document.title = 'Rental Residence | Avenue Luxury Properties';
+      document.title = `Rental Residence | ${BRAND_CONFIG.identity.brandName}`;
     }
   }, [listing]);
 
   if (!listing) {
     return (
       <div className="min-h-screen pt-32 pb-20 px-6 text-center max-w-xl mx-auto flex flex-col items-center justify-center space-y-4">
-        <Building2 className="w-16 h-16 text-[#2F4B73]" />
-        <h2 className="font-display font-extrabold text-2xl uppercase tracking-tight text-[#1B2A44]">
+        <Building2 className="w-16 h-16 text-accent" />
+        <h2 className="font-display font-extrabold text-2xl uppercase tracking-tight text-brand">
           Rental Listing Not Found
         </h2>
         <p className="text-xs text-slate-500 font-body">
@@ -70,7 +71,7 @@ export const RentDetailPage: React.FC = () => {
         </p>
         <Link
           to="/rent"
-          className="mt-4 px-6 py-2.5 rounded-full bg-[#1B2A44] text-white text-xs font-display uppercase tracking-wider font-semibold"
+          className="mt-4 px-6 py-2.5 rounded-full bg-brand text-brand-contrast text-xs font-display uppercase tracking-wider font-semibold"
         >
           Return to Homes for Rent
         </Link>
@@ -148,7 +149,7 @@ export const RentDetailPage: React.FC = () => {
   };
 
   const whatsappMessage = encodeURIComponent(
-    `Assalam o Alaikum, I am inquiring about the rental residence "${listing.title}" (${formatRent(listing.monthlyRent)}) in ${listing.areaSociety}. Please share verification records and schedule a viewing.`
+    `${BRAND_CONFIG.locale.greeting}, I am inquiring about the rental residence "${listing.title}" (${formatRent(listing.monthlyRent)}) in ${listing.areaSociety}. Please share verification records and schedule a viewing.`
   );
 
   return (
@@ -157,7 +158,7 @@ export const RentDetailPage: React.FC = () => {
       <nav aria-label="Breadcrumb" className="px-2">
         <ol className="flex items-center gap-2 text-xs font-display uppercase tracking-widest text-slate-500">
           <li>
-            <Link to="/" className="hover:text-[#1B2A44] transition-colors">
+            <Link to="/" className="hover:text-brand transition-colors">
               Home
             </Link>
           </li>
@@ -165,14 +166,14 @@ export const RentDetailPage: React.FC = () => {
             <ChevronRight className="w-3 h-3 text-slate-400" />
           </li>
           <li>
-            <Link to="/rent" className="hover:text-[#1B2A44] transition-colors">
+            <Link to="/rent" className="hover:text-brand transition-colors">
               Rent
             </Link>
           </li>
           <li>
             <ChevronRight className="w-3 h-3 text-slate-400" />
           </li>
-          <li className="text-[#1B2A44] font-bold truncate max-w-[200px] sm:max-w-none" aria-current="page">
+          <li className="text-brand font-bold truncate max-w-[200px] sm:max-w-none" aria-current="page">
             {listing.title}
           </li>
         </ol>
@@ -182,7 +183,7 @@ export const RentDetailPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <Link
           to="/rent"
-          className="inline-flex items-center gap-2 text-xs font-display uppercase tracking-wider text-slate-600 hover:text-[#1B2A44] font-semibold transition-colors"
+          className="inline-flex items-center gap-2 text-xs font-display uppercase tracking-wider text-slate-600 hover:text-brand font-semibold transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back to All Rentals</span>
@@ -251,7 +252,7 @@ export const RentDetailPage: React.FC = () => {
                 onClick={() => setActivePhotoIdx(idx)}
                 className={`relative aspect-[16/10] rounded-2xl overflow-hidden border-2 transition-all cursor-pointer ${
                   activePhotoIdx === idx
-                    ? 'border-[#1B2A44] shadow-md scale-[1.02]'
+                    ? 'border-brand shadow-md scale-[1.02]'
                     : 'border-transparent opacity-75 hover:opacity-100'
                 }`}
               >
@@ -275,7 +276,7 @@ export const RentDetailPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <div className="flex items-center gap-2 text-xs text-[#2F4B73] font-semibold">
+                  <div className="flex items-center gap-2 text-xs text-accent font-semibold">
                     <MapPin className="w-4 h-4 shrink-0" />
                     <span>{listing.areaSociety}</span>
                   </div>
@@ -285,7 +286,7 @@ export const RentDetailPage: React.FC = () => {
                     </span>
                   )}
                 </div>
-                <h1 className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-[#1B2A44] uppercase tracking-tight">
+                <h1 className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-brand uppercase tracking-tight">
                   {listing.title}
                 </h1>
               </div>
@@ -294,7 +295,7 @@ export const RentDetailPage: React.FC = () => {
                 <span className="text-[10px] font-display uppercase tracking-widest text-slate-400 font-bold block">
                   Monthly Rent
                 </span>
-                <span className="font-display font-black text-2xl sm:text-3xl text-[#1B2A44]">
+                <span className="font-display font-black text-2xl sm:text-3xl text-brand">
                   {formatRent(listing.monthlyRent)}
                 </span>
                 <span className="text-xs text-slate-500 font-body block mt-0.5">
@@ -310,7 +311,7 @@ export const RentDetailPage: React.FC = () => {
                   Bedrooms
                 </span>
                 <span className="font-semibold text-slate-900 flex items-center gap-1.5">
-                  <Bed className="w-4 h-4 text-[#2F4B73]" /> {listing.beds} Beds
+                  <Bed className="w-4 h-4 text-accent" /> {listing.beds} Beds
                 </span>
               </div>
               <div className="space-y-1">
@@ -318,7 +319,7 @@ export const RentDetailPage: React.FC = () => {
                   Bathrooms
                 </span>
                 <span className="font-semibold text-slate-900 flex items-center gap-1.5">
-                  <Bath className="w-4 h-4 text-[#2F4B73]" /> {listing.baths} Baths
+                  <Bath className="w-4 h-4 text-accent" /> {listing.baths} Baths
                 </span>
               </div>
               <div className="space-y-1">
@@ -326,7 +327,7 @@ export const RentDetailPage: React.FC = () => {
                   Floor / Area
                 </span>
                 <span className="font-semibold text-slate-900 flex items-center gap-1.5">
-                  <Maximize2 className="w-4 h-4 text-[#2F4B73]" /> {listing.sizeOrFloor}
+                  <Maximize2 className="w-4 h-4 text-accent" /> {listing.sizeOrFloor}
                 </span>
               </div>
               <div className="space-y-1">
@@ -334,14 +335,14 @@ export const RentDetailPage: React.FC = () => {
                   Furnishing
                 </span>
                 <span className="font-semibold text-slate-900 flex items-center gap-1.5">
-                  <Key className="w-4 h-4 text-[#2F4B73]" /> {listing.furnished}
+                  <Key className="w-4 h-4 text-accent" /> {listing.furnished}
                 </span>
               </div>
             </div>
 
             {/* Description */}
             <div className="space-y-3 pt-2">
-              <h2 className="font-display font-bold text-lg text-[#1B2A44] uppercase tracking-wide">
+              <h2 className="font-display font-bold text-lg text-brand uppercase tracking-wide">
                 Residence Overview
               </h2>
               <p className="font-body text-sm text-slate-600 leading-relaxed">
@@ -352,7 +353,7 @@ export const RentDetailPage: React.FC = () => {
 
           {/* Tenancy Terms & Amenities Card */}
           <div className="bg-white rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 shadow-xl border border-slate-100 space-y-6">
-            <h2 className="font-display font-bold text-lg text-[#1B2A44] uppercase tracking-wide">
+            <h2 className="font-display font-bold text-lg text-brand uppercase tracking-wide">
               Tenancy Terms & Utilities
             </h2>
 
@@ -361,15 +362,15 @@ export const RentDetailPage: React.FC = () => {
                 <span className="font-display uppercase tracking-wider text-[10px] text-slate-400 block">
                   Available From
                 </span>
-                <span className="font-bold text-[#1B2A44] text-sm flex items-center gap-1.5">
-                  <Calendar className="w-4 h-4 text-[#2F4B73]" /> {listing.availableFrom}
+                <span className="font-bold text-brand text-sm flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-accent" /> {listing.availableFrom}
                 </span>
               </div>
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
                 <span className="font-display uppercase tracking-wider text-[10px] text-slate-400 block">
                   Security Deposit
                 </span>
-                <span className="font-bold text-[#1B2A44] text-sm flex items-center gap-1.5">
+                <span className="font-bold text-brand text-sm flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-600" /> {listing.securityDeposit}
                 </span>
               </div>
@@ -377,15 +378,15 @@ export const RentDetailPage: React.FC = () => {
                 <span className="font-display uppercase tracking-wider text-[10px] text-slate-400 block">
                   Minimum Lease
                 </span>
-                <span className="font-bold text-[#1B2A44] text-sm flex items-center gap-1.5">
-                  <FileText className="w-4 h-4 text-[#2F4B73]" /> {listing.minContractPeriod}
+                <span className="font-bold text-brand text-sm flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-accent" /> {listing.minContractPeriod}
                 </span>
               </div>
             </div>
 
             {/* Amenities Grid */}
             <div className="space-y-4">
-              <h3 className="font-display font-bold text-sm text-[#1B2A44] uppercase tracking-wider">
+              <h3 className="font-display font-bold text-sm text-brand uppercase tracking-wider">
                 Included Amenities & Utilities
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -407,10 +408,10 @@ export const RentDetailPage: React.FC = () => {
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-white rounded-[28px] sm:rounded-[36px] p-6 sm:p-8 shadow-xl border border-slate-100 sticky top-28 space-y-6">
             <div>
-              <span className="text-[10px] font-display uppercase tracking-widest text-[#2F4B73] font-bold block mb-1">
+              <span className="text-[10px] font-display uppercase tracking-widest text-accent font-bold block mb-1">
                 Tenancy Concierge
               </span>
-              <h3 className="font-display font-extrabold text-xl text-[#1B2A44] uppercase tracking-tight">
+              <h3 className="font-display font-extrabold text-xl text-brand uppercase tracking-tight">
                 Schedule Private Viewing
               </h3>
               <p className="font-body text-xs text-slate-500 mt-1">
@@ -425,7 +426,7 @@ export const RentDetailPage: React.FC = () => {
                   Viewing Request Confirmed
                 </h4>
                 <p className="text-xs text-emerald-800 font-body">
-                  An Avenue leasing advisor will call you to confirm gate access and key handover.
+                  An {BRAND_CONFIG.identity.brandShortName} leasing advisor will call you to confirm gate access and key handover.
                 </p>
                 <button
                   type="button"
@@ -454,10 +455,10 @@ export const RentDetailPage: React.FC = () => {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Asim Raza"
+                    placeholder={`e.g. ${BRAND_CONFIG.locale.placeholderNames.rentalDetailName}`}
                     value={tourName}
                     onChange={(e) => setTourName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-[#2F4B73]"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-accent"
                   />
                 </div>
 
@@ -468,23 +469,23 @@ export const RentDetailPage: React.FC = () => {
                   <input
                     type="email"
                     required
-                    placeholder="e.g. asim@example.com"
+                    placeholder={`e.g. ${BRAND_CONFIG.locale.placeholderNames.rentalDetailEmail}`}
                     value={tourEmail}
                     onChange={(e) => setTourEmail(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-[#2F4B73]"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-accent"
                   />
                 </div>
 
                 <div>
                   <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1">
-                    Direct Phone (Pakistani Mobile)
+                    Direct Phone ({BRAND_CONFIG.locale.nationalityAdjective} Mobile)
                   </label>
                   <input
                     type="tel"
-                    placeholder="03XX XXXXXXX"
+                    placeholder={BRAND_CONFIG.locale.shortPhonePlaceholder}
                     value={tourPhone}
                     onChange={(e) => setTourPhone(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-[#2F4B73]"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-accent"
                   />
                 </div>
 
@@ -497,7 +498,7 @@ export const RentDetailPage: React.FC = () => {
                     required
                     value={tourDate}
                     onChange={(e) => setTourDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-[#2F4B73]"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-accent"
                   />
                 </div>
 
@@ -510,14 +511,14 @@ export const RentDetailPage: React.FC = () => {
                     placeholder="e.g. Corporate lease, diplomat visa, move-in next week..."
                     value={tourNotes}
                     onChange={(e) => setTourNotes(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-[#2F4B73]"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-accent"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={tourSubmitting}
-                  className="w-full py-3.5 px-6 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] disabled:opacity-60 text-white font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-3.5 px-6 rounded-full bg-brand hover:bg-accent disabled:opacity-60 text-brand-contrast font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>
@@ -534,7 +535,7 @@ export const RentDetailPage: React.FC = () => {
             {/* Direct WhatsApp Contact */}
             <div className="pt-4 border-t border-slate-100">
               <a
-                href={`https://wa.me/923001234567?text=${whatsappMessage}`}
+                href={`https://wa.me/${BRAND_CONFIG.contact.phone.whatsappDigits}?text=${whatsappMessage}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full py-3 px-4 rounded-full border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-display font-semibold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors"

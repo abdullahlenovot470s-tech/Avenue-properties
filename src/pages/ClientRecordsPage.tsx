@@ -36,36 +36,63 @@ import {
   retryPendingEnquiries,
   PENDING_QUEUE_EVENT,
 } from '../services/enquiryWebhook';
+import { BRAND_CONFIG } from '../config/brand.config';
 
 type SectionView = 'all' | 'inquiries' | 'accounts';
 type InquiryStatusFilter = 'all' | 'new' | 'contacted' | 'resolved';
 type DateRangeFilter = 'all' | 'today' | 'week';
 type AccountFilter = 'all' | 'verified' | 'pending' | 'email' | 'google';
 
-const PKT_OFFSET_MS = 5 * 60 * 60 * 1000;
+function getTimezoneOffsetMs(timeZone: string, date: Date): number {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).formatToParts(date);
+    const val = (type: string) => Number(parts.find((p) => p.type === type)?.value || 0);
+    const utcEquivalent = Date.UTC(
+      val('year'),
+      val('month') - 1,
+      val('day'),
+      val('hour') % 24,
+      val('minute'),
+      val('second')
+    );
+    return utcEquivalent - date.getTime();
+  } catch {
+    return 0;
+  }
+}
 
-function getPktRangeStarts(): { todayStartMs: number; weekStartMs: number } {
-  const nowMs = Date.now();
-  const pktShifted = new Date(nowMs + PKT_OFFSET_MS);
-  const y = pktShifted.getUTCFullYear();
-  const m = pktShifted.getUTCMonth();
-  const d = pktShifted.getUTCDate();
-  const daysSinceMonday = (pktShifted.getUTCDay() + 6) % 7;
+function getLocalRangeStarts(): { todayStartMs: number; weekStartMs: number } {
+  const now = new Date();
+  const offsetMs = getTimezoneOffsetMs(BRAND_CONFIG.locale.timezoneIana, now);
+  const shifted = new Date(now.getTime() + offsetMs);
+  const y = shifted.getUTCFullYear();
+  const m = shifted.getUTCMonth();
+  const d = shifted.getUTCDate();
+  const daysSinceMonday = (shifted.getUTCDay() + 6) % 7;
 
-  const todayStartMs = Date.UTC(y, m, d, 0, 0, 0, 0) - PKT_OFFSET_MS;
-  const weekStartMs = Date.UTC(y, m, d - daysSinceMonday, 0, 0, 0, 0) - PKT_OFFSET_MS;
+  const todayStartMs = Date.UTC(y, m, d, 0, 0, 0, 0) - offsetMs;
+  const weekStartMs = Date.UTC(y, m, d - daysSinceMonday, 0, 0, 0, 0) - offsetMs;
   return { todayStartMs, weekStartMs };
 }
 
-function formatPktDateTime(iso?: string): string {
+function formatLocalDateTime(iso?: string): string {
   if (!iso) return '—';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return `${date.toLocaleString('en-PK', {
-    timeZone: 'Asia/Karachi',
+  return `${date.toLocaleString(BRAND_CONFIG.locale.currencyLocale, {
+    timeZone: BRAND_CONFIG.locale.timezoneIana,
     dateStyle: 'medium',
     timeStyle: 'short',
-  })} PKT`;
+  })} ${BRAND_CONFIG.locale.timezoneLabel}`;
 }
 
 function escapeCsvCell(value: unknown): string {
@@ -80,14 +107,14 @@ function formatDateTime(iso?: string): string {
   if (!iso) return '—';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString('en-PK', {
+  return date.toLocaleString(BRAND_CONFIG.locale.currencyLocale, {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
 }
 
 function getInitials(name?: string): string {
-  if (!name) return 'AV';
+  if (!name) return BRAND_CONFIG.identity.brandInitials;
   const parts = name.trim().split(/\s+/);
   if (parts.length >= 2) {
     return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
@@ -96,8 +123,31 @@ function getInitials(name?: string): string {
 }
 
 export const ClientRecordsPage: React.FC = () => {
-  const { managementToken, logout } = useAuth();
+  const { managementToken, firebaseUser, logout } = useAuth();
   const { showToast } = useToast();
+
+  const buildMgmtHeaders = useCallback(
+    async (json = false): Promise<Record<string, string> | null> => {
+      const headers: Record<string, string> = {};
+      if (json) headers['Content-Type'] = 'application/json';
+      let fbToken = '';
+      if (firebaseUser) {
+        try {
+          fbToken = await firebaseUser.getIdToken();
+        } catch {
+          fbToken = '';
+        }
+      }
+      const primary = managementToken || fbToken;
+      if (!primary) return null;
+      headers.Authorization = `Bearer ${primary}`;
+      if (fbToken) {
+        headers['X-Firebase-Token'] = fbToken;
+      }
+      return headers;
+    },
+    [managementToken, firebaseUser]
+  );
 
   const [inquiries, setInquiries] = useState<ContactInquiryRecord[]>([]);
   const [accounts, setAccounts] = useState<RegisteredAccountRecord[]>([]);
@@ -120,6 +170,7 @@ export const ClientRecordsPage: React.FC = () => {
     emailProvider: 'resend' | 'smtp' | 'none';
     serverWebhookConfigured: boolean;
     alertRecipient?: string;
+    configIssue?: string;
   } | null>(null);
   const [testPreviewUrl, setTestPreviewUrl] = useState<string | undefined>(undefined);
   const [sendingTestAlert, setSendingTestAlert] = useState(false);
@@ -137,119 +188,124 @@ export const ClientRecordsPage: React.FC = () => {
   const [confirmDeleteAccountId, setConfirmDeleteAccountId] = useState<string | null>(null);
 
   useEffect(() => {
-    document.title = 'Client Records & Accounts | Avenue Luxury Properties';
+    document.title = `Client Records & Accounts | ${BRAND_CONFIG.identity.brandName}`;
   }, []);
 
   const fetchRecords = useCallback(
     async (isManual = false) => {
-      if (!managementToken) {
+      const headers = await buildMgmtHeaders(false);
+      if (!headers && !auth.currentUser?.emailVerified) {
         setLoading(false);
         return;
       }
       if (isManual) setRefreshing(true);
       setRecordsError(null);
       try {
-        const [res, alertRes] = await Promise.all([
-          fetch('/api/management/records', {
-            headers: {
-              Authorization: `Bearer ${managementToken}`,
-            },
-          }),
-          fetch('/api/management/alerts-status', {
-            headers: {
-              Authorization: `Bearer ${managementToken}`,
-            },
-          }).catch(() => null),
-        ]);
+        let backendAccounts: RegisteredAccountRecord[] = [];
+        let backendLoaded = false;
 
-        if (alertRes) {
-          const parsedAlerts = await parseApiResponse<{
-            success?: boolean;
-            emailProvider?: 'resend' | 'smtp' | 'none';
-            serverWebhookConfigured?: boolean;
-            alertRecipient?: string;
-          }>(alertRes);
-          if (parsedAlerts.ok && parsedAlerts.data?.success) {
-            setServerAlertStatus({
-              emailProvider: parsedAlerts.data.emailProvider || 'none',
-              serverWebhookConfigured: Boolean(parsedAlerts.data.serverWebhookConfigured),
-              alertRecipient: parsedAlerts.data.alertRecipient,
-            });
-          }
-        }
+        if (headers) {
+          const [res, alertRes] = await Promise.all([
+            fetch('/api/management/records', { headers }),
+            fetch('/api/management/alerts-status', { headers }).catch(() => null),
+          ]);
 
-        const parsed = await parseApiResponse<{
-          success?: boolean;
-          error?: string;
-          inquiries?: ContactInquiryRecord[];
-          accounts?: RegisteredAccountRecord[];
-        }>(res);
-
-        if (parsed.unreachable || !parsed.data) {
-          setRecordsError(SERVER_UNREACHABLE_MESSAGE);
-          showToast(SERVER_UNREACHABLE_MESSAGE, 'error');
-        } else if (parsed.status === 401) {
-          const msg = parsed.data.error || 'Management session expired. Please sign in again.';
-          showToast(msg, 'error');
-          void logout();
-        } else if (!parsed.ok || !parsed.data.success) {
-          const msg = parsed.data.error || 'Could not load client records.';
-          setRecordsError(msg);
-          showToast(msg, 'error');
-        } else {
-          setInquiries(Array.isArray(parsed.data.inquiries) ? parsed.data.inquiries : []);
-          const backendAccounts = Array.isArray(parsed.data.accounts) ? parsed.data.accounts : [];
-          const mergedByEmail = new Map<string, RegisteredAccountRecord>();
-          for (const acc of backendAccounts) {
-            if (acc.email) {
-              mergedByEmail.set(acc.email.toLowerCase(), acc);
-            }
-          }
-
-          // Also read verified client profiles persisted directly in Firestore /users
-          if (auth.currentUser?.emailVerified) {
-            try {
-              const snap = await getDocs(collection(db, 'users'));
-              const currentAdminEmail = (auth.currentUser.email || '').toLowerCase();
-              snap.docs.forEach((docSnap) => {
-                const data = docSnap.data() as Record<string, unknown>;
-                const email = String(data.email || '').trim().toLowerCase();
-                if (!email || email === currentAdminEmail) return;
-                const existing = mergedByEmail.get(email);
-                const fsRecord: RegisteredAccountRecord = {
-                  id: String(data.id || docSnap.id),
-                  name: String(data.name || existing?.name || email.split('@')[0]),
-                  email,
-                  emailVerified: data.emailVerified !== undefined ? Boolean(data.emailVerified) : true,
-                  provider:
-                    data.provider === 'google' || data.provider === 'email'
-                      ? data.provider
-                      : existing?.provider || 'email',
-                  photoURL: typeof data.photoURL === 'string' ? data.photoURL : existing?.photoURL,
-                  phone: typeof data.phone === 'string' && data.phone ? data.phone : existing?.phone,
-                  createdAt:
-                    typeof data.createdAt === 'string' && data.createdAt
-                      ? data.createdAt
-                      : existing?.createdAt || new Date().toISOString(),
-                  lastLoginAt:
-                    typeof data.lastLoginAt === 'string' ? data.lastLoginAt : existing?.lastLoginAt,
-                };
-                mergedByEmail.set(email, fsRecord);
+          if (alertRes) {
+            const parsedAlerts = await parseApiResponse<{
+              success?: boolean;
+              emailProvider?: 'resend' | 'smtp' | 'none';
+              serverWebhookConfigured?: boolean;
+              alertRecipient?: string;
+              configIssue?: string;
+            }>(alertRes);
+            if (parsedAlerts.ok && parsedAlerts.data?.success) {
+              setServerAlertStatus({
+                emailProvider: parsedAlerts.data.emailProvider || 'none',
+                serverWebhookConfigured: Boolean(parsedAlerts.data.serverWebhookConfigured),
+                alertRecipient: parsedAlerts.data.alertRecipient,
+                configIssue: parsedAlerts.data.configIssue,
               });
-            } catch (err) {
-              try {
-                handleFirestoreError(err, OperationType.LIST, 'users');
-              } catch {
-                // Non-fatal fallback to backend accounts list
-              }
             }
           }
 
-          const combinedAccounts = Array.from(mergedByEmail.values()).sort(
-            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
-          setAccounts(combinedAccounts);
+          const parsed = await parseApiResponse<{
+            success?: boolean;
+            error?: string;
+            inquiries?: ContactInquiryRecord[];
+            accounts?: RegisteredAccountRecord[];
+          }>(res);
+
+          if (parsed.unreachable || !parsed.data) {
+            setRecordsError(SERVER_UNREACHABLE_MESSAGE);
+            showToast(SERVER_UNREACHABLE_MESSAGE, 'error');
+          } else if (parsed.status === 401) {
+            const msg = parsed.data.error || 'Management session expired. Please sign in again.';
+            showToast(msg, 'error');
+            void logout();
+          } else if (!parsed.ok || !parsed.data.success) {
+            const msg = parsed.data.error || 'Could not load client records.';
+            setRecordsError(msg);
+            showToast(msg, 'error');
+          } else {
+            backendLoaded = true;
+            setInquiries(Array.isArray(parsed.data.inquiries) ? parsed.data.inquiries : []);
+            backendAccounts = Array.isArray(parsed.data.accounts) ? parsed.data.accounts : [];
+          }
         }
+
+        const mergedByEmail = new Map<string, RegisteredAccountRecord>();
+        for (const acc of backendAccounts) {
+          if (acc.email) {
+            mergedByEmail.set(acc.email.toLowerCase(), acc);
+          }
+        }
+
+        // Also read verified client profiles persisted directly in Firestore /users
+        if (auth.currentUser?.emailVerified) {
+          try {
+            const snap = await getDocs(collection(db, 'users'));
+            const currentAdminEmail = (auth.currentUser.email || '').toLowerCase();
+            snap.docs.forEach((docSnap) => {
+              const data = docSnap.data() as Record<string, unknown>;
+              const email = String(data.email || '').trim().toLowerCase();
+              if (!email || email === currentAdminEmail) return;
+              const existing = mergedByEmail.get(email);
+              const fsRecord: RegisteredAccountRecord = {
+                id: String(data.id || docSnap.id),
+                name: String(data.name || existing?.name || email.split('@')[0]),
+                email,
+                emailVerified: data.emailVerified !== undefined ? Boolean(data.emailVerified) : true,
+                provider:
+                  data.provider === 'google' || data.provider === 'email'
+                    ? data.provider
+                    : existing?.provider || 'email',
+                photoURL: typeof data.photoURL === 'string' ? data.photoURL : existing?.photoURL,
+                phone: typeof data.phone === 'string' && data.phone ? data.phone : existing?.phone,
+                createdAt:
+                  typeof data.createdAt === 'string' && data.createdAt
+                    ? data.createdAt
+                    : existing?.createdAt || new Date().toISOString(),
+                lastLoginAt:
+                  typeof data.lastLoginAt === 'string' ? data.lastLoginAt : existing?.lastLoginAt,
+              };
+              mergedByEmail.set(email, fsRecord);
+            });
+            if (mergedByEmail.size > 0 && !backendLoaded) {
+              setRecordsError(null);
+            }
+          } catch (err) {
+            try {
+              handleFirestoreError(err, OperationType.LIST, 'users');
+            } catch {
+              // Non-fatal fallback to backend accounts list
+            }
+          }
+        }
+
+        const combinedAccounts = Array.from(mergedByEmail.values()).sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        setAccounts(combinedAccounts);
       } catch {
         setRecordsError(SERVER_UNREACHABLE_MESSAGE);
         showToast(SERVER_UNREACHABLE_MESSAGE, 'error');
@@ -258,7 +314,7 @@ export const ClientRecordsPage: React.FC = () => {
         setRefreshing(false);
       }
     },
-    [managementToken, logout, showToast]
+    [buildMgmtHeaders, logout, showToast]
   );
 
   useEffect(() => {
@@ -298,13 +354,13 @@ export const ClientRecordsPage: React.FC = () => {
 
     let serverSent = false;
     let previewUrl: string | undefined;
-    if (managementToken) {
+    let serverError: string | undefined;
+    const alertHeaders = await buildMgmtHeaders(false);
+    if (alertHeaders) {
       try {
         const res = await fetch('/api/management/test-alert', {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${managementToken}`,
-          },
+          headers: alertHeaders,
         });
         const parsed = await parseApiResponse<{
           success?: boolean;
@@ -316,6 +372,7 @@ export const ClientRecordsPage: React.FC = () => {
         if (parsed.ok && parsed.data) {
           serverSent = Boolean(parsed.data.success);
           previewUrl = parsed.data.previewUrl;
+          serverError = parsed.data.error;
         }
       } catch {
         // Ignore network error and rely on clientSent status
@@ -324,17 +381,26 @@ export const ClientRecordsPage: React.FC = () => {
 
     setSendingTestAlert(false);
 
+    if (serverError) {
+      setServerAlertStatus((prev) => (prev ? { ...prev, configIssue: serverError } : prev));
+    } else if (serverSent) {
+      setServerAlertStatus((prev) => (prev ? { ...prev, configIssue: undefined } : prev));
+    }
+
     if (clientSent || serverSent) {
       showToast('Test alert sent. Check your email in a minute.', 'success');
     } else if (previewUrl) {
       setTestPreviewUrl(previewUrl);
       showToast(
-        'No live email/webhook configured yet — generated an Ethereal test preview instead.',
+        serverError
+          ? `${serverError} Generated an Ethereal test preview instead.`
+          : 'No live email/webhook configured yet — generated an Ethereal test preview instead.',
         'info'
       );
     } else {
       showToast(
-        'Email alerts are not configured. Set RESEND_API_KEY, SMTP_*, or VITE_ENQUIRY_WEBHOOK_URL.',
+        serverError ||
+          'Email alerts are not configured. Set RESEND_API_KEY, SMTP_*, or VITE_ENQUIRY_WEBHOOK_URL.',
         'error'
       );
     }
@@ -359,15 +425,13 @@ export const ClientRecordsPage: React.FC = () => {
     id: string,
     newStatus: 'new' | 'contacted' | 'resolved'
   ) => {
-    if (!managementToken) return;
+    const headers = await buildMgmtHeaders(true);
+    if (!headers) return;
     setUpdatingInquiryId(id);
     try {
       const res = await fetch(`/api/management/inquiries/${encodeURIComponent(id)}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${managementToken}`,
-        },
+        headers,
         body: JSON.stringify({ status: newStatus }),
       });
       const parsed = await parseApiResponse<{ success?: boolean; error?: string }>(res);
@@ -392,13 +456,12 @@ export const ClientRecordsPage: React.FC = () => {
   };
 
   const handleDeleteInquiry = async (id: string, name: string) => {
-    if (!managementToken) return;
+    const headers = await buildMgmtHeaders(false);
+    if (!headers) return;
     try {
       const res = await fetch(`/api/management/inquiries/${encodeURIComponent(id)}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${managementToken}`,
-        },
+        headers,
       });
       const parsed = await parseApiResponse<{ success?: boolean; error?: string }>(res);
       setConfirmDeleteInquiryId(null);
@@ -420,15 +483,16 @@ export const ClientRecordsPage: React.FC = () => {
   };
 
   const handleDeleteAccount = async (id: string, email: string) => {
-    if (!managementToken) return;
+    const headers = await buildMgmtHeaders(false);
+    if (!headers && !auth.currentUser?.emailVerified) return;
     try {
-      const res = await fetch(`/api/management/accounts/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${managementToken}`,
-        },
-      });
-      const parsed = await parseApiResponse<{ success?: boolean; error?: string }>(res);
+      const res = headers
+        ? await fetch(`/api/management/accounts/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers,
+          })
+        : null;
+      const parsed = res ? await parseApiResponse<{ success?: boolean; error?: string }>(res) : null;
 
       let deletedFromFirestore = false;
       if (auth.currentUser?.emailVerified) {
@@ -445,10 +509,10 @@ export const ClientRecordsPage: React.FC = () => {
       }
 
       setConfirmDeleteAccountId(null);
-      if ((parsed.ok && parsed.data?.success) || deletedFromFirestore) {
+      if ((parsed?.ok && parsed.data?.success) || deletedFromFirestore) {
         setAccounts((prev) => prev.filter((acc) => acc.id !== id));
         showToast(`Removed registered account "${email}".`, 'info');
-      } else if (parsed.unreachable || !parsed.data) {
+      } else if (!parsed || parsed.unreachable || !parsed.data) {
         showToast(SERVER_UNREACHABLE_MESSAGE, 'error');
       } else if (parsed.status === 401) {
         showToast(parsed.data.error || 'Management session expired. Please sign in again.', 'error');
@@ -463,7 +527,7 @@ export const ClientRecordsPage: React.FC = () => {
   };
 
   const { todayCount, weekCount } = useMemo(() => {
-    const { todayStartMs, weekStartMs } = getPktRangeStarts();
+    const { todayStartMs, weekStartMs } = getLocalRangeStarts();
     const nowMs = Date.now();
     let today = 0;
     let week = 0;
@@ -478,7 +542,7 @@ export const ClientRecordsPage: React.FC = () => {
 
   const filteredInquiries = useMemo(() => {
     const q = inquirySearch.trim().toLowerCase();
-    const { todayStartMs, weekStartMs } = getPktRangeStarts();
+    const { todayStartMs, weekStartMs } = getLocalRangeStarts();
     const nowMs = Date.now();
     return inquiries.filter((item) => {
       if (statusFilter !== 'all' && item.status !== statusFilter) return false;
@@ -503,7 +567,7 @@ export const ClientRecordsPage: React.FC = () => {
 
   const handleExportCsv = () => {
     const headers = [
-      'Time in PKT',
+      `Time in ${BRAND_CONFIG.locale.timezoneLabel}`,
       'Name',
       'Email',
       'Phone',
@@ -525,7 +589,7 @@ export const ClientRecordsPage: React.FC = () => {
       ].filter(Boolean);
 
       return [
-        formatPktDateTime(item.createdAt),
+        formatLocalDateTime(item.createdAt),
         item.name,
         item.email,
         item.phone,
@@ -545,7 +609,7 @@ export const ClientRecordsPage: React.FC = () => {
     const link = document.createElement('a');
     link.href = url;
     const dateStamp = new Date().toISOString().slice(0, 10);
-    link.download = `avenue-enquiries-${dateStamp}.csv`;
+    link.download = `${BRAND_CONFIG.identity.storageKeyPrefix}-enquiries-${dateStamp}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -584,14 +648,14 @@ export const ClientRecordsPage: React.FC = () => {
       <nav aria-label="Breadcrumb" className="px-2">
         <ol className="flex items-center gap-2 text-xs font-display uppercase tracking-widest text-slate-500">
           <li>
-            <Link to="/" className="hover:text-[#1B2A44] transition-colors">
+            <Link to="/" className="hover:text-brand transition-colors">
               Home
             </Link>
           </li>
           <li>
             <ChevronRight className="w-3 h-3 text-slate-400" />
           </li>
-          <li className="text-[#1B2A44] font-bold" aria-current="page">
+          <li className="text-brand font-bold" aria-current="page">
             Client Records
           </li>
         </ol>
@@ -601,21 +665,21 @@ export const ClientRecordsPage: React.FC = () => {
       <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-10 shadow-xl border border-slate-100 space-y-6">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div className="space-y-2">
-            <span className="text-[11px] font-display uppercase tracking-widest text-[#2F4B73] font-bold block">
+            <span className="text-[11px] font-display uppercase tracking-widest text-accent font-bold block">
               Executive Management Portal
             </span>
-            <h1 className="font-display font-extrabold text-2xl sm:text-4xl text-[#1B2A44] uppercase tracking-tight leading-none">
+            <h1 className="font-display font-extrabold text-2xl sm:text-4xl text-brand uppercase tracking-tight leading-none">
               CLIENT SUBMISSIONS & ACCOUNTS
             </h1>
             <p className="font-body text-xs sm:text-sm text-slate-600 max-w-2xl">
-              Review all user inquiries submitted across contact, consultation, and property viewing forms alongside every registered client account created on Avenue.
+              Review all user inquiries submitted across contact, consultation, and property viewing forms alongside every registered client account created on {BRAND_CONFIG.identity.brandShortName}.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
             <Link
               to="/manage"
-              className="px-4 py-2 rounded-full border border-slate-200 hover:border-[#1B2A44] text-slate-700 text-xs font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 transition-colors"
+              className="px-4 py-2 rounded-full border border-slate-200 hover:border-brand text-slate-700 text-xs font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 transition-colors"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
               <span>Manage Inventory</span>
@@ -624,7 +688,7 @@ export const ClientRecordsPage: React.FC = () => {
               type="button"
               onClick={() => fetchRecords(true)}
               disabled={refreshing}
-              className="px-4 py-2 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] disabled:opacity-60 text-white text-xs font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+              className="px-4 py-2 rounded-full bg-brand hover:bg-accent disabled:opacity-60 text-brand-contrast text-xs font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
               <span>{refreshing ? 'Refreshing...' : 'Refresh Records'}</span>
@@ -636,12 +700,12 @@ export const ClientRecordsPage: React.FC = () => {
         <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-[#1B2A44] text-white flex items-center justify-center shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-brand text-brand-contrast flex items-center justify-center shrink-0">
                 <Bell className="w-4 h-4" />
               </div>
               <div className="space-y-0.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-display uppercase tracking-wider font-bold text-[#1B2A44]">
+                  <span className="text-[11px] font-display uppercase tracking-wider font-bold text-brand">
                     Alerts
                   </span>
                   <span
@@ -662,20 +726,25 @@ export const ClientRecordsPage: React.FC = () => {
                         ? ` (${serverAlertStatus.emailProvider.toUpperCase()} to ${serverAlertStatus.alertRecipient || 'management'})`
                         : ''}
                       {clientWebhookConfigured || serverAlertStatus?.serverWebhookConfigured
-                        ? ' • Google Sheet webhook & daily 8 PM PKT report enabled'
+                        ? ` • Google Sheet webhook & daily ${BRAND_CONFIG.locale.dailyReportLabel} enabled`
                         : ''}
                     </>
                   ) : (
-                    'Set RESEND_API_KEY / SMTP_* for instant email alerts or VITE_ENQUIRY_WEBHOOK_URL + VITE_ENQUIRY_KEY for Google Sheet & daily 8 PM PKT reports.'
+                    `Set RESEND_API_KEY / SMTP_* for instant email alerts or VITE_ENQUIRY_WEBHOOK_URL + VITE_ENQUIRY_KEY for Google Sheet & daily ${BRAND_CONFIG.locale.dailyReportLabel}s.`
                   )}
                 </p>
+                {serverAlertStatus?.configIssue && (
+                  <p className="font-body text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5 mt-1">
+                    {serverAlertStatus.configIssue}
+                  </p>
+                )}
                 {testPreviewUrl && (
                   <p className="font-body text-xs">
                     <a
                       href={testPreviewUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[#2F4B73] hover:underline font-semibold"
+                      className="text-accent hover:underline font-semibold"
                     >
                       Open Ethereal test email preview →
                     </a>
@@ -688,7 +757,7 @@ export const ClientRecordsPage: React.FC = () => {
               type="button"
               onClick={handleSendTestAlert}
               disabled={sendingTestAlert}
-              className="px-4 py-2 rounded-full bg-white hover:bg-[#1B2A44] hover:text-white text-[#1B2A44] border border-slate-200 text-xs font-display uppercase tracking-wider font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 disabled:opacity-60"
+              className="px-4 py-2 rounded-full bg-white hover:bg-brand hover:text-brand-contrast text-brand border border-slate-200 text-xs font-display uppercase tracking-wider font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 disabled:opacity-60"
             >
               <Bell className="w-3.5 h-3.5" />
               <span>{sendingTestAlert ? 'Testing...' : 'Send test alert'}</span>
@@ -722,7 +791,7 @@ export const ClientRecordsPage: React.FC = () => {
             onClick={() => setActiveView('all')}
             className={`px-5 py-2.5 rounded-full font-display text-xs uppercase tracking-wider font-bold flex items-center gap-2 transition-all cursor-pointer ${
               activeView === 'all'
-                ? 'bg-[#1B2A44] text-white shadow-md'
+                ? 'bg-brand text-brand-contrast shadow-md'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
@@ -735,7 +804,7 @@ export const ClientRecordsPage: React.FC = () => {
             onClick={() => setActiveView('inquiries')}
             className={`px-5 py-2.5 rounded-full font-display text-xs uppercase tracking-wider font-bold flex items-center gap-2 transition-all cursor-pointer ${
               activeView === 'inquiries'
-                ? 'bg-[#1B2A44] text-white shadow-md'
+                ? 'bg-brand text-brand-contrast shadow-md'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
@@ -748,7 +817,7 @@ export const ClientRecordsPage: React.FC = () => {
             onClick={() => setActiveView('accounts')}
             className={`px-5 py-2.5 rounded-full font-display text-xs uppercase tracking-wider font-bold flex items-center gap-2 transition-all cursor-pointer ${
               activeView === 'accounts'
-                ? 'bg-[#1B2A44] text-white shadow-md'
+                ? 'bg-brand text-brand-contrast shadow-md'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
@@ -760,8 +829,8 @@ export const ClientRecordsPage: React.FC = () => {
 
       {loading ? (
         <section className="bg-white rounded-[24px] sm:rounded-[32px] p-12 shadow-xl border border-slate-100 text-center space-y-3">
-          <div className="w-10 h-10 rounded-full border-2 border-[#1B2A44]/20 border-t-[#1B2A44] animate-spin mx-auto" />
-          <p className="font-display text-xs uppercase tracking-widest text-[#2F4B73] font-semibold">
+          <div className="w-10 h-10 rounded-full border-2 border-brand/20 border-t-brand animate-spin mx-auto" />
+          <p className="font-display text-xs uppercase tracking-widest text-accent font-semibold">
             Loading Stored Submissions & Accounts...
           </p>
         </section>
@@ -769,7 +838,7 @@ export const ClientRecordsPage: React.FC = () => {
         <section className="bg-white rounded-[24px] sm:rounded-[32px] p-8 sm:p-10 shadow-xl border border-rose-200 text-center space-y-4">
           <AlertCircle className="w-10 h-10 text-rose-500 mx-auto" />
           <div className="space-y-1">
-            <h2 className="font-display font-bold text-lg text-[#1B2A44] uppercase">
+            <h2 className="font-display font-bold text-lg text-brand uppercase">
               Could Not Load Client Records
             </h2>
             <p className="font-body text-xs sm:text-sm text-slate-600 max-w-md mx-auto">
@@ -779,7 +848,7 @@ export const ClientRecordsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => fetchRecords(true)}
-            className="px-5 py-2.5 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] text-white text-xs font-display uppercase tracking-wider font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+            className="px-5 py-2.5 rounded-full bg-brand hover:bg-accent text-brand-contrast text-xs font-display uppercase tracking-wider font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Retry</span>
@@ -792,14 +861,14 @@ export const ClientRecordsPage: React.FC = () => {
             <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-8 shadow-xl border border-slate-100 space-y-6">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-5">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-[#1B2A44] text-white flex items-center justify-center shrink-0">
+                  <div className="w-11 h-11 rounded-2xl bg-brand text-brand-contrast flex items-center justify-center shrink-0">
                     <MessageSquare className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-[10px] font-display uppercase tracking-widest text-[#2F4B73] font-bold block">
+                    <span className="text-[10px] font-display uppercase tracking-widest text-accent font-bold block">
                       Section 01 — Inbound Form Submissions
                     </span>
-                    <h2 className="font-display font-extrabold text-xl sm:text-2xl text-[#1B2A44] uppercase tracking-tight">
+                    <h2 className="font-display font-extrabold text-xl sm:text-2xl text-brand uppercase tracking-tight">
                       Contact & Viewing Submissions ({filteredInquiries.length})
                     </h2>
                   </div>
@@ -814,7 +883,7 @@ export const ClientRecordsPage: React.FC = () => {
                       placeholder="Search name, email, property..."
                       value={inquirySearch}
                       onChange={(e) => setInquirySearch(e.target.value)}
-                      className="pl-8 pr-3 py-2 rounded-full border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-[#2F4B73] w-full sm:w-56"
+                      className="pl-8 pr-3 py-2 rounded-full border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-accent w-full sm:w-56"
                     />
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -825,7 +894,7 @@ export const ClientRecordsPage: React.FC = () => {
                         onClick={() => setStatusFilter(st)}
                         className={`px-3 py-1.5 rounded-full text-[11px] font-display uppercase tracking-wider font-semibold cursor-pointer transition-colors ${
                           statusFilter === st
-                            ? 'bg-[#1B2A44] text-white'
+                            ? 'bg-brand text-brand-contrast'
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                       >
@@ -838,7 +907,7 @@ export const ClientRecordsPage: React.FC = () => {
                       onClick={() => setDateFilter((prev) => (prev === 'today' ? 'all' : 'today'))}
                       className={`px-3 py-1.5 rounded-full text-[11px] font-display uppercase tracking-wider font-semibold cursor-pointer transition-colors inline-flex items-center gap-1.5 ${
                         dateFilter === 'today'
-                          ? 'bg-[#2F4B73] text-white'
+                          ? 'bg-accent text-accent-contrast'
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                     >
@@ -846,8 +915,8 @@ export const ClientRecordsPage: React.FC = () => {
                       <span
                         className={`px-1.5 py-0.5 rounded-full text-[10px] leading-none font-bold ${
                           dateFilter === 'today'
-                            ? 'bg-white/20 text-white'
-                            : 'bg-white text-[#1B2A44]'
+                            ? 'bg-white/20 text-accent-contrast'
+                            : 'bg-white text-brand'
                         }`}
                       >
                         {todayCount}
@@ -859,7 +928,7 @@ export const ClientRecordsPage: React.FC = () => {
                       onClick={() => setDateFilter((prev) => (prev === 'week' ? 'all' : 'week'))}
                       className={`px-3 py-1.5 rounded-full text-[11px] font-display uppercase tracking-wider font-semibold cursor-pointer transition-colors inline-flex items-center gap-1.5 ${
                         dateFilter === 'week'
-                          ? 'bg-[#2F4B73] text-white'
+                          ? 'bg-accent text-accent-contrast'
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                     >
@@ -867,8 +936,8 @@ export const ClientRecordsPage: React.FC = () => {
                       <span
                         className={`px-1.5 py-0.5 rounded-full text-[10px] leading-none font-bold ${
                           dateFilter === 'week'
-                            ? 'bg-white/20 text-white'
-                            : 'bg-white text-[#1B2A44]'
+                            ? 'bg-white/20 text-accent-contrast'
+                            : 'bg-white text-brand'
                         }`}
                       >
                         {weekCount}
@@ -879,7 +948,7 @@ export const ClientRecordsPage: React.FC = () => {
                       type="button"
                       onClick={handleExportCsv}
                       disabled={filteredInquiries.length === 0}
-                      className="px-3.5 py-1.5 rounded-full border border-slate-200 bg-white hover:border-[#1B2A44] disabled:opacity-50 text-[#1B2A44] text-[11px] font-display uppercase tracking-wider font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                      className="px-3.5 py-1.5 rounded-full border border-slate-200 bg-white hover:border-brand disabled:opacity-50 text-brand text-[11px] font-display uppercase tracking-wider font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
                     >
                       <Download className="w-3.5 h-3.5" />
                       <span>Export CSV</span>
@@ -891,7 +960,7 @@ export const ClientRecordsPage: React.FC = () => {
               {filteredInquiries.length === 0 ? (
                 <div className="p-10 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center space-y-2">
                   <MessageSquare className="w-8 h-8 text-slate-400 mx-auto" />
-                  <p className="font-display font-bold text-sm text-[#1B2A44] uppercase">
+                  <p className="font-display font-bold text-sm text-brand uppercase">
                     No Contact Submissions Found
                   </p>
                   <p className="font-body text-xs text-slate-500">
@@ -905,14 +974,14 @@ export const ClientRecordsPage: React.FC = () => {
                   {filteredInquiries.map((item) => (
                     <div
                       key={item.id}
-                      className="rounded-2xl border border-slate-200/90 bg-slate-50/60 p-4 sm:p-5 flex flex-col justify-between gap-4 hover:border-[#2F4B73]/40 transition-colors"
+                      className="rounded-2xl border border-slate-200/90 bg-slate-50/60 p-4 sm:p-5 flex flex-col justify-between gap-4 hover:border-accent/40 transition-colors"
                     >
                       <div className="space-y-3">
                         {/* Card Top Row */}
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="font-display font-bold text-base text-[#1B2A44]">
+                              <h3 className="font-display font-bold text-base text-brand">
                                 {item.name}
                               </h3>
                               <span
@@ -925,7 +994,7 @@ export const ClientRecordsPage: React.FC = () => {
                                     : 'Resolved'}
                               </span>
                             </div>
-                            <span className="text-[11px] font-display uppercase tracking-wider text-[#2F4B73] font-semibold">
+                            <span className="text-[11px] font-display uppercase tracking-wider text-accent font-semibold">
                               {item.source}
                             </span>
                           </div>
@@ -938,12 +1007,12 @@ export const ClientRecordsPage: React.FC = () => {
 
                         {/* Subject & Property Highlight */}
                         <div className="flex flex-wrap gap-2 text-xs">
-                          <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 font-display font-semibold text-[#1B2A44]">
+                          <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 font-display font-semibold text-brand">
                             {item.subject}
                           </span>
                           {item.propertyTitle && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#E6ECF5] text-[#1B2A44] font-body font-semibold">
-                              <Building2 className="w-3 h-3 text-[#2F4B73]" />
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface text-brand font-body font-semibold">
+                              <Building2 className="w-3 h-3 text-accent" />
                               <span>{item.propertyTitle}</span>
                             </span>
                           )}
@@ -960,25 +1029,25 @@ export const ClientRecordsPage: React.FC = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs text-slate-600 font-body pt-1">
                           {item.email && (
                             <div className="flex items-center gap-1.5 truncate">
-                              <Mail className="w-3.5 h-3.5 text-[#2F4B73] shrink-0" />
+                              <Mail className="w-3.5 h-3.5 text-accent shrink-0" />
                               <span className="truncate">{item.email}</span>
                             </div>
                           )}
                           {item.phone && (
                             <div className="flex items-center gap-1.5">
-                              <Phone className="w-3.5 h-3.5 text-[#2F4B73] shrink-0" />
+                              <Phone className="w-3.5 h-3.5 text-accent shrink-0" />
                               <span>{item.phone}</span>
                             </div>
                           )}
                           {item.office && (
                             <div className="flex items-center gap-1.5">
-                              <MapPin className="w-3.5 h-3.5 text-[#2F4B73] shrink-0" />
+                              <MapPin className="w-3.5 h-3.5 text-accent shrink-0" />
                               <span>Office / City: {item.office}</span>
                             </div>
                           )}
                           {(item.preferredDate || item.timeframe) && (
                             <div className="flex items-center gap-1.5">
-                              <Calendar className="w-3.5 h-3.5 text-[#2F4B73] shrink-0" />
+                              <Calendar className="w-3.5 h-3.5 text-accent shrink-0" />
                               <span>
                                 {item.preferredDate
                                   ? `Visit Date: ${item.preferredDate}`
@@ -1005,7 +1074,7 @@ export const ClientRecordsPage: React.FC = () => {
                             className={`px-3 py-1 rounded-full border text-[11px] font-display uppercase tracking-wider font-semibold flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-60 ${
                               item.status === 'contacted'
                                 ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'
-                                : 'bg-white text-[#1B2A44] border-slate-200 hover:border-[#2F4B73] hover:bg-slate-50'
+                                : 'bg-white text-brand border-slate-200 hover:border-accent hover:bg-slate-50'
                             }`}
                           >
                             <CheckCircle2 className="w-3 h-3" />
@@ -1026,7 +1095,7 @@ export const ClientRecordsPage: React.FC = () => {
                                 e.target.value as 'new' | 'contacted' | 'resolved'
                               )
                             }
-                            className="px-2.5 py-1 rounded-full border border-slate-200 bg-white text-[11px] font-display uppercase tracking-wider font-semibold text-[#1B2A44] focus:outline-none focus:border-[#2F4B73] cursor-pointer"
+                            className="px-2.5 py-1 rounded-full border border-slate-200 bg-white text-[11px] font-display uppercase tracking-wider font-semibold text-brand focus:outline-none focus:border-accent cursor-pointer"
                           >
                             <option value="new">New</option>
                             <option value="contacted">Contacted</option>
@@ -1076,14 +1145,14 @@ export const ClientRecordsPage: React.FC = () => {
             <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-8 shadow-xl border border-slate-100 space-y-6">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-5">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-[#2F4B73] text-white flex items-center justify-center shrink-0">
+                  <div className="w-11 h-11 rounded-2xl bg-accent text-accent-contrast flex items-center justify-center shrink-0">
                     <Users className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-[10px] font-display uppercase tracking-widest text-[#2F4B73] font-bold block">
+                    <span className="text-[10px] font-display uppercase tracking-widest text-accent font-bold block">
                       Section 02 — Client Authentication Registry
                     </span>
-                    <h2 className="font-display font-extrabold text-xl sm:text-2xl text-[#1B2A44] uppercase tracking-tight">
+                    <h2 className="font-display font-extrabold text-xl sm:text-2xl text-brand uppercase tracking-tight">
                       Created User Accounts ({filteredAccounts.length})
                     </h2>
                   </div>
@@ -1098,7 +1167,7 @@ export const ClientRecordsPage: React.FC = () => {
                       placeholder="Search user name, email, phone..."
                       value={accountSearch}
                       onChange={(e) => setAccountSearch(e.target.value)}
-                      className="pl-8 pr-3 py-2 rounded-full border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-[#2F4B73] w-full sm:w-60"
+                      className="pl-8 pr-3 py-2 rounded-full border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-accent w-full sm:w-60"
                     />
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -1110,7 +1179,7 @@ export const ClientRecordsPage: React.FC = () => {
                           onClick={() => setAccountFilter(flt)}
                           className={`px-3 py-1.5 rounded-full text-[11px] font-display uppercase tracking-wider font-semibold cursor-pointer transition-colors ${
                             accountFilter === flt
-                              ? 'bg-[#2F4B73] text-white'
+                              ? 'bg-accent text-accent-contrast'
                               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                           }`}
                         >
@@ -1125,7 +1194,7 @@ export const ClientRecordsPage: React.FC = () => {
               {filteredAccounts.length === 0 ? (
                 <div className="p-10 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center space-y-2">
                   <Users className="w-8 h-8 text-slate-400 mx-auto" />
-                  <p className="font-display font-bold text-sm text-[#1B2A44] uppercase">
+                  <p className="font-display font-bold text-sm text-brand uppercase">
                     No Registered User Accounts Found
                   </p>
                   <p className="font-body text-xs text-slate-500">
@@ -1139,7 +1208,7 @@ export const ClientRecordsPage: React.FC = () => {
                   {filteredAccounts.map((acc) => (
                     <div
                       key={acc.id}
-                      className="rounded-2xl border border-slate-200/90 bg-slate-50/60 p-4 sm:p-5 flex flex-col justify-between gap-4 hover:border-[#2F4B73]/40 transition-colors"
+                      className="rounded-2xl border border-slate-200/90 bg-slate-50/60 p-4 sm:p-5 flex flex-col justify-between gap-4 hover:border-accent/40 transition-colors"
                     >
                       <div className="space-y-3">
                         <div className="flex items-start justify-between gap-3">
@@ -1152,12 +1221,12 @@ export const ClientRecordsPage: React.FC = () => {
                                 className="w-11 h-11 rounded-full object-cover border border-slate-200 shrink-0"
                               />
                             ) : (
-                              <div className="w-11 h-11 rounded-full bg-[#1B2A44] text-white flex items-center justify-center font-display font-bold text-xs tracking-wider shrink-0">
+                              <div className="w-11 h-11 rounded-full bg-brand text-brand-contrast flex items-center justify-center font-display font-bold text-xs tracking-wider shrink-0">
                                 {getInitials(acc.name)}
                               </div>
                             )}
                             <div className="min-w-0">
-                              <h3 className="font-display font-bold text-sm sm:text-base text-[#1B2A44] truncate">
+                              <h3 className="font-display font-bold text-sm sm:text-base text-brand truncate">
                                 {acc.name}
                               </h3>
                               <p className="font-body text-xs text-slate-600 truncate">
@@ -1194,7 +1263,7 @@ export const ClientRecordsPage: React.FC = () => {
                         <div className="space-y-1 text-xs text-slate-600 font-body bg-white rounded-xl p-3 border border-slate-100">
                           {acc.phone && (
                             <div className="flex items-center gap-1.5">
-                              <Phone className="w-3.5 h-3.5 text-[#2F4B73] shrink-0" />
+                              <Phone className="w-3.5 h-3.5 text-accent shrink-0" />
                               <span>{acc.phone}</span>
                             </div>
                           )}

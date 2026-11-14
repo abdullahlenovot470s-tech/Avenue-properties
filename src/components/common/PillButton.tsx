@@ -30,17 +30,17 @@ export const PillButton: React.FC<PillButtonProps> = ({
   }[size];
 
   const variantStyles = {
-    dark: 'bg-[#1B2A44] hover:bg-[#2F4B73] text-white shadow-sm hover:shadow-md',
-    white: 'bg-white hover:bg-[#E6ECF5] text-[#1B2A44] shadow-sm hover:shadow-md',
+    dark: 'bg-brand hover:bg-accent text-brand-contrast hover:text-accent-contrast shadow-sm hover:shadow-md',
+    white: 'bg-white hover:bg-surface text-brand shadow-sm hover:shadow-md',
     glass: 'glass-panel hover:bg-white/25 text-white shadow-sm',
-    outline: 'border border-[#1B2A44]/30 hover:border-[#1B2A44] text-[#1B2A44] hover:bg-[#1B2A44]/5',
+    outline: 'border border-brand/30 hover:border-brand text-brand hover:bg-brand/5',
   }[variant];
 
   const circleStyles = {
-    dark: 'bg-white text-[#1B2A44] group-hover:scale-105',
-    white: 'bg-[#1B2A44] text-white group-hover:scale-105',
+    dark: 'bg-white text-brand group-hover:scale-105',
+    white: 'bg-brand text-brand-contrast group-hover:scale-105',
     glass: 'bg-white/20 text-white group-hover:bg-white/30',
-    outline: 'bg-[#1B2A44] text-white group-hover:scale-105',
+    outline: 'bg-brand text-brand-contrast group-hover:scale-105',
   }[variant];
 
   const circleSize = {

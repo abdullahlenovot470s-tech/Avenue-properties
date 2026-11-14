@@ -15,6 +15,7 @@ import { HomePage } from './pages/HomePage';
 import { ConsultationModal } from './components/modals/ConsultationModal';
 import { PropertyDetailModal } from './components/modals/PropertyDetailModal';
 import { PropertyListing, PortfolioProject } from './types';
+import { BRAND_CONFIG } from './config/brand.config';
 
 // Prefetchable lazy route loaders for instant subsequent page transitions
 const loadAboutPage = () => import('./pages/AboutPage');
@@ -58,11 +59,13 @@ function PageLoadingFallback() {
   return (
     <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 space-y-4">
       <div className="relative w-11 h-11 flex items-center justify-center">
-        <div className="w-11 h-11 rounded-full border-2 border-[#1B2A44]/20 border-t-[#1B2A44] animate-spin" />
-        <span className="absolute font-display font-black text-xs text-[#1B2A44]">A</span>
+        <div className="w-11 h-11 rounded-full border-2 border-brand/20 border-t-brand animate-spin" />
+        <span className="absolute font-display font-black text-xs text-brand">
+          {BRAND_CONFIG.identity.brandMonogram}
+        </span>
       </div>
-      <span className="font-display uppercase tracking-widest text-xs font-semibold text-[#2F4B73]">
-        Loading Avenue Residence...
+      <span className="font-display uppercase tracking-widest text-xs font-semibold text-accent">
+        Loading {BRAND_CONFIG.identity.brandShortName} Residence...
       </span>
     </div>
   );
@@ -89,7 +92,9 @@ function AnimatedAppContent() {
 
   // Consultation and Property Modal states
   const [consultationOpen, setConsultationOpen] = useState(false);
-  const [selectedService, setSelectedService] = useState('Residential Acquisition Strategy');
+  const [selectedService, setSelectedService] = useState<string>(
+    BRAND_CONFIG.locale.defaultServiceInterest
+  );
   const [selectedProperty, setSelectedProperty] = useState<PropertyListing | PortfolioProject | null>(
     null
   );
@@ -98,9 +103,9 @@ function AnimatedAppContent() {
   // Idle background prefetch of primary navigation routes after initial paint
   useEffect(() => {
     const prefetch = () => {
-      void loadProjectsPage();
-      void loadBuyPage();
-      void loadRentPage();
+      if (BRAND_CONFIG.features.showProjectsPage) void loadProjectsPage();
+      if (BRAND_CONFIG.features.showBuyPage) void loadBuyPage();
+      if (BRAND_CONFIG.features.showRentPage) void loadRentPage();
       void loadAboutPage();
       void loadServicesPage();
       void loadContactPage();
@@ -132,7 +137,7 @@ function AnimatedAppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-[#E6ECF5] text-[#1B2A44] selection:bg-[#2F4B73] selection:text-white antialiased flex flex-col justify-between">
+    <div className="min-h-screen bg-surface text-brand selection:bg-accent selection:text-accent-contrast antialiased flex flex-col justify-between">
       <ScrollToTop />
 
       {/* Shared Persistent Navbar across all pages */}
@@ -160,14 +165,60 @@ function AnimatedAppContent() {
                 path="/services"
                 element={<ServicesPage onOpenConsultation={handleOpenConsultation} />}
               />
-              <Route path="/projects" element={<ProjectsPage />} />
-              <Route path="/projects/:id" element={<ProjectDetailPage />} />
+              <Route
+                path="/projects"
+                element={
+                  BRAND_CONFIG.features.showProjectsPage ? (
+                    <ProjectsPage />
+                  ) : (
+                    <Navigate to="/" replace />
+                  )
+                }
+              />
+              <Route
+                path="/projects/:id"
+                element={
+                  BRAND_CONFIG.features.showProjectsPage ? (
+                    <ProjectDetailPage />
+                  ) : (
+                    <Navigate to="/" replace />
+                  )
+                }
+              />
 
-              <Route path="/buy" element={<BuyPage />} />
-              <Route path="/buy/:id" element={<BuyDetailPage />} />
+              <Route
+                path="/buy"
+                element={
+                  BRAND_CONFIG.features.showBuyPage ? <BuyPage /> : <Navigate to="/" replace />
+                }
+              />
+              <Route
+                path="/buy/:id"
+                element={
+                  BRAND_CONFIG.features.showBuyPage ? (
+                    <BuyDetailPage />
+                  ) : (
+                    <Navigate to="/" replace />
+                  )
+                }
+              />
 
-              <Route path="/rent" element={<RentPage />} />
-              <Route path="/rent/:id" element={<RentDetailPage />} />
+              <Route
+                path="/rent"
+                element={
+                  BRAND_CONFIG.features.showRentPage ? <RentPage /> : <Navigate to="/" replace />
+                }
+              />
+              <Route
+                path="/rent/:id"
+                element={
+                  BRAND_CONFIG.features.showRentPage ? (
+                    <RentDetailPage />
+                  ) : (
+                    <Navigate to="/" replace />
+                  )
+                }
+              />
               <Route path="/contact" element={<ContactPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />

@@ -23,6 +23,7 @@ import {
   ChevronRight,
   MessageCircle,
 } from 'lucide-react';
+import { BRAND_CONFIG } from '../config/brand.config';
 
 export const BuyDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -55,17 +56,17 @@ export const BuyDetailPage: React.FC = () => {
   useEffect(() => {
     setActivePhotoIdx(0);
     if (property) {
-      document.title = `${property.title} | Properties for Sale | Avenue`;
+      document.title = `${property.title} | Properties for Sale | ${BRAND_CONFIG.identity.brandShortName}`;
     } else {
-      document.title = 'Property For Sale | Avenue Luxury Properties';
+      document.title = `Property For Sale | ${BRAND_CONFIG.identity.brandName}`;
     }
   }, [property]);
 
   if (!property) {
     return (
       <div className="min-h-screen pt-32 pb-20 px-6 text-center max-w-xl mx-auto flex flex-col items-center justify-center space-y-4">
-        <Building2 className="w-16 h-16 text-[#2F4B73]" />
-        <h2 className="font-display font-extrabold text-2xl uppercase tracking-tight text-[#1B2A44]">
+        <Building2 className="w-16 h-16 text-accent" />
+        <h2 className="font-display font-extrabold text-2xl uppercase tracking-tight text-brand">
           Property Listing Not Found
         </h2>
         <p className="text-xs text-slate-500 font-body">
@@ -73,7 +74,7 @@ export const BuyDetailPage: React.FC = () => {
         </p>
         <Link
           to="/buy"
-          className="mt-4 px-6 py-2.5 rounded-full bg-[#1B2A44] text-white text-xs font-display uppercase tracking-wider font-semibold"
+          className="mt-4 px-6 py-2.5 rounded-full bg-brand text-brand-contrast text-xs font-display uppercase tracking-wider font-semibold"
         >
           Return to Properties for Sale
         </Link>
@@ -143,7 +144,7 @@ export const BuyDetailPage: React.FC = () => {
     });
 
     setTourBooked(true);
-    showToast('Viewing scheduled. An Avenue senior advisor will contact you within 2 hours.', 'success');
+    showToast(`Viewing scheduled. An ${BRAND_CONFIG.identity.brandShortName} senior advisor will contact you within 2 hours.`, 'success');
   };
 
   // Financing calculation in PKR
@@ -159,9 +160,9 @@ export const BuyDetailPage: React.FC = () => {
 
   const formatPKR = (amount: number) => {
     if (amount >= 10000000) {
-      return `PKR ${(amount / 10000000).toFixed(2)} Crore`;
+      return `${BRAND_CONFIG.locale.currencyCode} ${(amount / 10000000).toFixed(2)} Crore`;
     }
-    return `PKR ${(amount / 100000).toFixed(1)} Lakh`;
+    return `${BRAND_CONFIG.locale.currencyCode} ${(amount / 100000).toFixed(1)} Lakh`;
   };
 
   const rawImages = property.gallery && property.gallery.length > 0 ? property.gallery : [property.image];
@@ -175,7 +176,7 @@ export const BuyDetailPage: React.FC = () => {
       <nav aria-label="Breadcrumb" className="px-2">
         <ol className="flex items-center gap-2 text-xs font-display uppercase tracking-widest text-slate-500">
           <li>
-            <Link to="/" className="hover:text-[#1B2A44] transition-colors">
+            <Link to="/" className="hover:text-brand transition-colors">
               Home
             </Link>
           </li>
@@ -183,14 +184,14 @@ export const BuyDetailPage: React.FC = () => {
             <ChevronRight className="w-3 h-3 text-slate-400" />
           </li>
           <li>
-            <Link to="/buy" className="hover:text-[#1B2A44] transition-colors">
+            <Link to="/buy" className="hover:text-brand transition-colors">
               Buy
             </Link>
           </li>
           <li>
             <ChevronRight className="w-3 h-3 text-slate-400" />
           </li>
-          <li className="text-[#1B2A44] font-bold truncate max-w-[200px] sm:max-w-md" aria-current="page">
+          <li className="text-brand font-bold truncate max-w-[200px] sm:max-w-md" aria-current="page">
             {property.title}
           </li>
         </ol>
@@ -200,7 +201,7 @@ export const BuyDetailPage: React.FC = () => {
       <div className="flex items-center justify-between px-2">
         <Link
           to="/buy"
-          className="hover:text-[#1B2A44] flex items-center gap-1.5 text-xs font-display uppercase tracking-widest text-slate-500 transition-colors"
+          className="hover:text-brand flex items-center gap-1.5 text-xs font-display uppercase tracking-widest text-slate-500 transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to Properties for Sale</span>
@@ -208,8 +209,8 @@ export const BuyDetailPage: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <a
-            href={`https://wa.me/923001234567?text=${encodeURIComponent(
-              `Assalam o Alaikum, I am inquiring about the property for sale: ${property.title} (${property.price}).`
+            href={`https://wa.me/${BRAND_CONFIG.contact.phone.whatsappDigits}?text=${encodeURIComponent(
+              `${BRAND_CONFIG.locale.greeting}, I am inquiring about the property for sale: ${property.title} (${property.price}).`
             )}`}
             target="_blank"
             rel="noopener noreferrer"
@@ -281,7 +282,7 @@ export const BuyDetailPage: React.FC = () => {
                 onClick={() => setActivePhotoIdx(i)}
                 className={`relative w-24 h-16 sm:w-28 sm:h-20 rounded-xl overflow-hidden border-2 shrink-0 transition-all cursor-pointer ${
                   activePhotoIdx === i
-                    ? 'border-[#1B2A44] scale-105 shadow-md'
+                    ? 'border-brand scale-105 shadow-md'
                     : 'border-transparent opacity-60 hover:opacity-100'
                 }`}
               >
@@ -300,7 +301,7 @@ export const BuyDetailPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-100 pb-6">
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-[#2F4B73]">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-accent">
                     <MapPin className="w-4 h-4" />
                     <span>{property.location}</span>
                   </div>
@@ -316,7 +317,7 @@ export const BuyDetailPage: React.FC = () => {
                     </span>
                   )}
                 </div>
-                <h1 className="font-display font-extrabold text-3xl sm:text-4xl text-[#1B2A44] uppercase tracking-tight">
+                <h1 className="font-display font-extrabold text-3xl sm:text-4xl text-brand uppercase tracking-tight">
                   {property.title}
                 </h1>
                 <span className="text-xs font-display uppercase tracking-wider text-emerald-700 font-semibold mt-1 block">
@@ -328,7 +329,7 @@ export const BuyDetailPage: React.FC = () => {
                 <span className="text-[10px] uppercase font-display tracking-widest text-slate-400 block">
                   Price
                 </span>
-                <span className="font-display font-extrabold text-3xl sm:text-4xl text-[#1B2A44]">
+                <span className="font-display font-extrabold text-3xl sm:text-4xl text-brand">
                   {property.price}
                 </span>
               </div>
@@ -338,36 +339,36 @@ export const BuyDetailPage: React.FC = () => {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-2 text-xs text-slate-700 font-body">
               {property.type !== 'Plot' && (
                 <>
-                  <div className="p-4 rounded-2xl bg-[#E6ECF5]/40 border border-[#E6ECF5]">
-                    <Bed className="w-4 h-4 text-[#2F4B73] mb-1" />
+                  <div className="p-4 rounded-2xl bg-surface/40 border border-surface">
+                    <Bed className="w-4 h-4 text-accent mb-1" />
                     <span className="block text-[10px] uppercase font-display tracking-wider text-slate-400">Bedrooms</span>
-                    <span className="font-bold text-sm text-[#1B2A44]">{property.beds} Beds</span>
+                    <span className="font-bold text-sm text-brand">{property.beds} Beds</span>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-[#E6ECF5]/40 border border-[#E6ECF5]">
-                    <Bath className="w-4 h-4 text-[#2F4B73] mb-1" />
+                  <div className="p-4 rounded-2xl bg-surface/40 border border-surface">
+                    <Bath className="w-4 h-4 text-accent mb-1" />
                     <span className="block text-[10px] uppercase font-display tracking-wider text-slate-400">Bathrooms</span>
-                    <span className="font-bold text-sm text-[#1B2A44]">{property.baths} Baths</span>
+                    <span className="font-bold text-sm text-brand">{property.baths} Baths</span>
                   </div>
                 </>
               )}
 
-              <div className="p-4 rounded-2xl bg-[#E6ECF5]/40 border border-[#E6ECF5]">
-                <Maximize2 className="w-4 h-4 text-[#2F4B73] mb-1" />
+              <div className="p-4 rounded-2xl bg-surface/40 border border-surface">
+                <Maximize2 className="w-4 h-4 text-accent mb-1" />
                 <span className="block text-[10px] uppercase font-display tracking-wider text-slate-400">Plot / Area</span>
-                <span className="font-bold text-sm text-[#1B2A44]">{property.area}</span>
+                <span className="font-bold text-sm text-brand">{property.area}</span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[#E6ECF5]/40 border border-[#E6ECF5]">
-                <Calendar className="w-4 h-4 text-[#2F4B73] mb-1" />
+              <div className="p-4 rounded-2xl bg-surface/40 border border-surface">
+                <Calendar className="w-4 h-4 text-accent mb-1" />
                 <span className="block text-[10px] uppercase font-display tracking-wider text-slate-400">Possession</span>
-                <span className="font-bold text-sm text-[#1B2A44]">{property.possession}</span>
+                <span className="font-bold text-sm text-brand">{property.possession}</span>
               </div>
             </div>
 
             {/* Description */}
             <div className="space-y-3 pt-2">
-              <h3 className="text-xs font-display uppercase tracking-widest text-[#2F4B73] font-bold">
+              <h3 className="text-xs font-display uppercase tracking-widest text-accent font-bold">
                 Property Overview
               </h3>
               <p className="font-body text-xs sm:text-sm text-slate-700 leading-relaxed font-light">
@@ -377,7 +378,7 @@ export const BuyDetailPage: React.FC = () => {
 
             {/* Key Features */}
             <div className="pt-4 border-t border-slate-100">
-              <h3 className="text-xs font-display uppercase tracking-widest text-[#2F4B73] font-bold mb-3">
+              <h3 className="text-xs font-display uppercase tracking-widest text-accent font-bold mb-3">
                 Verified Amenities & Utilities
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -391,23 +392,23 @@ export const BuyDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Capital & Home Financing Calculator in PKR */}
-          <div className="bg-[#1B2A44] rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 text-white shadow-xl space-y-6">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+          {/* Capital & Home Financing Calculator */}
+          <div className="bg-brand rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 text-brand-contrast shadow-xl space-y-6">
+            <div className="flex items-center justify-between border-b border-brand-contrast/10 pb-4">
               <div className="flex items-center gap-2.5">
                 <Calculator className="w-5 h-5 text-amber-300" />
-                <h3 className="font-display font-bold text-lg sm:text-xl uppercase tracking-tight text-white">
+                <h3 className="font-display font-bold text-lg sm:text-xl uppercase tracking-tight text-brand-contrast">
                   HOME FINANCING & INSTALLMENT CALCULATOR
                 </h3>
               </div>
-              <span className="text-[10px] font-display uppercase tracking-widest text-white/60">
-                Pakistani Bank / Developer Model
+              <span className="text-[10px] font-display uppercase tracking-widest text-brand-contrast/60">
+                {BRAND_CONFIG.locale.nationalityAdjective} Bank / Developer Model
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               <div>
-                <label className="block text-[10px] uppercase font-display tracking-wider text-white/70 mb-1">
+                <label className="block text-[10px] uppercase font-display tracking-wider text-brand-contrast/70 mb-1">
                   Down Payment ({downPaymentPercent}% Pay Order)
                 </label>
                 <div className="font-display font-bold text-lg text-emerald-300">
@@ -425,10 +426,10 @@ export const BuyDetailPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[10px] uppercase font-display tracking-wider text-white/70 mb-1">
+                <label className="block text-[10px] uppercase font-display tracking-wider text-brand-contrast/70 mb-1">
                   Financing Rate ({financingRate}%)
                 </label>
-                <div className="font-display font-bold text-lg text-white">
+                <div className="font-display font-bold text-lg text-brand-contrast">
                   {financingRate}% p.a.
                 </div>
                 <input
@@ -443,14 +444,14 @@ export const BuyDetailPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[10px] uppercase font-display tracking-wider text-white/70 mb-1">
+                <label className="block text-[10px] uppercase font-display tracking-wider text-brand-contrast/70 mb-1">
                   Estimated Monthly Installment
                 </label>
                 <div className="font-display font-bold text-xl sm:text-2xl text-amber-200">
                   {formatPKR(monthlyPayment)}
-                  <span className="text-xs text-white/60 font-body font-normal"> / mo</span>
+                  <span className="text-xs text-brand-contrast/60 font-body font-normal"> / mo</span>
                 </div>
-                <span className="text-[10px] text-white/50 block mt-1">
+                <span className="text-[10px] text-brand-contrast/50 block mt-1">
                   Excludes stamp duty, CVT & society transfer fee
                 </span>
               </div>
@@ -462,14 +463,14 @@ export const BuyDetailPage: React.FC = () => {
         <div className="lg:col-span-4 sticky top-28">
           <div className="bg-white rounded-[28px] sm:rounded-[36px] p-6 sm:p-8 shadow-xl border border-slate-100 space-y-5">
             <div>
-              <span className="text-[10px] font-display uppercase tracking-widest text-[#2F4B73] font-bold block mb-1">
+              <span className="text-[10px] font-display uppercase tracking-widest text-accent font-bold block mb-1">
                 Direct Principal Inquiry
               </span>
-              <h3 className="font-display font-extrabold text-xl uppercase tracking-tight text-[#1B2A44]">
+              <h3 className="font-display font-extrabold text-xl uppercase tracking-tight text-brand">
                 SCHEDULE PRIVATE SITE VISIT
               </h3>
               <p className="text-xs text-slate-500 font-body mt-1">
-                Site visits are escorted directly by an Avenue partner with society security clearances.
+                Site visits are escorted directly by an {BRAND_CONFIG.identity.brandShortName} partner with society security clearances.
               </p>
             </div>
 
@@ -480,7 +481,7 @@ export const BuyDetailPage: React.FC = () => {
                   Viewing Confirmed
                 </h4>
                 <p className="text-xs text-emerald-800 font-body">
-                  Assalam o Alaikum, {tourName}. An Avenue partner will coordinate your private visit to the property for {tourDate}.
+                  {BRAND_CONFIG.locale.greeting}, {tourName}. An {BRAND_CONFIG.identity.brandShortName} partner will coordinate your private visit to the property for {tourDate}.
                 </p>
               </div>
             ) : (
@@ -504,7 +505,7 @@ export const BuyDetailPage: React.FC = () => {
                     required
                     value={tourDate}
                     onChange={(e) => setTourDate(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-[#2F4B73] focus:bg-white"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-accent focus:bg-white"
                   />
                 </div>
 
@@ -515,10 +516,10 @@ export const BuyDetailPage: React.FC = () => {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Bilal Khan"
+                    placeholder={`e.g. ${BRAND_CONFIG.locale.placeholderNames.detailName}`}
                     value={tourName}
                     onChange={(e) => setTourName(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-[#2F4B73] focus:bg-white"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-accent focus:bg-white"
                   />
                 </div>
 
@@ -529,10 +530,10 @@ export const BuyDetailPage: React.FC = () => {
                   <input
                     type="email"
                     required
-                    placeholder="e.g. bilal.khan@example.com"
+                    placeholder={`e.g. ${BRAND_CONFIG.locale.placeholderNames.detailEmail}`}
                     value={tourEmail}
                     onChange={(e) => setTourEmail(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-[#2F4B73] focus:bg-white"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-accent focus:bg-white"
                   />
                 </div>
 
@@ -542,10 +543,10 @@ export const BuyDetailPage: React.FC = () => {
                   </label>
                   <input
                     type="tel"
-                    placeholder="e.g. 0300 1234567"
+                    placeholder={`e.g. ${BRAND_CONFIG.locale.placeholderNames.consultationPhone}`}
                     value={tourPhone}
                     onChange={(e) => setTourPhone(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-[#2F4B73] focus:bg-white"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-accent focus:bg-white"
                   />
                 </div>
 
@@ -558,7 +559,7 @@ export const BuyDetailPage: React.FC = () => {
                     placeholder="Inquire about title deeds, transfer fee, possession..."
                     value={tourNotes}
                     onChange={(e) => setTourNotes(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-[#2F4B73] focus:bg-white"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-accent focus:bg-white"
                   />
                 </div>
 
@@ -566,7 +567,7 @@ export const BuyDetailPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={tourSubmitting}
-                    className="w-full py-3.5 px-6 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] disabled:opacity-60 text-white font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full py-3.5 px-6 rounded-full bg-brand hover:bg-accent disabled:opacity-60 text-brand-contrast font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <span>
                       {tourSubmitting

@@ -1,20 +1,25 @@
-export type PakistanLocationCategory = 'All' | 'Lahore' | 'Islamabad' | 'Karachi' | 'Rawalpindi' | 'Murree & Hills';
+import { BRAND_CONFIG } from '../config/brand.config.ts';
+
+export type LocationCategory = string;
+export type PakistanLocationCategory = LocationCategory;
 
 export type ProjectStatus = 'Available' | 'Under Offer' | 'Sold';
 export type BuyStatus = 'Available' | 'Under Offer' | 'Sold';
 export type RentStatus = 'Available' | 'Rented';
 export type PropertyStatus = 'Available' | 'Under Offer' | 'Sold' | 'Rented';
 
+export type MainCity = (typeof BRAND_CONFIG.locale.mainCities)[number];
+
 export interface PropertyListing {
   id: string;
   name: string;
   location: string;
   price: string;
-  numericPrice: number; // in PKR
+  numericPrice: number;
   beds: number;
   baths: number;
-  sqft: string; // e.g. "2 Kanal (9,000 sq ft)" or "1,000 Sq. Yards"
-  category: 'Lahore' | 'Islamabad' | 'Karachi' | 'Rawalpindi' | 'Murree & Hills';
+  sqft: string;
+  category: string;
   description: string;
   extendedStory?: string;
   layoutVariant: 'exterior-left' | 'exterior-right';
@@ -33,16 +38,16 @@ export interface PortfolioProject {
   id: string;
   title: string;
   location: string;
-  size: string; // Marla / Kanal / Sq. Yards
+  size: string;
   beds: number;
   baths: number;
   projectDelivered: string;
   image: string;
   summary: string;
   architect: string;
-  valuation: string; // e.g. "PKR 6.5 Crore"
+  valuation: string;
   numericValuation?: number;
-  category: 'Lahore' | 'Islamabad' | 'Karachi' | 'Rawalpindi' | 'Murree & Hills';
+  category: string;
   gallery: string[];
   status?: ProjectStatus;
 }
@@ -50,26 +55,38 @@ export interface PortfolioProject {
 export interface RentalListing {
   id: string;
   title: string;
-  city: 'Lahore' | 'Islamabad' | 'Karachi' | 'Rawalpindi' | 'Murree & Hills';
+  city: string;
   areaSociety: string;
   type: 'Apartment' | 'House' | 'Upper Portion' | 'Lower Portion';
-  monthlyRent: number; // in PKR, e.g. 220000
+  monthlyRent: number;
   beds: number;
   baths: number;
-  sizeOrFloor: string; // e.g. "10 Marla" or "5th Floor"
+  sizeOrFloor: string;
   furnished: 'Furnished' | 'Unfurnished';
   image: string;
   gallery: string[];
-  availableFrom: string; // DD/MM/YYYY
-  securityDeposit: string; // e.g. "2 months' rent"
-  advanceRent: string; // e.g. "1 month" or "3 months"
-  minContractPeriod: string; // "11 months"
+  availableFrom: string;
+  securityDeposit: string;
+  advanceRent: string;
+  minContractPeriod: string;
   amenities: string[];
   description: string;
   status?: RentStatus;
 }
 
-export interface AvenueService {
+export interface NewsArticle {
+  id: string;
+  title: string;
+  slug: string;
+  summary: string;
+  content: string;
+  category: string;
+  publishedAt: string;
+  author: string;
+  image: string;
+}
+
+export interface BrandService {
   id: string;
   number: string;
   title: string;
@@ -80,8 +97,9 @@ export interface AvenueService {
   deliverables?: string[];
 }
 
-// Backward-compatible alias
-export type CurationService = AvenueService;
+// Backward-compatible aliases
+export type AvenueService = BrandService;
+export type CurationService = BrandService;
 
 export interface UserProfile {
   id: string;
@@ -102,6 +120,10 @@ export interface TeamMember {
   bio: string;
   avatarVariant: 'male' | 'female' | 'hijab';
   image?: string;
+  social?: {
+    linkedin?: string;
+    email?: string;
+  };
 }
 
 export interface OfficeLocation {

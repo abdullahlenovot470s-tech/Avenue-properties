@@ -20,11 +20,13 @@ import type {
   BuyStatus,
   RentStatus,
 } from './src/types/index.ts';
+import { BRAND_CONFIG } from './src/config/brand.config.ts';
+import { resolveBrandImagePath } from './src/data/legacyImageMap.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
 const MANAGEMENT_EMAIL = (process.env.MANAGEMENT_EMAIL || '').trim().toLowerCase();
 const MANAGEMENT_PASSWORD = process.env.MANAGEMENT_PASSWORD || '';
-const DEFAULT_MANAGEMENT_GOOGLE_EMAIL = 'abdullah.lenovot470s@gmail.com';
+const DEFAULT_MANAGEMENT_GOOGLE_EMAIL = BRAND_CONFIG.contact.managementGoogleEmail.toLowerCase();
 const MANAGEMENT_GOOGLE_EMAILS = new Set(
   [
     DEFAULT_MANAGEMENT_GOOGLE_EMAIL,
@@ -253,7 +255,7 @@ interface ContactInquiryRecord {
   createdAt: string;
 }
 
-type CityCategory = 'Lahore' | 'Islamabad' | 'Karachi' | 'Rawalpindi' | 'Murree & Hills';
+type CityCategory = string;
 
 interface CatalogStore {
   projects: PortfolioProject[];
@@ -262,10 +264,10 @@ interface CatalogStore {
   rent: RentalListing[];
 }
 
-const VALID_CITIES: CityCategory[] = ['Lahore', 'Islamabad', 'Karachi', 'Rawalpindi', 'Murree & Hills'];
+const VALID_CITIES: CityCategory[] = [...BRAND_CONFIG.locale.mainCities];
 
 function normalizeCity(city: string): CityCategory {
-  return VALID_CITIES.includes(city as CityCategory) ? (city as CityCategory) : 'Lahore';
+  return VALID_CITIES.includes(city) ? city : BRAND_CONFIG.locale.defaultCity;
 }
 
 function getDefaultCatalog(): CatalogStore {
@@ -286,13 +288,13 @@ const LEGACY_REPLACEMENTS: Record<string, string> = {
 
 function normalizeStockImageUrl(url: string): string {
   if (!url) return url;
+  if (url.startsWith('/stock/')) {
+    return resolveBrandImagePath(url, BRAND_CONFIG.images.fallbackVilla);
+  }
   const match = url.match(/^https:\/\/images\.unsplash\.com\/(photo-[^?\s'"]+)/);
   if (match) {
     const mapped = LEGACY_REPLACEMENTS[match[1]] || match[1];
-    const localPath = path.resolve(process.cwd(), 'public/stock', `${mapped}.jpg`);
-    if (fs.existsSync(localPath)) {
-      return `/stock/${mapped}.jpg`;
-    }
+    return resolveBrandImagePath(`/stock/${mapped}.jpg`, BRAND_CONFIG.images.fallbackVilla);
   }
   return url;
 }
@@ -909,21 +911,36 @@ function extractBearerToken(req: Request): string {
   return authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
 }
 
-function requireManagement(req: Request, res: Response, next: NextFunction) {
-  const token = extractBearerToken(req);
-  if (!token) {
+async function requireManagement(req: Request, res: Response, next: NextFunction) {
+  const bearerToken = extractBearerToken(req);
+  const firebaseHeaderToken = String(req.headers['x-firebase-token'] || '').trim();
+  const candidateToken = bearerToken || firebaseHeaderToken;
+
+  if (!candidateToken) {
     return res.status(401).json({
       success: false,
       error: 'Management authentication required. Please sign in again.',
     });
   }
-  if (!verifyManagementToken(token)) {
-    return res.status(401).json({
-      success: false,
-      error: 'Management session expired or invalid. Please sign in again.',
-    });
+
+  if (verifyManagementToken(candidateToken)) {
+    return next();
   }
-  return next();
+
+  // Fallback for multi-instance restarts or fresh sessions: verify a 3-part Firebase ID token
+  const jwtCandidate =
+    firebaseHeaderToken || (candidateToken.split('.').length === 3 ? candidateToken : '');
+  if (jwtCandidate) {
+    const verified = await verifyFirebaseIdToken(jwtCandidate);
+    if (verified && verified.emailVerified && isManagementEmail(verified.email)) {
+      return next();
+    }
+  }
+
+  return res.status(401).json({
+    success: false,
+    error: 'Management session expired or invalid. Please sign in again.',
+  });
 }
 
 interface VerifiedFirebaseIdentity {
@@ -933,6 +950,106 @@ interface VerifiedFirebaseIdentity {
   photoURL?: string;
   emailVerified: boolean;
   signInProvider?: string;
+}
+
+const GOOGLE_SECURETOKEN_CERTS_URL =
+  'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
+let cachedGoogleCerts: Record<string, string> = {};
+let cachedGoogleCertsExpiresAt = 0;
+
+async function getGoogleSecureTokenCerts(forceRefresh = false): Promise<Record<string, string>> {
+  if (!forceRefresh && cachedGoogleCertsExpiresAt > Date.now() && Object.keys(cachedGoogleCerts).length > 0) {
+    return cachedGoogleCerts;
+  }
+  const res = await fetch(GOOGLE_SECURETOKEN_CERTS_URL);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch Google X.509 certs (${res.status})`);
+  }
+  const certs = (await res.json()) as Record<string, string>;
+  const cacheControl = res.headers.get('cache-control') || '';
+  const maxAgeMatch = cacheControl.match(/max-age=(\d+)/i);
+  const maxAgeSec = maxAgeMatch ? Math.max(60, Number(maxAgeMatch[1])) : 3600;
+  cachedGoogleCerts = certs;
+  cachedGoogleCertsExpiresAt = Date.now() + maxAgeSec * 1000;
+  return certs;
+}
+
+async function verifyFirebaseJwtWithGoogleCerts(
+  idToken: string,
+  projectId: string
+): Promise<VerifiedFirebaseIdentity | null> {
+  const segments = idToken.split('.');
+  if (segments.length !== 3) return null;
+  const [headerB64, payloadB64, signatureB64] = segments;
+
+  try {
+    const header = JSON.parse(Buffer.from(headerB64, 'base64url').toString('utf-8')) as {
+      alg?: string;
+      kid?: string;
+    };
+    if (header.alg !== 'RS256' || !header.kid) {
+      return null;
+    }
+
+    const claims = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf-8')) as {
+      aud?: string;
+      iss?: string;
+      sub?: string;
+      exp?: number;
+      iat?: number;
+      auth_time?: number;
+      email?: string;
+      email_verified?: boolean;
+      name?: string;
+      picture?: string;
+      firebase?: {
+        sign_in_provider?: string;
+      };
+    };
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (
+      claims.aud !== projectId ||
+      claims.iss !== `https://securetoken.google.com/${projectId}` ||
+      !claims.sub ||
+      typeof claims.exp !== 'number' ||
+      claims.exp <= nowSec ||
+      typeof claims.iat !== 'number' ||
+      claims.iat > nowSec + 300 ||
+      !claims.email
+    ) {
+      return null;
+    }
+
+    let certs = await getGoogleSecureTokenCerts(false);
+    let certPem = certs[header.kid];
+    if (!certPem) {
+      certs = await getGoogleSecureTokenCerts(true);
+      certPem = certs[header.kid];
+    }
+    if (!certPem) {
+      return null;
+    }
+
+    const verifier = crypto.createVerify('RSA-SHA256');
+    verifier.update(`${headerB64}.${payloadB64}`);
+    verifier.end();
+    const signatureValid = verifier.verify(certPem, Buffer.from(signatureB64, 'base64url'));
+    if (!signatureValid) {
+      return null;
+    }
+
+    return {
+      uid: claims.sub,
+      email: claims.email.toLowerCase(),
+      name: claims.name || claims.email.split('@')[0] || `${BRAND_CONFIG.identity.brandShortName} Member`,
+      photoURL: claims.picture || undefined,
+      emailVerified: Boolean(claims.email_verified),
+      signInProvider: claims.firebase?.sign_in_provider,
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseIdentity | null> {
@@ -946,7 +1063,7 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseI
       return {
         uid: decoded.uid,
         email: decoded.email.toLowerCase(),
-        name: decoded.name || decoded.email.split('@')[0] || 'Avenue Member',
+        name: decoded.name || decoded.email.split('@')[0] || `${BRAND_CONFIG.identity.brandShortName} Member`,
         photoURL: decoded.picture || undefined,
         emailVerified: Boolean(decoded.email_verified),
         signInProvider: decoded.firebase?.sign_in_provider,
@@ -956,9 +1073,18 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseI
     }
   }
 
-  // 2. Fallback: validate JWT claims against projectId + verify signature/revocation via Identity Toolkit lookup
-  const apiKey = firebaseAppletConfig.apiKey;
-  const projectId = firebaseAppletConfig.projectId;
+  const projectId = (process.env.FIREBASE_PROJECT_ID || firebaseAppletConfig.projectId || '').trim();
+  const apiKey = (process.env.FIREBASE_API_KEY || firebaseAppletConfig.apiKey || '').trim();
+
+  // 2. Cryptographic RS256 verification against Google's official public X.509 certificates
+  if (projectId) {
+    const certVerified = await verifyFirebaseJwtWithGoogleCerts(idToken, projectId);
+    if (certVerified) {
+      return certVerified;
+    }
+  }
+
+  // 3. Fallback: validate JWT claims against projectId + verify via Identity Toolkit lookup
   if (!apiKey || !projectId) return null;
 
   const segments = idToken.split('.');
@@ -1011,7 +1137,7 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseI
     return {
       uid: fbUser.localId,
       email: fbUser.email.toLowerCase(),
-      name: fbUser.displayName || fbUser.email.split('@')[0] || 'Avenue Member',
+      name: fbUser.displayName || fbUser.email.split('@')[0] || `${BRAND_CONFIG.identity.brandShortName} Member`,
       photoURL: fbUser.photoUrl || undefined,
       emailVerified: Boolean(fbUser.emailVerified),
       signInProvider: claims.firebase?.sign_in_provider,
@@ -1099,25 +1225,119 @@ function clearLoginFailures(email: string): void {
 // Email Delivery Helpers
 let cachedEtherealTransporter: Transporter | null = null;
 let cachedEtherealAccount: TestAccount | null = null;
+let lastEmailConfigIssue: string | null = null;
+const rejectedResendKeys = new Set<string>();
+
+function cleanEnvValue(raw?: string): string {
+  const trimmed = (raw || '').trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function getCleanResendApiKey(): { key: string; issue?: string } {
+  let key = cleanEnvValue(process.env.RESEND_API_KEY);
+  if (/^bearer\s+/i.test(key)) {
+    key = key.replace(/^bearer\s+/i, '').trim();
+  }
+  if (!key || /^(your_resend_api_key|re_placeholder|placeholder)$/i.test(key)) {
+    return { key: '' };
+  }
+  if (rejectedResendKeys.has(key)) {
+    return {
+      key: '',
+      issue: 'Resend API key was rejected (401). Please update RESEND_API_KEY with a valid key.',
+    };
+  }
+  return { key };
+}
+
+function normalizeSmtpConfig(): {
+  configured: boolean;
+  host: string;
+  port: number;
+  user: string;
+  pass: string;
+  from: string;
+  issue?: string;
+} {
+  let host = cleanEnvValue(process.env.SMTP_HOST);
+  const port = Number(cleanEnvValue(process.env.SMTP_PORT)) || 587;
+  const user = cleanEnvValue(process.env.SMTP_USER);
+  const pass = cleanEnvValue(process.env.SMTP_PASS);
+  const from =
+    cleanEnvValue(process.env.EMAIL_FROM) ||
+    (user
+      ? `${BRAND_CONFIG.identity.brandName} <${user}>`
+      : `${BRAND_CONFIG.identity.brandName} <no-reply@example.com>`);
+
+  if (!host && !user && !pass) {
+    return { configured: false, host: '', port, user: '', pass: '', from };
+  }
+
+  host = host.replace(/^smtps?:\/\//i, '').replace(/\/+$/, '').trim();
+  // Auto-correct common email-style typo such as "smtp@gmail.com" -> "smtp.gmail.com"
+  const prefixEmailMatch = host.match(/^(smtp|mail|imap|pop)@([a-z0-9.-]+\.[a-z]{2,})$/i);
+  if (prefixEmailMatch) {
+    host = `${prefixEmailMatch[1].toLowerCase()}.${prefixEmailMatch[2].toLowerCase()}`;
+  }
+
+  if (!host || !user || !pass) {
+    return {
+      configured: false,
+      host: '',
+      port,
+      user,
+      pass,
+      from,
+      issue: 'Incomplete SMTP settings. Provide SMTP_HOST, SMTP_USER, and SMTP_PASS.',
+    };
+  }
+
+  if (host.includes('@') || /\s/.test(host) || !host.includes('.')) {
+    return {
+      configured: false,
+      host: '',
+      port,
+      user,
+      pass,
+      from,
+      issue: `Invalid SMTP_HOST "${host}". Use a mail server hostname such as smtp.gmail.com.`,
+    };
+  }
+
+  return { configured: true, host, port, user, pass, from };
+}
+
+function getServerEmailConfigIssue(): string | null {
+  const resend = getCleanResendApiKey();
+  const smtp = normalizeSmtpConfig();
+  return lastEmailConfigIssue || resend.issue || smtp.issue || null;
+}
 
 async function getTransporter(): Promise<{
   transporter: Transporter;
   fromAddress: string;
   isEthereal: boolean;
 }> {
-  const defaultFrom = process.env.EMAIL_FROM || 'Avenue Luxury Properties <no-reply@example.com>';
-
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  const smtp = normalizeSmtpConfig();
+  if (smtp.configured) {
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: Number(process.env.SMTP_PORT) === 465,
+      host: smtp.host,
+      port: smtp.port,
+      secure: smtp.port === 465,
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        user: smtp.user,
+        pass: smtp.pass,
       },
     });
-    return { transporter, fromAddress: defaultFrom, isEthereal: false };
+    return { transporter, fromAddress: smtp.from, isEthereal: false };
   }
 
   if (!cachedEtherealTransporter || !cachedEtherealAccount) {
@@ -1126,6 +1346,8 @@ async function getTransporter(): Promise<{
       host: cachedEtherealAccount.smtp.host,
       port: cachedEtherealAccount.smtp.port,
       secure: cachedEtherealAccount.smtp.secure,
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
       auth: {
         user: cachedEtherealAccount.user,
         pass: cachedEtherealAccount.pass,
@@ -1135,15 +1357,16 @@ async function getTransporter(): Promise<{
 
   return {
     transporter: cachedEtherealTransporter,
-    fromAddress: `Avenue Luxury Properties <${cachedEtherealAccount.user}>`,
+    fromAddress: `${BRAND_CONFIG.identity.brandName} <${cachedEtherealAccount.user}>`,
     isEthereal: true,
   };
 }
 
 interface SendEmailResult {
   sent: boolean;
-  provider: 'resend' | 'smtp' | 'ethereal';
+  provider: 'resend' | 'smtp' | 'ethereal' | 'none';
   previewUrl?: string;
+  error?: string;
 }
 
 async function sendEmail(params: {
@@ -1151,55 +1374,136 @@ async function sendEmail(params: {
   subject: string;
   html: string;
   text: string;
+  allowEthereal?: boolean;
 }): Promise<SendEmailResult> {
-  if (process.env.RESEND_API_KEY) {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: process.env.EMAIL_FROM || 'Avenue Luxury Properties <onboarding@resend.dev>',
-        to: [params.to],
-        subject: params.subject,
-        html: params.html,
-        text: params.text,
-      }),
-    });
-    if (res.ok) {
-      return { sent: true, provider: 'resend' };
-    }
-    const errBody = await res.text();
-    console.warn('Resend API error, falling back to SMTP/Ethereal:', errBody);
+  const issues: string[] = [];
+  const resend = getCleanResendApiKey();
+  if (resend.issue) {
+    issues.push(resend.issue);
   }
 
-  const { transporter, fromAddress, isEthereal } = await getTransporter();
-  const info = await transporter.sendMail({
-    from: fromAddress,
-    to: params.to,
-    subject: params.subject,
-    text: params.text,
-    html: params.html,
-  });
+  if (resend.key) {
+    try {
+      const fromAddress =
+        cleanEnvValue(process.env.EMAIL_FROM) ||
+        `${BRAND_CONFIG.identity.brandName} <onboarding@resend.dev>`;
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${resend.key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: fromAddress,
+          to: [params.to],
+          subject: params.subject,
+          html: params.html,
+          text: params.text,
+        }),
+      });
+      if (res.ok) {
+        lastEmailConfigIssue = null;
+        return { sent: true, provider: 'resend' };
+      }
 
-  const previewUrl = isEthereal ? nodemailer.getTestMessageUrl(info) || undefined : undefined;
-  return {
-    sent: true,
-    provider: isEthereal ? 'ethereal' : 'smtp',
-    previewUrl,
-  };
+      const errText = await res.text();
+      let detail = `Resend error (${res.status})`;
+      try {
+        const parsedErr = JSON.parse(errText) as { message?: string };
+        if (parsedErr.message) {
+          detail = `Resend API: ${parsedErr.message}`;
+        }
+      } catch {
+        // Use HTTP status fallback
+      }
+      if (res.status === 401 || res.status === 403) {
+        rejectedResendKeys.add(resend.key);
+        detail = 'Resend API key is invalid (401). Please verify RESEND_API_KEY.';
+      }
+      issues.push(detail);
+      lastEmailConfigIssue = detail;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Resend request failed';
+      issues.push(msg);
+      lastEmailConfigIssue = msg;
+    }
+  }
+
+  const smtp = normalizeSmtpConfig();
+  if (smtp.issue) {
+    issues.push(smtp.issue);
+    lastEmailConfigIssue = smtp.issue;
+  }
+
+  if (smtp.configured) {
+    try {
+      const { transporter, fromAddress } = await getTransporter();
+      await transporter.sendMail({
+        from: fromAddress,
+        to: params.to,
+        subject: params.subject,
+        text: params.text,
+        html: params.html,
+      });
+      lastEmailConfigIssue = null;
+      return { sent: true, provider: 'smtp' };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'SMTP delivery failed';
+      issues.push(`SMTP (${smtp.host}): ${msg}`);
+      lastEmailConfigIssue = `SMTP (${smtp.host}): ${msg}`;
+    }
+  }
+
+  if (params.allowEthereal === false) {
+    return {
+      sent: false,
+      provider: 'none',
+      error: issues.join(' | ') || lastEmailConfigIssue || undefined,
+    };
+  }
+
+  try {
+    if (!cachedEtherealTransporter || !cachedEtherealAccount) {
+      cachedEtherealAccount = await nodemailer.createTestAccount();
+      cachedEtherealTransporter = nodemailer.createTransport({
+        host: cachedEtherealAccount.smtp.host,
+        port: cachedEtherealAccount.smtp.port,
+        secure: cachedEtherealAccount.smtp.secure,
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        auth: {
+          user: cachedEtherealAccount.user,
+          pass: cachedEtherealAccount.pass,
+        },
+      });
+    }
+    const info = await cachedEtherealTransporter.sendMail({
+      from: `${BRAND_CONFIG.identity.brandName} <${cachedEtherealAccount.user}>`,
+      to: params.to,
+      subject: params.subject,
+      text: params.text,
+      html: params.html,
+    });
+    const previewUrl = nodemailer.getTestMessageUrl(info) || undefined;
+    return {
+      sent: true,
+      provider: 'ethereal',
+      previewUrl,
+      error: issues.length > 0 ? issues.join(' | ') : undefined,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Preview email service unavailable';
+    return {
+      sent: false,
+      provider: 'none',
+      error: issues.concat(msg).join(' | '),
+    };
+  }
 }
 
 function getServerEmailDeliveryMode(): 'resend' | 'smtp' | 'none' {
-  if ((process.env.RESEND_API_KEY || '').trim()) return 'resend';
-  if (
-    (process.env.SMTP_HOST || '').trim() &&
-    (process.env.SMTP_USER || '').trim() &&
-    (process.env.SMTP_PASS || '').trim()
-  ) {
-    return 'smtp';
-  }
+  if (getCleanResendApiKey().key) return 'resend';
+  if (normalizeSmtpConfig().configured) return 'smtp';
   return 'none';
 }
 
@@ -1221,20 +1525,20 @@ function getServerWebhookConfig(): { url: string; key: string } {
   return { url, key };
 }
 
-function formatAlertPktTime(iso: string): string {
+function formatAlertLocalTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return `${d.toLocaleString('en-PK', {
-    timeZone: 'Asia/Karachi',
+  return `${d.toLocaleString(BRAND_CONFIG.locale.currencyLocale, {
+    timeZone: BRAND_CONFIG.locale.timezoneIana,
     dateStyle: 'medium',
     timeStyle: 'short',
-  })} PKT`;
+  })} ${BRAND_CONFIG.locale.timezoneLabel}`;
 }
 
 function buildInquiryAlertEmailText(record: ContactInquiryRecord): string {
   const lines = [
-    `New Avenue Luxury Properties Enquiry (${record.source})`,
-    `Time: ${formatAlertPktTime(record.createdAt)}`,
+    `New ${BRAND_CONFIG.identity.brandName} Enquiry (${record.source})`,
+    `Time: ${formatAlertLocalTime(record.createdAt)}`,
     `Name: ${record.name}`,
     record.email ? `Email: ${record.email}` : '',
     record.phone ? `Phone: ${record.phone}` : '',
@@ -1249,16 +1553,18 @@ function buildInquiryAlertEmailText(record: ContactInquiryRecord): string {
 }
 
 function buildInquiryAlertEmailHtml(record: ContactInquiryRecord): string {
+  const brandColor = BRAND_CONFIG.theme.brand;
+  const shortBrand = escapeHtml(BRAND_CONFIG.identity.brandShortName);
   const row = (label: string, val?: string) =>
     val
-      ? `<tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:12px;font-weight:700;text-transform:uppercase;width:150px;">${escapeHtml(label)}</td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;color:#1B2A44;font-size:13px;">${escapeHtml(val)}</td></tr>`
+      ? `<tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:12px;font-weight:700;text-transform:uppercase;width:150px;">${escapeHtml(label)}</td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;color:${brandColor};font-size:13px;">${escapeHtml(val)}</td></tr>`
       : '';
 
   return `
     <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px 16px;">
-      <div style="background:#1B2A44;color:#ffffff;padding:24px 28px;border-radius:18px 18px 0 0;">
-        <div style="font-size:20px;font-weight:800;letter-spacing:-0.4px;">Avenue Enquiry Alert</div>
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.8px;color:#94a3b8;margin-top:4px;">${escapeHtml(record.source)} &bull; ${escapeHtml(formatAlertPktTime(record.createdAt))}</div>
+      <div style="background:${brandColor};color:#ffffff;padding:24px 28px;border-radius:18px 18px 0 0;">
+        <div style="font-size:20px;font-weight:800;letter-spacing:-0.4px;">${shortBrand} Enquiry Alert</div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.8px;color:#94a3b8;margin-top:4px;">${escapeHtml(record.source)} &bull; ${escapeHtml(formatAlertLocalTime(record.createdAt))}</div>
       </div>
       <div style="background:#ffffff;padding:24px 28px;border-radius:0 0 18px 18px;border:1px solid #e2e8f0;border-top:none;">
         <table style="width:100%;border-collapse:collapse;">
@@ -1285,6 +1591,7 @@ async function dispatchInquiryAlert(
   emailProvider: 'resend' | 'smtp' | 'ethereal' | 'none';
   webhookSent: boolean;
   previewUrl?: string;
+  error?: string;
 }> {
   const emailMode = getServerEmailDeliveryMode();
   const webhookConfig = getServerWebhookConfig();
@@ -1293,21 +1600,20 @@ async function dispatchInquiryAlert(
   let deliveredToInbox = false;
   let usedEmailProvider: 'resend' | 'smtp' | 'ethereal' | 'none' = 'none';
   let previewUrl: string | undefined;
+  let deliveryError: string | undefined;
 
   if (emailMode !== 'none' || options?.allowEtherealPreview) {
-    try {
-      const emailResult = await sendEmail({
-        to: recipient,
-        subject: `[Avenue] New Enquiry: ${record.name} (${record.source})`,
-        text: buildInquiryAlertEmailText(record),
-        html: buildInquiryAlertEmailHtml(record),
-      });
-      usedEmailProvider = emailResult.provider;
-      previewUrl = emailResult.previewUrl;
-      deliveredToInbox = emailResult.provider === 'resend' || emailResult.provider === 'smtp';
-    } catch (err) {
-      console.warn('[Alert] Email delivery failed:', err instanceof Error ? err.message : String(err));
-    }
+    const emailResult = await sendEmail({
+      to: recipient,
+      subject: `[${BRAND_CONFIG.identity.brandShortName}] New Enquiry: ${record.name} (${record.source})`,
+      text: buildInquiryAlertEmailText(record),
+      html: buildInquiryAlertEmailHtml(record),
+      allowEthereal: Boolean(options?.allowEtherealPreview),
+    });
+    usedEmailProvider = emailResult.provider;
+    previewUrl = emailResult.previewUrl;
+    deliveryError = emailResult.error;
+    deliveredToInbox = emailResult.provider === 'resend' || emailResult.provider === 'smtp';
   }
 
   let webhookSent = false;
@@ -1326,7 +1632,7 @@ async function dispatchInquiryAlert(
           budget: record.timeframe || '',
           message: record.message,
           source: record.source,
-          page: `Avenue (${record.source})`,
+          page: `${BRAND_CONFIG.identity.brandShortName} (${record.source})`,
           website: '',
         }),
       });
@@ -1341,6 +1647,7 @@ async function dispatchInquiryAlert(
     emailProvider: usedEmailProvider,
     webhookSent,
     previewUrl,
+    error: deliveryError,
   };
 }
 
@@ -1364,29 +1671,34 @@ function escapeHtml(str: string): string {
 
 function buildVerificationEmailHtml(name: string, code: string, verifyLink: string): string {
   const safeName = escapeHtml(name);
+  const shortBrand = escapeHtml(BRAND_CONFIG.identity.brandShortName);
+  const fullBrand = escapeHtml(BRAND_CONFIG.identity.brandName);
+  const greeting = escapeHtml(BRAND_CONFIG.locale.greeting);
+  const brandColor = BRAND_CONFIG.theme.brand;
+
   return `
     <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 560px; margin: 0 auto; background: #f8fafc; padding: 32px 20px;">
-      <div style="background: #1B2A44; color: #ffffff; padding: 28px 32px; border-radius: 20px 20px 0 0;">
-        <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">Avenue</div>
-        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #94a3b8; margin-top: 4px;">Luxury Properties &amp; Architectural Legacies</div>
+      <div style="background: ${brandColor}; color: #ffffff; padding: 28px 32px; border-radius: 20px 20px 0 0;">
+        <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">${shortBrand}</div>
+        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #94a3b8; margin-top: 4px;">${fullBrand}</div>
       </div>
       <div style="background: #ffffff; padding: 32px; border-radius: 0 0 20px 20px; border: 1px solid #e2e8f0; border-top: none;">
-        <h2 style="color: #1B2A44; margin: 0 0 12px; font-size: 20px;">Verify your email address</h2>
+        <h2 style="color: ${brandColor}; margin: 0 0 12px; font-size: 20px;">Verify your email address</h2>
         <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">
-          Assalam o Alaikum ${safeName},<br/>
-          Thank you for registering with Avenue. Enter the 6-digit verification code below or click the verification button to activate your account.
+          ${greeting} ${safeName},<br/>
+          Thank you for registering with ${shortBrand}. Enter the 6-digit verification code below or click the verification button to activate your account.
         </p>
         <div style="background: #f1f5f9; border: 1px dashed #94a3b8; border-radius: 14px; padding: 18px; text-align: center; margin-bottom: 24px;">
           <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #64748b; margin-bottom: 6px;">Verification Code</div>
-          <div style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #1B2A44; font-family: monospace;">${code}</div>
+          <div style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: ${brandColor}; font-family: monospace;">${code}</div>
         </div>
         <div style="text-align: center; margin-bottom: 24px;">
-          <a href="${verifyLink}" style="display: inline-block; background: #1B2A44; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; padding: 14px 28px; border-radius: 999px;">
+          <a href="${verifyLink}" style="display: inline-block; background: ${brandColor}; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; padding: 14px 28px; border-radius: 999px;">
             Verify Email Address
           </a>
         </div>
         <p style="color: #64748b; font-size: 12px; line-height: 1.5; margin: 0;">
-          This code expires in 15 minutes. If you did not create an Avenue account, you may safely ignore this email.
+          This code expires in 15 minutes. If you did not create an ${shortBrand} account, you may safely ignore this email.
         </p>
       </div>
     </div>
@@ -1395,21 +1707,25 @@ function buildVerificationEmailHtml(name: string, code: string, verifyLink: stri
 
 function buildResetEmailHtml(name: string, code: string): string {
   const safeName = escapeHtml(name);
+  const shortBrand = escapeHtml(BRAND_CONFIG.identity.brandShortName);
+  const greeting = escapeHtml(BRAND_CONFIG.locale.greeting);
+  const brandColor = BRAND_CONFIG.theme.brand;
+
   return `
     <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 560px; margin: 0 auto; background: #f8fafc; padding: 32px 20px;">
-      <div style="background: #1B2A44; color: #ffffff; padding: 28px 32px; border-radius: 20px 20px 0 0;">
-        <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">Avenue</div>
+      <div style="background: ${brandColor}; color: #ffffff; padding: 28px 32px; border-radius: 20px 20px 0 0;">
+        <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">${shortBrand}</div>
         <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #94a3b8; margin-top: 4px;">Password Reset Request</div>
       </div>
       <div style="background: #ffffff; padding: 32px; border-radius: 0 0 20px 20px; border: 1px solid #e2e8f0; border-top: none;">
-        <h2 style="color: #1B2A44; margin: 0 0 12px; font-size: 20px;">Reset your password</h2>
+        <h2 style="color: ${brandColor}; margin: 0 0 12px; font-size: 20px;">Reset your password</h2>
         <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">
-          Assalam o Alaikum ${safeName},<br/>
-          We received a request to reset the password for your Avenue client account. Enter the 6-digit code below in the Reset Password window to choose a new password.
+          ${greeting} ${safeName},<br/>
+          We received a request to reset the password for your ${shortBrand} client account. Enter the 6-digit code below in the Reset Password window to choose a new password.
         </p>
         <div style="background: #f1f5f9; border: 1px dashed #94a3b8; border-radius: 14px; padding: 18px; text-align: center; margin-bottom: 24px;">
           <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #64748b; margin-bottom: 6px;">Reset Code</div>
-          <div style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #1B2A44; font-family: monospace;">${code}</div>
+          <div style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: ${brandColor}; font-family: monospace;">${code}</div>
         </div>
         <p style="color: #64748b; font-size: 12px; line-height: 1.5; margin: 0;">
           This code expires in 15 minutes. If you did not request a password reset, please disregard this message.
@@ -1470,7 +1786,7 @@ function computeAreaCategory(area: string): BuyProperty['areaCategory'] {
   return 'Up to 5 Marla';
 }
 
-const DEFAULT_FALLBACK_IMAGE = '/stock/photo-1600596542815-ffad4c1539a9.jpg';
+const DEFAULT_FALLBACK_IMAGE = BRAND_CONFIG.images.fallbackVilla;
 const MAX_GALLERY_IMAGES = 4;
 const MAX_CATALOG_ITEM_BYTES = 800 * 1024;
 const ALLOWED_PROJECT_STATUSES: readonly ProjectStatus[] = ['Available', 'Under Offer', 'Sold'];
@@ -1563,13 +1879,13 @@ function buildProjectFromBody(
 ): { ok: true; item: PortfolioProject } | { ok: false; error: string } {
   const title = String(body.title || '').trim();
   const location = String(body.location || '').trim();
-  const category = normalizeCity(String(body.category || 'Lahore'));
+  const category = normalizeCity(String(body.category || BRAND_CONFIG.locale.defaultCity));
   const valuation = String(body.valuation || '').trim();
   const size = String(body.size || '').trim() || '1 Kanal';
   const beds = Math.max(0, Number(body.beds ?? 5) || 0);
   const baths = Math.max(0, Number(body.baths ?? 5) || 0);
   const projectDelivered = String(body.projectDelivered || new Date().getFullYear()).trim();
-  const architect = String(body.architect || 'Avenue Design Atelier').trim();
+  const architect = String(body.architect || BRAND_CONFIG.identity.architectDefault).trim();
   const summary =
     String(body.summary || '').trim() ||
     `Architectural residence located in ${location || category} with verified title and transfer documentation.`;
@@ -1621,7 +1937,7 @@ function buildBuyFromBody(
   body: Record<string, unknown>
 ): { ok: true; item: BuyProperty } | { ok: false; error: string } {
   const title = String(body.title || '').trim();
-  const city = normalizeCity(String(body.city || 'Lahore'));
+  const city = normalizeCity(String(body.city || BRAND_CONFIG.locale.defaultCity));
   const location = String(body.location || '').trim();
   const rawType = String(body.type || 'House').trim();
   const allowedTypes: BuyProperty['type'][] = ['House', 'Apartment', 'Plot'];
@@ -1698,7 +2014,7 @@ function buildRentFromBody(
   body: Record<string, unknown>
 ): { ok: true; item: RentalListing } | { ok: false; error: string } {
   const title = String(body.title || '').trim();
-  const city = normalizeCity(String(body.city || 'Lahore'));
+  const city = normalizeCity(String(body.city || BRAND_CONFIG.locale.defaultCity));
   const areaSociety = String(body.areaSociety || '').trim();
   const rawType = String(body.type || 'House').trim();
   const allowedTypes: RentalListing['type'][] = ['Apartment', 'House', 'Upper Portion', 'Lower Portion'];
@@ -1732,7 +2048,7 @@ function buildRentFromBody(
   if (!title || !areaSociety || !monthlyRent || Number.isNaN(monthlyRent) || monthlyRent <= 0) {
     return {
       ok: false,
-      error: 'Rental title, society/location, and a valid monthly rent in PKR are required.',
+      error: `Rental title, society/location, and a valid monthly rent in ${BRAND_CONFIG.locale.currencyCode} are required.`,
     };
   }
 
@@ -2064,8 +2380,8 @@ async function startServer() {
       const verifyLink = `${getBaseUrl(req)}/api/auth/verify-link?token=${verifyToken}&email=${encodeURIComponent(email)}`;
       const emailResult = await sendEmail({
         to: email,
-        subject: 'Verify your Avenue Luxury Properties account',
-        text: `Assalam o Alaikum ${name}, your Avenue verification code is ${verifyCode}. Or visit: ${verifyLink}`,
+        subject: `Verify your ${BRAND_CONFIG.identity.brandName} account`,
+        text: `${BRAND_CONFIG.locale.greeting} ${name}, your ${BRAND_CONFIG.identity.brandShortName} verification code is ${verifyCode}. Or visit: ${verifyLink}`,
         html: buildVerificationEmailHtml(name, verifyCode, verifyLink),
       });
 
@@ -2115,8 +2431,8 @@ async function startServer() {
       const verifyLink = `${getBaseUrl(req)}/api/auth/verify-link?token=${verifyToken}&email=${encodeURIComponent(email)}`;
       const emailResult = await sendEmail({
         to: email,
-        subject: 'Your new Avenue verification code',
-        text: `Assalam o Alaikum ${user.name}, your new verification code is ${verifyCode}. Or visit: ${verifyLink}`,
+        subject: `Your new ${BRAND_CONFIG.identity.brandShortName} verification code`,
+        text: `${BRAND_CONFIG.locale.greeting} ${user.name}, your new verification code is ${verifyCode}. Or visit: ${verifyLink}`,
         html: buildVerificationEmailHtml(user.name, verifyCode, verifyLink),
       });
 
@@ -2206,15 +2522,19 @@ async function startServer() {
       const token = String(req.query.token || '').trim();
       const user = await getUserByEmail(email);
 
+      const shortBrand = escapeHtml(BRAND_CONFIG.identity.brandShortName);
+      const surfaceColor = BRAND_CONFIG.theme.surface;
+      const brandColor = BRAND_CONFIG.theme.brand;
+
       const isExpired = Boolean(user?.verifyExpiresAt && Date.now() > user.verifyExpiresAt);
       if (!user || !token || (!user.emailVerified && (user.verifyToken !== token || isExpired))) {
         return res.status(400).send(`
           <html>
-            <body style="font-family: sans-serif; background: #E6ECF5; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0;">
+            <body style="font-family: sans-serif; background: ${surfaceColor}; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0;">
               <div style="background: white; padding: 40px; border-radius: 24px; max-width: 420px; text-align: center; box-shadow: 0 20px 50px rgba(27,42,68,0.1);">
-                <h2 style="color: #1B2A44; margin-top: 0;">Verification Link Invalid</h2>
+                <h2 style="color: ${brandColor}; margin-top: 0;">Verification Link Invalid</h2>
                 <p style="color: #64748b; font-size: 14px;">This verification link has expired or is invalid. Please request a new code in the app.</p>
-                <a href="/#/login" style="display: inline-block; margin-top: 16px; padding: 12px 24px; background: #1B2A44; color: white; text-decoration: none; border-radius: 999px; font-weight: bold; font-size: 13px;">Go to Login</a>
+                <a href="/#/login" style="display: inline-block; margin-top: 16px; padding: 12px 24px; background: ${brandColor}; color: white; text-decoration: none; border-radius: 999px; font-weight: bold; font-size: 13px;">Go to Login</a>
               </div>
             </body>
           </html>
@@ -2230,14 +2550,14 @@ async function startServer() {
 
       return res.send(`
         <html>
-          <body style="font-family: sans-serif; background: #E6ECF5; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0;">
+          <body style="font-family: sans-serif; background: ${surfaceColor}; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0;">
             <div style="background: white; padding: 40px; border-radius: 24px; max-width: 420px; text-align: center; box-shadow: 0 20px 50px rgba(27,42,68,0.1);">
               <div style="width: 56px; height: 56px; border-radius: 999px; background: #ecfdf5; color: #10b981; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 28px;">✓</div>
-              <h2 style="color: #1B2A44; margin-top: 0;">Email Verified!</h2>
+              <h2 style="color: ${brandColor}; margin-top: 0;">Email Verified!</h2>
               <p style="color: #475569; font-size: 14px; line-height: 1.5;">
-                Your Avenue account (${escapeHtml(email)}) is now active. Return to the app tab and click <strong>"I've verified my email"</strong> or sign in directly below.
+                Your ${shortBrand} account (${escapeHtml(email)}) is now active. Return to the app tab and click <strong>"I've verified my email"</strong> or sign in directly below.
               </p>
-              <a href="/#/login" style="display: inline-block; margin-top: 18px; padding: 12px 28px; background: #1B2A44; color: white; text-decoration: none; border-radius: 999px; font-weight: bold; font-size: 13px;">Sign In to Avenue</a>
+              <a href="/#/login" style="display: inline-block; margin-top: 18px; padding: 12px 28px; background: ${brandColor}; color: white; text-decoration: none; border-radius: 999px; font-weight: bold; font-size: 13px;">Sign In to ${shortBrand}</a>
             </div>
           </body>
         </html>
@@ -2306,8 +2626,8 @@ async function startServer() {
         return res.json({
           success: true,
           user: {
-            id: 'mgmt_avenue_admin',
-            name: 'Avenue Management',
+            id: `mgmt_${BRAND_CONFIG.identity.storageKeyPrefix}_admin`,
+            name: `${BRAND_CONFIG.identity.brandShortName} Management`,
             email: MANAGEMENT_EMAIL,
             emailVerified: true,
             role: 'management' as const,
@@ -2374,11 +2694,11 @@ async function startServer() {
         });
       }
 
-      const isMgmtGoogleAccount = isManagementEmail(verified.email);
-      if (isMgmtGoogleAccount && (!verified.emailVerified || verified.signInProvider !== 'google.com')) {
+      const isMgmtAccount = isManagementEmail(verified.email);
+      if (isMgmtAccount && !verified.emailVerified) {
         return res.status(403).json({
           success: false,
-          error: 'Verified Google Sign-In is required for management access.',
+          error: 'Email verification is required for management access.',
         });
       }
 
@@ -2415,7 +2735,7 @@ async function startServer() {
         statusCode = 201;
       }
 
-      if (isMgmtGoogleAccount) {
+      if (isMgmtAccount) {
         return res.status(statusCode).json({
           success: true,
           isManagement: true,
@@ -2474,7 +2794,7 @@ async function startServer() {
       if (!user && verifiedUid) {
         user = {
           id: verifiedUid,
-          name: verifiedName || verifiedEmail.split('@')[0] || 'Avenue Member',
+          name: verifiedName || verifiedEmail.split('@')[0] || `${BRAND_CONFIG.identity.brandShortName} Member`,
           email: verifiedEmail,
           passwordHash: '',
           salt: '',
@@ -2522,8 +2842,8 @@ async function startServer() {
 
       const emailResult = await sendEmail({
         to: email,
-        subject: 'Avenue Password Reset Code',
-        text: `Assalam o Alaikum ${user.name}, your Avenue password reset code is ${resetCode}. It expires in 15 minutes.`,
+        subject: `${BRAND_CONFIG.identity.brandShortName} Password Reset Code`,
+        text: `${BRAND_CONFIG.locale.greeting} ${user.name}, your ${BRAND_CONFIG.identity.brandShortName} password reset code is ${resetCode}. It expires in 15 minutes.`,
         html: buildResetEmailHtml(user.name, resetCode),
       });
 
@@ -2622,7 +2942,7 @@ async function startServer() {
       const name = String(body.name || '').trim();
       const email = String(body.email || '').trim().toLowerCase();
       const phone = String(body.phone || '').trim();
-      const office = String(body.office || 'Lahore').trim();
+      const office = String(body.office || BRAND_CONFIG.locale.defaultCity).trim();
       const subject = String(body.subject || 'General Inquiry').trim();
       const message = String(body.message || '').trim();
       const source = String(body.source || 'Contact Page').trim();
@@ -2677,6 +2997,7 @@ async function startServer() {
       emailProvider,
       serverWebhookConfigured: Boolean(webhook.url && webhook.key),
       alertRecipient: getAlertRecipientEmail(),
+      configIssue: getServerEmailConfigIssue() || undefined,
     });
   });
 
@@ -2687,9 +3008,9 @@ async function startServer() {
         name: 'TEST ENQUIRY',
         email: '',
         phone: '',
-        office: 'Lahore',
+        office: BRAND_CONFIG.locale.defaultCity,
         subject: 'Alert Diagnostics Test',
-        message: 'Test from the Avenue management portal.',
+        message: `Test from the ${BRAND_CONFIG.identity.brandShortName} management portal.`,
         source: 'Management test',
         status: 'new',
         createdAt: new Date().toISOString(),
@@ -2704,6 +3025,7 @@ async function startServer() {
         webhookSent: result.webhookSent,
         alertRecipient: getAlertRecipientEmail(),
         previewUrl: result.previewUrl,
+        error: result.error,
       });
     } catch (err) {
       console.error('POST /api/management/test-alert error:', err);

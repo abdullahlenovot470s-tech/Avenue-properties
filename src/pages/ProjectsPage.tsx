@@ -18,6 +18,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import type { ProjectStatus } from '../types';
+import { BRAND_CONFIG } from '../config/brand.config';
 
 const getStatusBadgeStyle = (status?: ProjectStatus) =>
   status === 'Sold'
@@ -33,7 +34,7 @@ interface UnifiedProject {
   beds: number;
   baths: number;
   sqft: string;
-  category: 'Lahore' | 'Islamabad' | 'Karachi' | 'Rawalpindi' | 'Murree & Hills';
+  category: string;
   image: string;
   architect: string;
   description: string;
@@ -97,7 +98,7 @@ export const ProjectsPage: React.FC = () => {
     return [...listB, ...listA];
   }, [propertyListings, portfolioProjects]);
 
-  const categories = ['All', 'Lahore', 'Islamabad', 'Karachi', 'Rawalpindi', 'Murree & Hills'];
+  const categories = ['All', ...BRAND_CONFIG.locale.mainCities];
 
   const filteredProjects = useMemo(() => {
     return allProjects
@@ -137,7 +138,7 @@ export const ProjectsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    document.title = 'Signature Projects | Avenue Luxury Properties';
+    document.title = `Signature Projects | ${BRAND_CONFIG.identity.brandName}`;
   }, []);
 
   return (
@@ -146,14 +147,14 @@ export const ProjectsPage: React.FC = () => {
       <nav aria-label="Breadcrumb" className="px-2">
         <ol className="flex items-center gap-2 text-xs font-display uppercase tracking-widest text-slate-500">
           <li>
-            <Link to="/" className="hover:text-[#1B2A44] transition-colors">
+            <Link to="/" className="hover:text-brand transition-colors">
               Home
             </Link>
           </li>
           <li>
             <ChevronRight className="w-3 h-3 text-slate-400" />
           </li>
-          <li className="text-[#1B2A44] font-bold" aria-current="page">
+          <li className="text-brand font-bold" aria-current="page">
             Projects
           </li>
         </ol>
@@ -163,7 +164,7 @@ export const ProjectsPage: React.FC = () => {
       <section className="relative w-full bg-white rounded-[24px] sm:rounded-[32px] overflow-hidden p-4 sm:p-10 md:p-14 shadow-xl border border-slate-100">
         <div className="absolute top-4 right-0 pointer-events-none select-none overflow-hidden max-w-full z-0">
           <span
-            className="font-display font-black leading-none uppercase tracking-tighter text-[#E2E8F0]/30 select-none"
+            className="font-display font-black leading-none uppercase tracking-tighter text-watermark/30 select-none"
             style={{ fontSize: 'clamp(4rem, 12vw, 7.5rem)' }}
           >
             PROJECTS
@@ -171,14 +172,14 @@ export const ProjectsPage: React.FC = () => {
         </div>
 
         <div className="relative z-10 max-w-3xl space-y-4">
-          <span className="text-[11px] font-display uppercase tracking-widest text-[#2F4B73] font-bold block">
+          <span className="text-[11px] font-display uppercase tracking-widest text-accent font-bold block">
             Signature Architectural Portfolio
           </span>
-          <h1 className="font-display font-extrabold text-2xl sm:text-4xl lg:text-5xl text-[#1B2A44] uppercase tracking-tight leading-none">
+          <h1 className="font-display font-extrabold text-2xl sm:text-4xl lg:text-5xl text-brand uppercase tracking-tight leading-none">
             SIGNATURE PROJECTS.
           </h1>
-          <p className="font-body text-xs sm:text-base text-[#1B2A44]/80 leading-relaxed font-light">
-            Discover residential works created by Pakistan's leading architects, licensed engineers, and master builders.
+          <p className="font-body text-xs sm:text-base text-brand/80 leading-relaxed font-light">
+            Discover residential works created by {BRAND_CONFIG.locale.country}'s leading architects, licensed engineers, and master builders.
           </p>
         </div>
 
@@ -188,7 +189,7 @@ export const ProjectsPage: React.FC = () => {
           <div className="flex sm:hidden items-center gap-2 overflow-x-auto no-scrollbar py-1 -mx-1 px-1">
             <button
               onClick={() => setMobileFiltersOpen(true)}
-              className="px-3 py-1.5 rounded-full bg-[#1B2A44] text-white text-xs font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
+              className="px-3 py-1.5 rounded-full bg-brand text-brand-contrast text-xs font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
               <span>Filters</span>
@@ -202,7 +203,7 @@ export const ProjectsPage: React.FC = () => {
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-3 py-1.5 rounded-full font-display text-xs uppercase tracking-wider font-semibold shrink-0 transition-all cursor-pointer ${
                   selectedCategory === cat
-                    ? 'bg-[#1B2A44] text-white shadow-xs'
+                    ? 'bg-brand text-brand-contrast shadow-xs'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
@@ -221,7 +222,7 @@ export const ProjectsPage: React.FC = () => {
                   onClick={() => setSelectedCategory(cat)}
                   className={`px-4 py-2 rounded-full font-display text-xs uppercase tracking-wider font-semibold transition-all cursor-pointer ${
                     selectedCategory === cat
-                      ? 'bg-[#1B2A44] text-white shadow-sm'
+                      ? 'bg-brand text-brand-contrast shadow-sm'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
@@ -238,7 +239,7 @@ export const ProjectsPage: React.FC = () => {
                   placeholder="Search city, architect..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 rounded-full border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-[#2F4B73] focus:bg-white transition-all"
+                  className="w-full pl-9 pr-4 py-2 rounded-full border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-accent focus:bg-white transition-all"
                 />
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
               </div>
@@ -262,7 +263,7 @@ export const ProjectsPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-end sm:hidden bg-black/60 backdrop-blur-xs">
           <div className="w-full bg-white rounded-t-3xl p-5 max-h-[85vh] overflow-y-auto space-y-4 animate-in slide-in-from-bottom duration-300">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-display font-bold text-base text-[#1B2A44] uppercase tracking-tight">
+              <h3 className="font-display font-bold text-base text-brand uppercase tracking-tight">
                 Filter Projects
               </h3>
               <button
@@ -333,7 +334,7 @@ export const ProjectsPage: React.FC = () => {
               </button>
               <button
                 onClick={() => setMobileFiltersOpen(false)}
-                className="flex-1 py-3 rounded-full bg-[#1B2A44] text-white font-display text-xs uppercase tracking-wider font-semibold text-center shadow-md cursor-pointer"
+                className="flex-1 py-3 rounded-full bg-brand text-brand-contrast font-display text-xs uppercase tracking-wider font-semibold text-center shadow-md cursor-pointer"
               >
                 Apply Filters
               </button>
@@ -385,7 +386,7 @@ export const ProjectsPage: React.FC = () => {
                     <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                       <div>
                         <div className="flex items-center justify-between gap-2">
-                          <div className="font-display font-bold text-[0.95rem] text-[#1B2A44] leading-tight truncate">
+                          <div className="font-display font-bold text-[0.95rem] text-brand leading-tight truncate">
                             {project.price}
                           </div>
                           {project.status && project.status !== 'Available' && (
@@ -398,10 +399,10 @@ export const ProjectsPage: React.FC = () => {
                             </span>
                           )}
                         </div>
-                        <h3 className="font-display font-semibold text-[0.82rem] text-[#1B2A44] line-clamp-2 mt-0.5 leading-snug">
+                        <h3 className="font-display font-semibold text-[0.82rem] text-brand line-clamp-2 mt-0.5 leading-snug">
                           {project.name}
                         </h3>
-                        <div className="flex items-center gap-1 text-[0.72rem] text-[#2F4B73] font-medium mt-1 truncate">
+                        <div className="flex items-center gap-1 text-[0.72rem] text-accent font-medium mt-1 truncate">
                           <MapPin className="w-3 h-3 shrink-0" />
                           <span className="truncate">{project.location}</span>
                         </div>
@@ -459,14 +460,14 @@ export const ProjectsPage: React.FC = () => {
 
                     <div className="p-4 flex flex-col justify-between flex-1 space-y-3">
                       <div>
-                        <div className="flex items-center gap-1 text-[0.75rem] text-[#2F4B73] font-semibold mb-0.5 truncate">
+                        <div className="flex items-center gap-1 text-[0.75rem] text-accent font-semibold mb-0.5 truncate">
                           <MapPin className="w-3 h-3 shrink-0" />
                           <span className="truncate">{project.location}</span>
                         </div>
-                        <h3 className="font-display font-bold text-sm text-[#1B2A44] uppercase line-clamp-1">
+                        <h3 className="font-display font-bold text-sm text-brand uppercase line-clamp-1">
                           {project.name}
                         </h3>
-                        <div className="font-display font-bold text-sm text-[#1B2A44] mt-0.5">
+                        <div className="font-display font-bold text-sm text-brand mt-0.5">
                           {project.price}
                         </div>
                       </div>
@@ -533,16 +534,16 @@ export const ProjectsPage: React.FC = () => {
                     {/* Body Content */}
                     <div className="p-7 flex flex-col justify-between flex-1 space-y-4">
                       <div>
-                        <div className="flex items-center gap-1.5 text-xs text-[#2F4B73] font-semibold mb-1">
+                        <div className="flex items-center gap-1.5 text-xs text-accent font-semibold mb-1">
                           <MapPin className="w-3.5 h-3.5 shrink-0" />
                           <span className="truncate">{project.location}</span>
                         </div>
 
-                        <h3 className="font-display font-extrabold text-xl text-[#1B2A44] uppercase tracking-tight group-hover:text-[#2F4B73] transition-colors">
+                        <h3 className="font-display font-extrabold text-xl text-brand uppercase tracking-tight group-hover:text-accent transition-colors">
                           {project.name}
                         </h3>
 
-                        <div className="font-display font-bold text-lg text-[#1B2A44] mt-1">
+                        <div className="font-display font-bold text-lg text-brand mt-1">
                           {project.price}
                         </div>
 
@@ -567,10 +568,10 @@ export const ProjectsPage: React.FC = () => {
                       {/* Action link to /projects/:id */}
                       <Link
                         to={`/projects/${project.id}`}
-                        className="w-full py-3 px-5 rounded-full bg-slate-100 hover:bg-[#1B2A44] text-[#1B2A44] hover:text-white font-display text-xs uppercase tracking-widest font-semibold transition-all flex items-center justify-between group/btn cursor-pointer"
+                        className="w-full py-3 px-5 rounded-full bg-slate-100 hover:bg-brand text-brand hover:text-brand-contrast font-display text-xs uppercase tracking-widest font-semibold transition-all flex items-center justify-between group/btn cursor-pointer"
                       >
                         <span>View Full Details</span>
-                        <span className="w-6 h-6 rounded-full bg-white text-[#1B2A44] flex items-center justify-center group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform">
+                        <span className="w-6 h-6 rounded-full bg-white text-brand flex items-center justify-center group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform">
                           <ArrowUpRight className="w-3.5 h-3.5" />
                         </span>
                       </Link>
@@ -582,7 +583,7 @@ export const ProjectsPage: React.FC = () => {
           </>
         ) : (
           <div className="bg-white rounded-3xl p-12 text-center border border-slate-100 shadow-md">
-            <h3 className="font-display font-bold text-lg text-[#1B2A44] uppercase">
+            <h3 className="font-display font-bold text-lg text-brand uppercase">
               No Residences Match Your Search
             </h3>
             <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto font-body mt-1">
@@ -590,7 +591,7 @@ export const ProjectsPage: React.FC = () => {
             </p>
             <button
               onClick={handleClearFilters}
-              className="mt-4 px-5 py-2.5 rounded-full bg-[#1B2A44] text-white text-xs font-display uppercase tracking-wider font-semibold cursor-pointer"
+              className="mt-4 px-5 py-2.5 rounded-full bg-brand text-brand-contrast text-xs font-display uppercase tracking-wider font-semibold cursor-pointer"
             >
               Reset Filters
             </button>

@@ -22,7 +22,6 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
   if (!isOpen || !property) return null;
 
-  // Unify property vs portfolio item images & fields
   const isListing = 'exteriorImage' in property;
   const name = isListing ? property.name : property.title;
   const location = property.location;
@@ -38,12 +37,14 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
         'Double Glazed Acoustic Windows',
         'Swimming Pool',
         'Separate Servant Quarters',
-        '24/7 Society Guard Patrol'
+        '24/7 Society Guard Patrol',
       ];
 
   const images = isListing
-    ? [property.exteriorImage, property.interiorImages[0], property.interiorImages[1]]
-    : [property.image];
+    ? [property.exteriorImage, ...property.interiorImages].filter(Boolean)
+    : property.gallery && property.gallery.length > 0
+      ? property.gallery
+      : [property.image];
 
   return (
     <AnimatePresence>
@@ -52,19 +53,17 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="relative w-full max-w-4xl bg-white rounded-[28px] sm:rounded-[36px] overflow-hidden text-[#1B2A44] shadow-2xl p-6 sm:p-10 border border-slate-100 max-h-[92vh] flex flex-col justify-between overflow-y-auto"
+          className="relative w-full max-w-4xl bg-white rounded-[28px] sm:rounded-[36px] overflow-hidden text-brand shadow-2xl p-6 sm:p-10 border border-slate-100 max-h-[92vh] flex flex-col justify-between overflow-y-auto"
         >
-          {/* Close Button */}
           <button
             onClick={onClose}
-            className="absolute top-5 right-5 z-20 w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-[#1B2A44] transition-colors cursor-pointer"
+            className="absolute top-5 right-5 z-20 w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-brand transition-colors cursor-pointer"
             aria-label="Close modal"
           >
             <X className="w-5 h-5" />
           </button>
 
           <div>
-            {/* Gallery Main Photo */}
             <div className="relative w-full aspect-[16/9] sm:aspect-[21/9] rounded-2xl overflow-hidden shadow-lg border border-slate-200">
               <SafeImage
                 src={images[activePhotoIdx] || images[0]}
@@ -76,7 +75,6 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
               </div>
             </div>
 
-            {/* Thumbnail Selectors if multiple */}
             {images.length > 1 && (
               <div className="flex items-center gap-3 mt-3">
                 {images.map((img, i) => (
@@ -85,7 +83,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                     onClick={() => setActivePhotoIdx(i)}
                     className={`relative w-20 h-14 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
                       activePhotoIdx === i
-                        ? 'border-[#1B2A44] scale-105'
+                        ? 'border-brand scale-105'
                         : 'border-transparent opacity-60 hover:opacity-100'
                     }`}
                   >
@@ -95,14 +93,13 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
               </div>
             )}
 
-            {/* Header info */}
             <div className="mt-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-200 pb-5">
               <div>
-                <div className="flex items-center gap-2 text-xs font-semibold text-[#2F4B73] mb-1">
+                <div className="flex items-center gap-2 text-xs font-semibold text-accent mb-1">
                   <MapPin className="w-3.5 h-3.5" />
                   <span>{location}</span>
                 </div>
-                <h3 className="font-display font-extrabold text-2xl sm:text-3xl uppercase tracking-tight text-[#1B2A44]">
+                <h3 className="font-display font-extrabold text-2xl sm:text-3xl uppercase tracking-tight text-brand">
                   {name}
                 </h3>
               </div>
@@ -110,39 +107,36 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                 <span className="text-[10px] uppercase font-display tracking-wider text-slate-500 block">
                   Offered Exclusively At
                 </span>
-                <span className="font-display font-bold text-2xl text-[#1B2A44]">
+                <span className="font-display font-bold text-2xl text-brand">
                   {price}
                 </span>
               </div>
             </div>
 
-            {/* Specs Row */}
-            <div className="grid grid-cols-3 gap-3 py-4 my-2 border-b border-slate-100 text-xs sm:text-sm text-[#1B2A44]">
-              <div className="flex items-center gap-2 bg-[#E6ECF5]/40 p-3 rounded-xl">
-                <Bed className="w-4 h-4 text-[#2F4B73]" />
+            <div className="grid grid-cols-3 gap-3 py-4 my-2 border-b border-slate-100 text-xs sm:text-sm text-brand">
+              <div className="flex items-center gap-2 bg-surface/40 p-3 rounded-xl">
+                <Bed className="w-4 h-4 text-accent" />
                 <span>{beds} Bedrooms</span>
               </div>
-              <div className="flex items-center gap-2 bg-[#E6ECF5]/40 p-3 rounded-xl">
-                <Bath className="w-4 h-4 text-[#2F4B73]" />
+              <div className="flex items-center gap-2 bg-surface/40 p-3 rounded-xl">
+                <Bath className="w-4 h-4 text-accent" />
                 <span>{baths} Bathrooms</span>
               </div>
-              <div className="flex items-center gap-2 bg-[#E6ECF5]/40 p-3 rounded-xl">
-                <Maximize2 className="w-4 h-4 text-[#2F4B73]" />
+              <div className="flex items-center gap-2 bg-surface/40 p-3 rounded-xl">
+                <Maximize2 className="w-4 h-4 text-accent" />
                 <span>{sqft}</span>
               </div>
             </div>
 
-            {/* Description Narrative */}
             <div className="py-2">
               <h4 className="text-xs font-display uppercase tracking-widest text-slate-500 mb-2">
                 Architectural Statement
               </h4>
-              <p className="font-body text-xs sm:text-sm text-[#1B2A44]/80 leading-relaxed">
+              <p className="font-body text-xs sm:text-sm text-brand/80 leading-relaxed">
                 {description}
               </p>
             </div>
 
-            {/* Amenities Grid */}
             <div className="py-3">
               <h4 className="text-xs font-display uppercase tracking-widest text-slate-500 mb-2.5">
                 Key Property Features
@@ -161,7 +155,6 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Action Row */}
           <div className="pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />

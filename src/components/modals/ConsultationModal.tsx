@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, CheckCircle2, Calendar, ShieldCheck, Clock, User, Mail, Phone } from 'lucide-react';
+import { X, CheckCircle2, ShieldCheck, Clock, User, Mail, Phone } from 'lucide-react';
 import { PillButton } from '../common/PillButton';
+import { BRAND_CONFIG } from '../../config/brand.config';
 import { submitInquiry } from '../../lib/inquiriesApi';
 import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../../services/enquiryWebhook';
 
@@ -14,7 +15,7 @@ interface ConsultationModalProps {
 export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   isOpen,
   onClose,
-  defaultService = 'Residential Acquisition Strategy',
+  defaultService = BRAND_CONFIG.locale.defaultServiceInterest,
 }) => {
   const [service, setService] = useState(defaultService);
   const [formData, setFormData] = useState({
@@ -30,13 +31,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [error, setError] = useState('');
   const [website, setWebsite] = useState('');
 
-  const servicesList = [
-    'Residential Acquisition Strategy',
-    'Property Management & Advisory',
-    'Investment Advice & High-Value Sales',
-    'Private Architectural Site Visit',
-    'Confidential Property Valuation & Registry Check',
-  ];
+  const servicesList = BRAND_CONFIG.locale.serviceInterests;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,9 +86,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="relative w-full max-w-2xl bg-[#1B2A44] border border-white/20 rounded-[28px] sm:rounded-[36px] overflow-hidden text-white shadow-2xl p-6 sm:p-10"
+          className="relative w-full max-w-2xl bg-brand border border-white/20 rounded-[28px] sm:rounded-[36px] overflow-hidden text-brand-contrast shadow-2xl p-6 sm:p-10"
         >
-          {/* Close Button */}
           <button
             onClick={onClose}
             className="absolute top-6 right-6 w-9 h-9 rounded-full glass-card-subtle flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer"
@@ -111,7 +105,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 Consultation Reserved
               </h3>
               <p className="text-sm text-white/80 max-w-md mx-auto leading-relaxed font-body">
-                Assalam o Alaikum, <span className="font-semibold text-white">{formData.name}</span>. Our Senior Advisor for <span className="font-semibold text-emerald-300">{service}</span> will contact you to coordinate your consultation.
+                {BRAND_CONFIG.locale.greeting},{' '}
+                <span className="font-semibold text-white">{formData.name}</span>. Our Senior Advisor for{' '}
+                <span className="font-semibold text-emerald-300">{service}</span> will contact you to coordinate your consultation.
               </p>
               <div className="pt-6">
                 <PillButton variant="white" size="md" onClick={onClose}>
@@ -130,7 +126,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   BOOK A CONSULTATION
                 </h3>
                 <p className="text-xs text-white/70 mt-1 font-body">
-                  Connect with Avenue's senior partners for discrete acquisition, transfer verification, and investment counsel.
+                  Connect with {BRAND_CONFIG.identity.brandShortName}&apos;s senior partners for discreet acquisition, transfer verification, and investment counsel.
                 </p>
               </div>
 
@@ -151,7 +147,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   aria-hidden="true"
                   className="absolute -left-[9999px] w-px h-px overflow-hidden opacity-0 pointer-events-none"
                 />
-                {/* Service Selection */}
+
                 <div>
                   <label className="block text-[11px] font-display uppercase tracking-wider text-white/80 mb-1.5">
                     Select Practice Area
@@ -162,7 +158,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     className="w-full px-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs sm:text-sm focus:outline-none focus:border-white/50"
                   >
                     {servicesList.map((s) => (
-                      <option key={s} value={s} className="bg-[#1B2A44] text-white">
+                      <option key={s} value={s} className="bg-brand text-brand-contrast">
                         {s}
                       </option>
                     ))}
@@ -177,7 +173,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <div className="relative">
                       <input
                         type="text"
-                        placeholder="e.g. Tariq Mehmood"
+                        placeholder={`e.g. ${BRAND_CONFIG.locale.placeholderNames.consultationName}`}
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/40 text-xs sm:text-sm focus:outline-none focus:border-white/50"
@@ -193,7 +189,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <div className="relative">
                       <input
                         type="email"
-                        placeholder="e.g. tariq.mehmood@example.com"
+                        placeholder={`e.g. ${BRAND_CONFIG.locale.placeholderNames.consultationEmail}`}
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/40 text-xs sm:text-sm focus:outline-none focus:border-white/50"
@@ -211,7 +207,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <div className="relative">
                       <input
                         type="tel"
-                        placeholder="e.g. 0300 1234567"
+                        placeholder={`e.g. ${BRAND_CONFIG.locale.placeholderNames.consultationPhone}`}
                         value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/40 text-xs sm:text-sm focus:outline-none focus:border-white/50"
@@ -230,16 +226,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                         onChange={(e) => setFormData({ ...formData, timeframe: e.target.value })}
                         className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs sm:text-sm focus:outline-none focus:border-white/50"
                       >
-                        <option value="Immediate (Next 30 days)" className="bg-[#1B2A44]">
+                        <option value="Immediate (Next 30 days)" className="bg-brand">
                           Immediate (Next 30 days)
                         </option>
-                        <option value="1-3 Months" className="bg-[#1B2A44]">
+                        <option value="1-3 Months" className="bg-brand">
                           1-3 Months
                         </option>
-                        <option value="3-6 Months" className="bg-[#1B2A44]">
+                        <option value="3-6 Months" className="bg-brand">
                           3-6 Months
                         </option>
-                        <option value="Exploratory / Long Term" className="bg-[#1B2A44]">
+                        <option value="Exploratory / Long Term" className="bg-brand">
                           Exploratory / Long Term
                         </option>
                       </select>
@@ -254,7 +250,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   </label>
                   <textarea
                     rows={3}
-                    placeholder="E.g., Looking for a 1 Kanal or 2 Kanal house in DHA Phase 6 Lahore or Sector F-7 Islamabad with solar backup and separate drawing room..."
+                    placeholder={BRAND_CONFIG.locale.placeholderNames.consultationNotes}
                     value={formData.notes}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                     className="w-full px-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/40 text-xs sm:text-sm focus:outline-none focus:border-white/50"
@@ -268,7 +264,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   <button
                     type="submit"
                     disabled={loading}
-                    className="px-6 py-3 rounded-full bg-white text-[#1B2A44] font-display font-bold text-xs uppercase tracking-wider hover:bg-[#E6ECF5] transition-all cursor-pointer shadow-md disabled:opacity-60"
+                    className="px-6 py-3 rounded-full bg-white text-brand font-display font-bold text-xs uppercase tracking-wider hover:bg-surface transition-all cursor-pointer shadow-md disabled:opacity-60"
                   >
                     {loading ? 'Confirming...' : 'Book Consultation'}
                   </button>

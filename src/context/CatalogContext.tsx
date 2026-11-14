@@ -6,7 +6,7 @@ import { PortfolioProject, PropertyListing, RentalListing, ProjectStatus, BuySta
 import { useAuth } from './AuthContext';
 import { parseApiResponse, SERVER_UNREACHABLE_MESSAGE } from '../lib/http';
 
-export type CityOption = 'Lahore' | 'Islamabad' | 'Karachi' | 'Rawalpindi' | 'Murree & Hills';
+export type CityOption = string;
 
 export interface NewProjectInput {
   title: string;
@@ -97,14 +97,32 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [rentalListings, setRentalListings] = useState<RentalListing[]>(RENTAL_LISTINGS);
   const [loading, setLoading] = useState<boolean>(true);
   const [backendReachable, setBackendReachable] = useState<boolean>(true);
-  const { managementToken, logout } = useAuth();
+  const { managementToken, firebaseUser, logout } = useAuth();
 
-  const authHeaders = (json = true): Record<string, string> => {
-    const headers: Record<string, string> = {};
-    if (json) headers['Content-Type'] = 'application/json';
-    if (managementToken) headers.Authorization = `Bearer ${managementToken}`;
-    return headers;
-  };
+  const buildAuthHeaders = useCallback(
+    async (json = true): Promise<Record<string, string>> => {
+      const headers: Record<string, string> = {};
+      if (json) headers['Content-Type'] = 'application/json';
+      let fbToken = '';
+      if (firebaseUser) {
+        try {
+          fbToken = await firebaseUser.getIdToken();
+        } catch {
+          fbToken = '';
+        }
+      }
+      if (managementToken) {
+        headers.Authorization = `Bearer ${managementToken}`;
+      } else if (fbToken) {
+        headers.Authorization = `Bearer ${fbToken}`;
+      }
+      if (fbToken) {
+        headers['X-Firebase-Token'] = fbToken;
+      }
+      return headers;
+    },
+    [managementToken, firebaseUser]
+  );
 
   const applyCatalogPayload = (catalog: any) => {
     if (!catalog) return;
@@ -138,11 +156,17 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const executeMutation = async (
     url: string,
-    options: RequestInit,
+    method: 'POST' | 'PUT' | 'DELETE',
+    bodyPayload: unknown,
     fallbackError: string
   ): Promise<ActionResult> => {
     try {
-      const res = await fetch(url, options);
+      const headers = await buildAuthHeaders(bodyPayload !== undefined);
+      const res = await fetch(url, {
+        method,
+        headers,
+        body: bodyPayload !== undefined ? JSON.stringify(bodyPayload) : undefined,
+      });
       const parsed = await parseApiResponse<{
         success?: boolean;
         catalog?: any;
@@ -177,111 +201,64 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const addProject = (input: NewProjectInput) =>
-    executeMutation(
-      '/api/catalog/projects',
-      {
-        method: 'POST',
-        headers: authHeaders(true),
-        body: JSON.stringify(input),
-      },
-      'Could not add project.'
-    );
+    executeMutation('/api/catalog/projects', 'POST', input, 'Could not add project.');
 
   const updateProject = (id: string, input: NewProjectInput) =>
     executeMutation(
       `/api/catalog/projects/${encodeURIComponent(id)}`,
-      {
-        method: 'PUT',
-        headers: authHeaders(true),
-        body: JSON.stringify(input),
-      },
+      'PUT',
+      input,
       'Could not update project.'
     );
 
   const removeProject = (id: string) =>
     executeMutation(
       `/api/catalog/projects/${encodeURIComponent(id)}`,
-      {
-        method: 'DELETE',
-        headers: authHeaders(false),
-      },
+      'DELETE',
+      undefined,
       'Could not remove project.'
     );
 
   const addBuyProperty = (input: NewBuyInput) =>
-    executeMutation(
-      '/api/catalog/buy',
-      {
-        method: 'POST',
-        headers: authHeaders(true),
-        body: JSON.stringify(input),
-      },
-      'Could not add property.'
-    );
+    executeMutation('/api/catalog/buy', 'POST', input, 'Could not add property.');
 
   const updateBuy = (id: string, input: NewBuyInput) =>
     executeMutation(
       `/api/catalog/buy/${encodeURIComponent(id)}`,
-      {
-        method: 'PUT',
-        headers: authHeaders(true),
-        body: JSON.stringify(input),
-      },
+      'PUT',
+      input,
       'Could not update property.'
     );
 
   const removeBuyProperty = (id: string) =>
     executeMutation(
       `/api/catalog/buy/${encodeURIComponent(id)}`,
-      {
-        method: 'DELETE',
-        headers: authHeaders(false),
-      },
+      'DELETE',
+      undefined,
       'Could not remove property.'
     );
 
   const addRentalListing = (input: NewRentInput) =>
-    executeMutation(
-      '/api/catalog/rent',
-      {
-        method: 'POST',
-        headers: authHeaders(true),
-        body: JSON.stringify(input),
-      },
-      'Could not add rental listing.'
-    );
+    executeMutation('/api/catalog/rent', 'POST', input, 'Could not add rental listing.');
 
   const updateRental = (id: string, input: NewRentInput) =>
     executeMutation(
       `/api/catalog/rent/${encodeURIComponent(id)}`,
-      {
-        method: 'PUT',
-        headers: authHeaders(true),
-        body: JSON.stringify(input),
-      },
+      'PUT',
+      input,
       'Could not update rental listing.'
     );
 
   const removeRentalListing = (id: string) =>
     executeMutation(
       `/api/catalog/rent/${encodeURIComponent(id)}`,
-      {
-        method: 'DELETE',
-        headers: authHeaders(false),
-      },
+      'DELETE',
+      undefined,
       'Could not remove rental listing.'
     );
 
   const resetCatalog = (section: 'projects' | 'buy' | 'rent' | 'all') =>
-    executeMutation(
-      '/api/catalog/reset',
-      {
-        method: 'POST',
-        headers: authHeaders(true),
-        body: JSON.stringify({ section }),
-      },
-      'Could not restore defaults.'
-    );
+    executeMutation('/api/catalog/reset', 'POST', { section }, 'Could not restore defaults.');
 
   return (
     <CatalogContext.Provider

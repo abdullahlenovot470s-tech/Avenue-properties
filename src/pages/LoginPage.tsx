@@ -19,6 +19,7 @@ import { useToast } from '../context/ToastContext';
 import { SafeImage } from '../components/common/SafeImage';
 import { HERO_ASSETS } from '../data/realEstateData';
 import { GoogleSignInButton } from '../components/common/GoogleSignInButton';
+import { BRAND_CONFIG } from '../config/brand.config';
 
 // Mask email e.g. "ahmed.raza@example.com" -> "ahm***@example.com"
 function maskEmail(emailStr: string): string {
@@ -75,10 +76,11 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const shortBrand = BRAND_CONFIG.identity.brandShortName;
   const from = (location.state as any)?.from?.pathname || '/profile';
 
   React.useEffect(() => {
-    document.title = 'Client Login | Avenue Luxury Properties';
+    document.title = `Client Login | ${BRAND_CONFIG.identity.brandName}`;
   }, []);
 
   // Cooldown timer
@@ -100,10 +102,10 @@ export const LoginPage: React.FC = () => {
     if (result.success) {
       const hasExplicitFrom = Boolean((location.state as any)?.from?.pathname);
       if (result.isManagement) {
-        showToast('Signed in to Avenue Management.', 'success');
+        showToast(`Signed in to ${shortBrand} Management.`, 'success');
         navigate(hasExplicitFrom ? from : '/manage', { replace: true });
       } else {
-        showToast('Assalam o Alaikum! Welcome back to Avenue.', 'success');
+        showToast(`${BRAND_CONFIG.locale.greeting}! Welcome back to ${shortBrand}.`, 'success');
         navigate(from, { replace: true });
       }
     } else {
@@ -130,10 +132,10 @@ export const LoginPage: React.FC = () => {
     if (result.success) {
       const hasExplicitFrom = Boolean((location.state as any)?.from?.pathname);
       if (result.isManagement) {
-        showToast('Signed in to Avenue Management.', 'success');
+        showToast(`Signed in to ${shortBrand} Management.`, 'success');
         navigate(hasExplicitFrom ? from : '/manage', { replace: true });
       } else {
-        showToast('Assalam o Alaikum! Welcome back to Avenue.', 'success');
+        showToast(`${BRAND_CONFIG.locale.greeting}! Welcome back to ${shortBrand}.`, 'success');
         navigate(from, { replace: true });
       }
     } else if (result.unverified) {
@@ -163,7 +165,7 @@ export const LoginPage: React.FC = () => {
     setVerifyingCode(false);
 
     if (res.success) {
-      showToast('Email verified successfully! Welcome to Avenue.', 'success');
+      showToast(`Email verified successfully! Welcome to ${shortBrand}.`, 'success');
       setIsUnverified(false);
       navigate(from, { replace: true });
     } else {
@@ -179,7 +181,7 @@ export const LoginPage: React.FC = () => {
     setCheckingVerification(false);
 
     if (verified) {
-      showToast('Email verified successfully! Welcome to Avenue.', 'success');
+      showToast(`Email verified successfully! Welcome to ${shortBrand}.`, 'success');
       setIsUnverified(false);
       navigate(from, { replace: true });
     } else {
@@ -288,18 +290,18 @@ export const LoginPage: React.FC = () => {
           <div className="absolute inset-0 z-0">
             <SafeImage
               src={HERO_ASSETS.authVilla}
-              alt="Avenue Luxury Villa Architecture"
+              alt={`${shortBrand} Luxury Villa Architecture`}
               className="w-full h-full object-cover scale-105"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0e1726]/90 via-[#1B2A44]/30 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/90 via-brand/30 to-transparent" />
           </div>
 
           <div className="relative z-10 flex items-center justify-between text-white">
             <Link to="/" className="font-display font-bold text-2xl tracking-tighter text-white">
-              Avenue
+              {BRAND_CONFIG.identity.logoText}
             </Link>
             <span className="text-[10px] font-display uppercase tracking-widest text-white/70 glass-card-subtle px-3 py-1 rounded-full">
-              Private Portal
+              {BRAND_CONFIG.copy.auth.loginShowcaseBadge}
             </span>
           </div>
 
@@ -311,10 +313,10 @@ export const LoginPage: React.FC = () => {
               </span>
             </div>
             <p className="font-display font-bold text-xl sm:text-2xl tracking-tight text-white leading-snug">
-              "Your next address is waiting."
+              {BRAND_CONFIG.copy.auth.loginQuote}
             </p>
             <p className="font-body text-xs text-white/70 mt-2">
-              Access private residences, verified registry records, and exclusive listings.
+              {BRAND_CONFIG.copy.auth.loginQuoteAuthor}
             </p>
           </div>
         </div>
@@ -333,12 +335,12 @@ export const LoginPage: React.FC = () => {
                   <span className="text-[10px] font-display uppercase tracking-widest text-amber-700 font-bold block">
                     Verification Required
                   </span>
-                  <h3 className="font-display font-extrabold text-2xl uppercase tracking-tight text-[#1B2A44]">
+                  <h3 className="font-display font-extrabold text-2xl uppercase tracking-tight text-brand">
                     Verify Your Email
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-600 font-body leading-relaxed max-w-sm mx-auto">
                     Your account{' '}
-                    <span className="font-bold text-[#1B2A44]">{maskEmail(email)}</span> is awaiting verification.{' '}
+                    <span className="font-bold text-brand">{maskEmail(email)}</span> is awaiting verification.{' '}
                     {unverifiedProvider === 'firebase'
                       ? 'Click the verification link sent to your inbox, or resend a fresh link below.'
                       : 'Enter the 6-digit code from your email or resend a fresh link below.'}
@@ -347,14 +349,14 @@ export const LoginPage: React.FC = () => {
 
                 {verifyPreviewUrl && (
                   <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 text-center space-y-2">
-                    <p className="text-[11px] text-[#1B2A44] font-body leading-snug">
+                    <p className="text-[11px] text-brand font-body leading-snug">
                       Email delivered via free Ethereal Mail API:
                     </p>
                     <a
                       href={verifyPreviewUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#2F4B73] hover:bg-[#1B2A44] text-white font-display text-[11px] uppercase tracking-wider font-semibold transition-colors"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-accent text-accent-contrast hover:bg-brand hover:text-brand-contrast font-display text-[11px] uppercase tracking-wider font-semibold transition-colors"
                     >
                       <span>Open Verification Email</span>
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -375,7 +377,7 @@ export const LoginPage: React.FC = () => {
                         placeholder="123456"
                         value={verificationCode}
                         onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                        className="w-full py-3 px-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-[#2F4B73] focus:outline-none text-center font-mono text-xl font-bold tracking-[0.4em] text-[#1B2A44]"
+                        className="w-full py-3 px-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-accent focus:outline-none text-center font-mono text-xl font-bold tracking-[0.4em] text-brand"
                       />
                       {verifyError && (
                         <p className="text-[11px] text-rose-500 font-body mt-1.5 text-center">
@@ -387,7 +389,7 @@ export const LoginPage: React.FC = () => {
                     <button
                       type="submit"
                       disabled={verifyingCode}
-                      className="w-full py-3.5 px-6 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] text-white font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+                      className="w-full py-3.5 px-6 rounded-full bg-brand text-brand-contrast hover:bg-accent hover:text-accent-contrast font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
                     >
                       {verifyingCode ? (
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -406,8 +408,8 @@ export const LoginPage: React.FC = () => {
                     disabled={checkingVerification}
                     className={`w-full py-3 px-6 rounded-full font-display text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
                       unverifiedProvider === 'firebase'
-                        ? 'bg-[#1B2A44] hover:bg-[#2F4B73] text-white font-bold shadow-md'
-                        : 'bg-slate-100 hover:bg-slate-200 text-[#1B2A44] font-semibold'
+                        ? 'bg-brand text-brand-contrast hover:bg-accent hover:text-accent-contrast font-bold shadow-md'
+                        : 'bg-slate-100 hover:bg-slate-200 text-brand font-semibold'
                     }`}
                   >
                     {checkingVerification && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
@@ -430,7 +432,7 @@ export const LoginPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setIsUnverified(false)}
-                    className="text-xs font-display uppercase tracking-wider text-[#2F4B73] hover:underline cursor-pointer"
+                    className="text-xs font-display uppercase tracking-wider text-accent hover:underline cursor-pointer"
                   >
                     Back to Sign In
                   </button>
@@ -440,14 +442,14 @@ export const LoginPage: React.FC = () => {
               /* Regular Sign In Screen */
               <>
                 <div className="mb-6">
-                  <span className="text-[10px] font-display uppercase tracking-widest text-[#2F4B73] font-bold block mb-1">
-                    Client Access
+                  <span className="text-[10px] font-display uppercase tracking-widest text-accent font-bold block mb-1">
+                    {BRAND_CONFIG.copy.auth.loginEyebrow}
                   </span>
-                  <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-[#1B2A44] uppercase tracking-tight">
-                    SIGN IN TO AVENUE
+                  <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-brand uppercase tracking-tight">
+                    {BRAND_CONFIG.copy.auth.loginHeading}
                   </h2>
                   <p className="font-body text-xs sm:text-sm text-slate-500 mt-1">
-                    Enter your credentials to access your shortlisted properties.
+                    {BRAND_CONFIG.copy.auth.loginSubtitle}
                   </p>
                 </div>
 
@@ -458,21 +460,23 @@ export const LoginPage: React.FC = () => {
                 )}
 
                 {/* 1. Continue with Google Button */}
-                <div className="space-y-4">
-                  <GoogleSignInButton
-                    onClick={handleGoogleLogin}
-                    loading={googleLoading}
-                    text="Continue with Google"
-                  />
+                {BRAND_CONFIG.features.enableGoogleLogin && (
+                  <div className="space-y-4">
+                    <GoogleSignInButton
+                      onClick={handleGoogleLogin}
+                      loading={googleLoading}
+                      text="Continue with Google"
+                    />
 
-                  {/* Divider */}
-                  <div className="relative flex items-center justify-center">
-                    <div className="w-full border-t border-slate-200" />
-                    <span className="absolute bg-white px-3 text-[11px] font-display uppercase tracking-wider text-slate-400">
-                      or continue with email
-                    </span>
+                    {/* Divider */}
+                    <div className="relative flex items-center justify-center">
+                      <div className="w-full border-t border-slate-200" />
+                      <span className="absolute bg-white px-3 text-[11px] font-display uppercase tracking-wider text-slate-400">
+                        or continue with email
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* 2. Email / Password Form */}
                 <form onSubmit={handleSubmit} className="space-y-4 mt-5">
@@ -483,10 +487,10 @@ export const LoginPage: React.FC = () => {
                     <div className="relative">
                       <input
                         type="email"
-                        placeholder="e.g. ahmed.raza@example.com"
+                        placeholder={BRAND_CONFIG.locale.placeholderNames.inquiryEmail}
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-slate-50/60 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-[#2F4B73] focus:bg-white transition-all"
+                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-slate-50/60 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-accent focus:bg-white transition-all"
                       />
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                     </div>
@@ -500,7 +504,7 @@ export const LoginPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={openForgotModal}
-                        className="text-[11px] font-semibold font-body text-[#2F4B73] hover:text-[#1B2A44] hover:underline cursor-pointer"
+                        className="text-[11px] font-semibold font-body text-accent hover:text-brand hover:underline cursor-pointer"
                       >
                         Forgot password?
                       </button>
@@ -511,7 +515,7 @@ export const LoginPage: React.FC = () => {
                         placeholder="••••••••••••"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="w-full pl-10 pr-10 py-3 rounded-xl border border-slate-200 bg-slate-50/60 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-[#2F4B73] focus:bg-white transition-all"
+                        className="w-full pl-10 pr-10 py-3 rounded-xl border border-slate-200 bg-slate-50/60 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-accent focus:bg-white transition-all"
                       />
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                       <button
@@ -530,7 +534,7 @@ export const LoginPage: React.FC = () => {
                         type="checkbox"
                         checked={rememberMe}
                         onChange={(e) => setRememberMe(e.target.checked)}
-                        className="w-4 h-4 rounded text-[#1B2A44] border-slate-300 focus:ring-0 cursor-pointer"
+                        className="w-4 h-4 rounded text-brand border-slate-300 focus:ring-0 cursor-pointer"
                       />
                       <span className="text-xs text-slate-600 font-body">Remember this workstation</span>
                     </label>
@@ -540,10 +544,10 @@ export const LoginPage: React.FC = () => {
                     <button
                       type="submit"
                       disabled={loading}
-                      className="w-full py-3.5 px-6 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] text-white font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-between group cursor-pointer disabled:opacity-60 active:scale-[0.99]"
+                      className="w-full py-3.5 px-6 rounded-full bg-brand text-brand-contrast hover:bg-accent hover:text-accent-contrast font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-between group cursor-pointer disabled:opacity-60 active:scale-[0.99]"
                     >
                       <span>{loading ? 'Authenticating...' : 'Sign In'}</span>
-                      <span className="w-6 h-6 rounded-full bg-white text-[#1B2A44] flex items-center justify-center group-hover:scale-105 transition-transform">
+                      <span className="w-6 h-6 rounded-full bg-white text-brand flex items-center justify-center group-hover:scale-105 transition-transform">
                         <ArrowRight className="w-3.5 h-3.5" />
                       </span>
                     </button>
@@ -554,9 +558,9 @@ export const LoginPage: React.FC = () => {
                       Don't have an account?{' '}
                       <Link
                         to="/signup"
-                        className="font-display uppercase tracking-wider text-xs font-bold text-[#1B2A44] hover:text-[#2F4B73]"
+                        className="font-display uppercase tracking-wider text-xs font-bold text-brand hover:text-accent"
                       >
-                        Sign Up
+                        {BRAND_CONFIG.copy.auth.loginFooterCta}
                       </Link>
                     </span>
                   </div>
@@ -579,11 +583,11 @@ export const LoginPage: React.FC = () => {
               <X className="w-4 h-4" />
             </button>
 
-            <div className="w-12 h-12 rounded-full bg-blue-50 text-[#2F4B73] flex items-center justify-center mb-4">
+            <div className="w-12 h-12 rounded-full bg-blue-50 text-accent flex items-center justify-center mb-4">
               <KeyRound className="w-6 h-6" />
             </div>
 
-            <h3 className="font-display font-extrabold text-xl text-[#1B2A44] uppercase tracking-tight">
+            <h3 className="font-display font-extrabold text-xl text-brand uppercase tracking-tight">
               Reset Password
             </h3>
 
@@ -607,9 +611,9 @@ export const LoginPage: React.FC = () => {
                       type="email"
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
-                      placeholder="e.g. client@example.com"
+                      placeholder={`e.g. ${BRAND_CONFIG.locale.placeholderNames.loginEmail}`}
                       required
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm bg-slate-50 focus:bg-white focus:border-[#2F4B73] focus:outline-none"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm bg-slate-50 focus:bg-white focus:border-accent focus:outline-none"
                     />
                   </div>
 
@@ -624,7 +628,7 @@ export const LoginPage: React.FC = () => {
                     <button
                       type="submit"
                       disabled={forgotLoading}
-                      className="flex-1 py-3 rounded-full bg-[#1B2A44] text-white text-xs font-display uppercase tracking-wider font-semibold hover:bg-[#2F4B73] cursor-pointer disabled:opacity-60"
+                      className="flex-1 py-3 rounded-full bg-brand text-brand-contrast text-xs font-display uppercase tracking-wider font-semibold hover:bg-accent hover:text-accent-contrast cursor-pointer disabled:opacity-60"
                     >
                       {forgotLoading ? 'Sending...' : 'Send Reset Code'}
                     </button>
@@ -641,7 +645,7 @@ export const LoginPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowForgotPassword(false)}
-                  className="w-full py-3 rounded-full bg-[#1B2A44] text-white font-display text-xs uppercase tracking-wider font-semibold cursor-pointer"
+                  className="w-full py-3 rounded-full bg-brand text-brand-contrast hover:bg-accent hover:text-accent-contrast font-display text-xs uppercase tracking-wider font-semibold cursor-pointer"
                 >
                   Return to Sign In
                 </button>
@@ -656,14 +660,14 @@ export const LoginPage: React.FC = () => {
 
                 {forgotPreviewUrl && (
                   <div className="mt-4 p-3 rounded-2xl bg-blue-50 border border-blue-200 text-center space-y-1.5">
-                    <p className="text-[11px] text-[#1B2A44] font-body">
+                    <p className="text-[11px] text-brand font-body">
                       Reset code email delivered via Ethereal Mail API:
                     </p>
                     <a
                       href={forgotPreviewUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#2F4B73] hover:bg-[#1B2A44] text-white font-display text-[10px] uppercase tracking-wider font-semibold transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-accent text-accent-contrast hover:bg-brand hover:text-brand-contrast font-display text-[10px] uppercase tracking-wider font-semibold transition-colors"
                     >
                       <span>Open Reset Email</span>
                       <ExternalLink className="w-3 h-3" />
@@ -684,7 +688,7 @@ export const LoginPage: React.FC = () => {
                       value={resetCode}
                       onChange={(e) => setResetCode(e.target.value.replace(/\D/g, ''))}
                       required
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-center font-mono text-lg font-bold tracking-[0.35em] bg-slate-50 focus:bg-white focus:border-[#2F4B73] focus:outline-none"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-center font-mono text-lg font-bold tracking-[0.35em] bg-slate-50 focus:bg-white focus:border-accent focus:outline-none"
                     />
                   </div>
 
@@ -698,7 +702,7 @@ export const LoginPage: React.FC = () => {
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="••••••••••••"
                       required
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm bg-slate-50 focus:bg-white focus:border-[#2F4B73] focus:outline-none"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm bg-slate-50 focus:bg-white focus:border-accent focus:outline-none"
                     />
                   </div>
 
@@ -712,7 +716,7 @@ export const LoginPage: React.FC = () => {
                       onChange={(e) => setConfirmNewPassword(e.target.value)}
                       placeholder="••••••••••••"
                       required
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm bg-slate-50 focus:bg-white focus:border-[#2F4B73] focus:outline-none"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm bg-slate-50 focus:bg-white focus:border-accent focus:outline-none"
                     />
                   </div>
 
@@ -727,7 +731,7 @@ export const LoginPage: React.FC = () => {
                     <button
                       type="submit"
                       disabled={resettingPassword}
-                      className="flex-1 py-3 rounded-full bg-[#1B2A44] text-white text-xs font-display uppercase tracking-wider font-semibold hover:bg-[#2F4B73] cursor-pointer disabled:opacity-60"
+                      className="flex-1 py-3 rounded-full bg-brand text-brand-contrast text-xs font-display uppercase tracking-wider font-semibold hover:bg-accent hover:text-accent-contrast cursor-pointer disabled:opacity-60"
                     >
                       {resettingPassword ? 'Updating...' : 'Update Password'}
                     </button>
@@ -744,7 +748,7 @@ export const LoginPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowForgotPassword(false)}
-                  className="w-full py-3 rounded-full bg-[#1B2A44] text-white font-display text-xs uppercase tracking-wider font-semibold cursor-pointer"
+                  className="w-full py-3 rounded-full bg-brand text-brand-contrast hover:bg-accent hover:text-accent-contrast font-display text-xs uppercase tracking-wider font-semibold cursor-pointer"
                 >
                   Return to Sign In
                 </button>

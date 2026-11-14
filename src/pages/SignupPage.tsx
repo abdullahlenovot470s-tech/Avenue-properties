@@ -18,6 +18,7 @@ import { useToast } from '../context/ToastContext';
 import { SafeImage } from '../components/common/SafeImage';
 import { HERO_ASSETS } from '../data/realEstateData';
 import { GoogleSignInButton } from '../components/common/GoogleSignInButton';
+import { BRAND_CONFIG } from '../config/brand.config';
 
 // Mask email e.g. "fatima.noor@example.com" -> "fat***@example.com"
 function maskEmail(email: string): string {
@@ -67,7 +68,7 @@ export const SignupPage: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = 'Create Account | Avenue Luxury Properties';
+    document.title = `Create Account | ${BRAND_CONFIG.identity.brandName}`;
   }, []);
 
   // Cooldown countdown timer
@@ -118,10 +119,10 @@ export const SignupPage: React.FC = () => {
 
     if (result.success) {
       if (result.isManagement) {
-        showToast('Signed in to Avenue Management.', 'success');
+        showToast(`Signed in to ${BRAND_CONFIG.identity.brandShortName} Management.`, 'success');
         navigate('/manage', { replace: true });
       } else {
-        showToast('Welcome to Avenue!', 'success');
+        showToast(`Welcome to ${BRAND_CONFIG.identity.brandShortName}!`, 'success');
         navigate('/profile', { replace: true });
       }
     } else {
@@ -182,7 +183,7 @@ export const SignupPage: React.FC = () => {
     setVerifyingCode(false);
 
     if (result.success) {
-      showToast('Email verified! Welcome to Avenue.', 'success');
+      showToast(`Email verified! Welcome to ${BRAND_CONFIG.identity.brandShortName}.`, 'success');
       navigate('/profile', { replace: true });
     } else {
       setVerifyError(result.error || 'Invalid verification code.');
@@ -197,7 +198,7 @@ export const SignupPage: React.FC = () => {
     setCheckingVerification(false);
 
     if (isVerified) {
-      showToast('Email verified. Welcome to Avenue!', 'success');
+      showToast(`Email verified. Welcome to ${BRAND_CONFIG.identity.brandShortName}!`, 'success');
       navigate('/profile', { replace: true });
     } else {
       showToast('Email not yet verified. Enter the 6-digit code or click the link in your email.', 'info');
@@ -233,14 +234,14 @@ export const SignupPage: React.FC = () => {
             {step === 'form' ? (
               <>
                 <div className="mb-6">
-                  <span className="text-[10px] font-display uppercase tracking-widest text-[#2F4B73] font-bold block mb-1">
-                    Client Registration
+                  <span className="text-[10px] font-display uppercase tracking-widest text-accent font-bold block mb-1">
+                    {BRAND_CONFIG.copy.auth.signupEyebrow}
                   </span>
-                  <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-[#1B2A44] uppercase tracking-tight">
-                    JOIN AVENUE
+                  <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-brand uppercase tracking-tight">
+                    {BRAND_CONFIG.copy.auth.signupHeading}
                   </h2>
                   <p className="font-body text-xs sm:text-sm text-slate-500 mt-1">
-                    Register for confidential access to architectural residences in Pakistan.
+                    {BRAND_CONFIG.copy.auth.signupSubtitle}
                   </p>
                 </div>
 
@@ -251,21 +252,23 @@ export const SignupPage: React.FC = () => {
                 )}
 
                 {/* 1. Google Button as First Option */}
-                <div className="space-y-4">
-                  <GoogleSignInButton
-                    onClick={handleGoogleSignIn}
-                    loading={googleLoading}
-                    text="Continue with Google"
-                  />
+                {BRAND_CONFIG.features.enableGoogleLogin && (
+                  <div className="space-y-4">
+                    <GoogleSignInButton
+                      onClick={handleGoogleSignIn}
+                      loading={googleLoading}
+                      text="Continue with Google"
+                    />
 
-                  {/* Divider */}
-                  <div className="relative flex items-center justify-center">
-                    <div className="w-full border-t border-slate-200" />
-                    <span className="absolute bg-white px-3 text-[11px] font-display uppercase tracking-wider text-slate-400">
-                      or continue with email
-                    </span>
+                    {/* Divider */}
+                    <div className="relative flex items-center justify-center">
+                      <div className="w-full border-t border-slate-200" />
+                      <span className="absolute bg-white px-3 text-[11px] font-display uppercase tracking-wider text-slate-400">
+                        or continue with email
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <form onSubmit={handleSubmit} className="space-y-3.5 mt-5">
                   {/* Full Name */}
@@ -276,13 +279,13 @@ export const SignupPage: React.FC = () => {
                     <div className="relative">
                       <input
                         type="text"
-                        placeholder="e.g. Fatima Noor"
+                        placeholder={BRAND_CONFIG.locale.placeholderNames.signupName}
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-xs sm:text-sm bg-slate-50 focus:bg-white focus:outline-none transition-all ${
                           errors.name
                             ? 'border-rose-400 focus:border-rose-500'
-                            : 'border-slate-200 focus:border-[#2F4B73]'
+                            : 'border-slate-200 focus:border-accent'
                         }`}
                       />
                       <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -300,13 +303,13 @@ export const SignupPage: React.FC = () => {
                     <div className="relative">
                       <input
                         type="email"
-                        placeholder="e.g. fatima.noor@example.com"
+                        placeholder={BRAND_CONFIG.locale.placeholderNames.signupEmail}
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-xs sm:text-sm bg-slate-50 focus:bg-white focus:outline-none transition-all ${
                           errors.email
                             ? 'border-rose-400 focus:border-rose-500'
-                            : 'border-slate-200 focus:border-[#2F4B73]'
+                            : 'border-slate-200 focus:border-accent'
                         }`}
                       />
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -330,7 +333,7 @@ export const SignupPage: React.FC = () => {
                         className={`w-full pl-10 pr-10 py-2.5 rounded-xl border text-xs sm:text-sm bg-slate-50 focus:bg-white focus:outline-none transition-all ${
                           errors.password
                             ? 'border-rose-400 focus:border-rose-500'
-                            : 'border-slate-200 focus:border-[#2F4B73]'
+                            : 'border-slate-200 focus:border-accent'
                         }`}
                       />
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -363,7 +366,7 @@ export const SignupPage: React.FC = () => {
                         className={`w-full pl-10 pr-10 py-2.5 rounded-xl border text-xs sm:text-sm bg-slate-50 focus:bg-white focus:outline-none transition-all ${
                           errors.confirmPassword
                             ? 'border-rose-400 focus:border-rose-500'
-                            : 'border-slate-200 focus:border-[#2F4B73]'
+                            : 'border-slate-200 focus:border-accent'
                         }`}
                       />
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -395,11 +398,9 @@ export const SignupPage: React.FC = () => {
                         onChange={(e) =>
                           setFormData({ ...formData, agreeTerms: e.target.checked })
                         }
-                        className="mt-0.5 rounded border-slate-300 text-[#1B2A44] focus:ring-[#2F4B73] cursor-pointer"
+                        className="mt-0.5 rounded border-slate-300 text-brand focus:ring-accent cursor-pointer"
                       />
-                      <span>
-                        I acknowledge Avenue's client representation terms, non-disclosure protocols, and verified legal representation standards.
-                      </span>
+                      <span>{BRAND_CONFIG.copy.auth.signupTermsLabel}</span>
                     </label>
                     {errors.agreeTerms && (
                       <p className="text-[11px] text-rose-500 font-body mt-1">
@@ -413,13 +414,13 @@ export const SignupPage: React.FC = () => {
                     <button
                       type="submit"
                       disabled={loading}
-                      className="w-full py-3.5 px-6 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] text-white font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 active:scale-[0.99]"
+                      className="w-full py-3.5 px-6 rounded-full bg-brand hover:bg-accent text-brand-contrast font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 active:scale-[0.99]"
                     >
                       {loading ? (
                         <span>Sending Verification Email...</span>
                       ) : (
                         <>
-                          <span>Create Avenue Account</span>
+                          <span>{BRAND_CONFIG.copy.auth.signupSubmitLabel}</span>
                           <ArrowRight className="w-3.5 h-3.5" />
                         </>
                       )}
@@ -429,10 +430,10 @@ export const SignupPage: React.FC = () => {
 
                 {/* Footer link to Login */}
                 <div className="mt-6 text-center text-xs text-slate-500 font-body">
-                  <span>Already an Avenue client? </span>
+                  <span>Already an {BRAND_CONFIG.identity.brandShortName} client? </span>
                   <Link
                     to="/login"
-                    className="font-display uppercase tracking-wider font-bold text-[#1B2A44] hover:text-[#2F4B73] underline underline-offset-4"
+                    className="font-display uppercase tracking-wider font-bold text-brand hover:text-accent underline underline-offset-4"
                   >
                     Login here
                   </Link>
@@ -449,19 +450,19 @@ export const SignupPage: React.FC = () => {
                   <span className="text-[10px] font-display uppercase tracking-widest text-emerald-700 font-bold block">
                     Verification Email Dispatched
                   </span>
-                  <h3 className="font-display font-extrabold text-2xl uppercase tracking-tight text-[#1B2A44]">
+                  <h3 className="font-display font-extrabold text-2xl uppercase tracking-tight text-brand">
                     Verify Your Email
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-600 font-body leading-relaxed max-w-sm mx-auto">
                     {verifyProvider === 'firebase' ? (
                       <>
                         We sent a verification link to{' '}
-                        <span className="font-bold text-[#1B2A44]">{maskEmail(formData.email)}</span>. Open your inbox (check spam if needed), click the link, then confirm below.
+                        <span className="font-bold text-brand">{maskEmail(formData.email)}</span>. Open your inbox (check spam if needed), click the link, then confirm below.
                       </>
                     ) : (
                       <>
                         We sent a 6-digit code and verification link to{' '}
-                        <span className="font-bold text-[#1B2A44]">{maskEmail(formData.email)}</span>.
+                        <span className="font-bold text-brand">{maskEmail(formData.email)}</span>.
                       </>
                     )}
                   </p>
@@ -469,14 +470,14 @@ export const SignupPage: React.FC = () => {
 
                 {emailPreviewUrl && (
                   <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 text-center space-y-2">
-                    <p className="text-[11px] text-[#1B2A44] font-body leading-snug">
+                    <p className="text-[11px] text-brand font-body leading-snug">
                       Email delivered via free Ethereal Mail API. Open the message to copy your 6-digit code or click the verify button:
                     </p>
                     <a
                       href={emailPreviewUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#2F4B73] hover:bg-[#1B2A44] text-white font-display text-[11px] uppercase tracking-wider font-semibold transition-colors"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-accent hover:bg-brand text-accent-contrast font-display text-[11px] uppercase tracking-wider font-semibold transition-colors"
                     >
                       <span>Open Verification Email</span>
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -497,7 +498,7 @@ export const SignupPage: React.FC = () => {
                         placeholder="123456"
                         value={verificationCode}
                         onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                        className="w-full py-3 px-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-[#2F4B73] focus:outline-none text-center font-mono text-xl font-bold tracking-[0.4em] text-[#1B2A44]"
+                        className="w-full py-3 px-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-accent focus:outline-none text-center font-mono text-xl font-bold tracking-[0.4em] text-brand"
                       />
                       {verifyError && (
                         <p className="text-[11px] text-rose-500 font-body mt-1.5 text-center">
@@ -509,7 +510,7 @@ export const SignupPage: React.FC = () => {
                     <button
                       type="submit"
                       disabled={verifyingCode}
-                      className="w-full py-3.5 px-6 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] text-white font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 active:scale-[0.99]"
+                      className="w-full py-3.5 px-6 rounded-full bg-brand hover:bg-accent text-brand-contrast font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 active:scale-[0.99]"
                     >
                       {verifyingCode ? (
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -528,8 +529,8 @@ export const SignupPage: React.FC = () => {
                     disabled={checkingVerification}
                     className={`w-full py-3.5 px-6 rounded-full font-display font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
                       verifyProvider === 'firebase'
-                        ? 'bg-[#1B2A44] hover:bg-[#2F4B73] text-white shadow-md'
-                        : 'bg-slate-100 hover:bg-slate-200 text-[#1B2A44] font-semibold'
+                        ? 'bg-brand hover:bg-accent text-brand-contrast shadow-md'
+                        : 'bg-slate-100 hover:bg-slate-200 text-brand font-semibold'
                     }`}
                   >
                     {checkingVerification ? (
@@ -560,7 +561,7 @@ export const SignupPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setStep('form')}
-                    className="text-xs font-display uppercase tracking-wider text-[#2F4B73] hover:underline cursor-pointer"
+                    className="text-xs font-display uppercase tracking-wider text-accent hover:underline cursor-pointer"
                   >
                     Change email
                   </button>
@@ -575,18 +576,18 @@ export const SignupPage: React.FC = () => {
           <div className="absolute inset-0 z-0">
             <SafeImage
               src={HERO_ASSETS.approachWalkway}
-              alt="Avenue Luxury Villa Architecture"
+              alt={`${BRAND_CONFIG.identity.brandShortName} Luxury Villa Architecture`}
               className="w-full h-full object-cover scale-105"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0e1726]/90 via-[#1B2A44]/30 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/90 via-brand/30 to-transparent" />
           </div>
 
           <div className="relative z-10 flex items-center justify-between text-white">
             <Link to="/" className="font-display font-bold text-2xl tracking-tighter text-white">
-              Avenue
+              {BRAND_CONFIG.identity.logoText}
             </Link>
             <span className="text-[10px] font-display uppercase tracking-widest text-white/70 glass-card-subtle px-3 py-1 rounded-full">
-              Verified Ownership
+              {BRAND_CONFIG.copy.auth.signupShowcaseBadge}
             </span>
           </div>
 
@@ -598,10 +599,10 @@ export const SignupPage: React.FC = () => {
               </span>
             </div>
             <p className="font-display font-bold text-xl sm:text-2xl tracking-tight text-white leading-snug">
-              "Building architectural legacies with legal certainty."
+              {BRAND_CONFIG.copy.auth.signupQuote}
             </p>
             <p className="font-body text-xs text-white/70 mt-2">
-              Join Pakistan's premier registry of modern estates, verified fards, and vetted luxury acquisitions.
+              {BRAND_CONFIG.copy.auth.signupQuoteSubtext}
             </p>
           </div>
         </div>

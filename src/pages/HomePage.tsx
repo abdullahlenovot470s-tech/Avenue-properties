@@ -4,6 +4,7 @@ import { ServicesSection } from '../components/ServicesSection';
 import { Portfolio } from '../components/Portfolio';
 import { ContactCta } from '../components/ContactCta';
 import { PropertyListing, PortfolioProject } from '../types';
+import { BRAND_CONFIG } from '../config/brand.config';
 
 interface HomePageProps {
   onOpenConsultation: (service?: string) => void;
@@ -15,7 +16,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   onSelectProperty,
 }) => {
   React.useEffect(() => {
-    document.title = 'Avenue | Luxury Properties & Architectural Legacies';
+    document.title = `${BRAND_CONFIG.identity.brandShortName} | ${BRAND_CONFIG.identity.brandName}`;
   }, []);
 
   return (
@@ -27,10 +28,12 @@ export const HomePage: React.FC<HomePageProps> = ({
       <ServicesSection onOpenConsultation={onOpenConsultation} />
 
       {/* 3. SIGNATURE PORTFOLIO */}
-      <Portfolio
-        onSelectProject={onSelectProperty}
-        onOpenConsultation={() => onOpenConsultation('Signature Portfolio Access')}
-      />
+      {BRAND_CONFIG.features.showProjectsPage && (
+        <Portfolio
+          onSelectProject={onSelectProperty}
+          onOpenConsultation={() => onOpenConsultation('Signature Portfolio Access')}
+        />
+      )}
 
       {/* 4. LET'S TALK (CTA) */}
       <ContactCta />

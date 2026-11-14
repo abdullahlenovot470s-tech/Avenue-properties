@@ -19,6 +19,7 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react';
+import { BRAND_CONFIG } from '../config/brand.config';
 
 export const RentPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -36,10 +37,10 @@ export const RentPage: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = 'Homes For Rent | Avenue Luxury Properties';
+    document.title = `Homes For Rent | ${BRAND_CONFIG.identity.brandName}`;
   }, []);
 
-  const cities = ['All', 'Lahore', 'Islamabad', 'Karachi', 'Rawalpindi', 'Murree & Hills'];
+  const cities = ['All', ...BRAND_CONFIG.locale.mainCities];
   const types = ['All', 'Apartment', 'House', 'Upper Portion', 'Lower Portion'];
   const bedroomOptions = ['All', '1', '2', '3', '4+'];
   const priceOptions = ['All', 'Under 50,000', '50,000-1 Lakh', '1-2 Lakh', '2 Lakh+'];
@@ -125,14 +126,14 @@ export const RentPage: React.FC = () => {
       <nav aria-label="Breadcrumb" className="px-2">
         <ol className="flex items-center gap-2 text-xs font-display uppercase tracking-widest text-slate-500">
           <li>
-            <Link to="/" className="hover:text-[#1B2A44] transition-colors">
+            <Link to="/" className="hover:text-brand transition-colors">
               Home
             </Link>
           </li>
           <li>
             <ChevronRight className="w-3 h-3 text-slate-400" />
           </li>
-          <li className="text-[#1B2A44] font-bold" aria-current="page">
+          <li className="text-brand font-bold" aria-current="page">
             Rent
           </li>
         </ol>
@@ -142,7 +143,7 @@ export const RentPage: React.FC = () => {
       <section className="relative w-full bg-white rounded-[24px] sm:rounded-[32px] overflow-hidden p-4 sm:p-10 md:p-14 shadow-xl border border-slate-100">
         <div className="absolute top-4 right-0 pointer-events-none select-none overflow-hidden max-w-full z-0">
           <span
-            className="font-display font-black leading-none uppercase tracking-tighter text-[#E2E8F0]/30 select-none"
+            className="font-display font-black leading-none uppercase tracking-tighter text-watermark/30 select-none"
             style={{ fontSize: 'clamp(4rem, 16vw, 9.5rem)' }}
           >
             RENT
@@ -150,17 +151,17 @@ export const RentPage: React.FC = () => {
         </div>
 
         <div className="relative z-10 max-w-3xl space-y-4">
-          <span className="text-[11px] font-display uppercase tracking-widest text-[#2F4B73] font-bold block">
+          <span className="text-[11px] font-display uppercase tracking-widest text-accent font-bold block">
             Executive Tenancies & Leasing
           </span>
           <h1
-            className="font-display font-extrabold text-[#1B2A44] uppercase tracking-tight leading-none"
+            className="font-display font-extrabold text-brand uppercase tracking-tight leading-none"
             style={{ fontSize: 'clamp(1.75rem, 3.5vw, 3rem)' }}
           >
             HOMES FOR RENT
           </h1>
-          <p className="font-body text-xs sm:text-base text-[#1B2A44]/80 leading-relaxed font-light">
-            Verified apartments, houses and portions for rent in Lahore, Islamabad, Rawalpindi and Karachi.
+          <p className="font-body text-xs sm:text-base text-brand/80 leading-relaxed font-light">
+            Verified apartments, houses and portions for rent in {BRAND_CONFIG.locale.mainCities.join(', ')}.
           </p>
         </div>
 
@@ -170,7 +171,7 @@ export const RentPage: React.FC = () => {
           <div className="flex sm:hidden items-center gap-2 overflow-x-auto no-scrollbar py-1 -mx-1 px-1">
             <button
               onClick={() => setMobileFiltersOpen(true)}
-              className="px-3 py-1.5 rounded-full bg-[#1B2A44] text-white text-xs font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
+              className="px-3 py-1.5 rounded-full bg-brand text-brand-contrast text-xs font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
               <span>Filters</span>
@@ -184,7 +185,7 @@ export const RentPage: React.FC = () => {
                 onClick={() => setSelectedCity(city)}
                 className={`px-3 py-1.5 rounded-full font-display text-xs uppercase tracking-wider font-semibold shrink-0 transition-all cursor-pointer ${
                   selectedCity === city
-                    ? 'bg-[#1B2A44] text-white shadow-xs'
+                    ? 'bg-brand text-brand-contrast shadow-xs'
                     : 'bg-slate-100 text-slate-600'
                 }`}
               >
@@ -201,7 +202,7 @@ export const RentPage: React.FC = () => {
                 onClick={() => setSelectedCity(city)}
                 className={`px-4 py-2 rounded-full font-display text-xs uppercase tracking-wider font-semibold transition-all cursor-pointer ${
                   selectedCity === city
-                    ? 'bg-[#1B2A44] text-white shadow-sm'
+                    ? 'bg-brand text-brand-contrast shadow-sm'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
@@ -279,7 +280,7 @@ export const RentPage: React.FC = () => {
                   placeholder="Search society, city, rent..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 rounded-full border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-[#2F4B73] focus:bg-white transition-all"
+                  className="w-full pl-9 pr-4 py-2 rounded-full border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-accent focus:bg-white transition-all"
                 />
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
               </div>
@@ -303,7 +304,7 @@ export const RentPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-end sm:hidden bg-black/60 backdrop-blur-xs">
           <div className="w-full bg-white rounded-t-3xl p-5 max-h-[85vh] overflow-y-auto space-y-4 animate-in slide-in-from-bottom duration-300">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-display font-bold text-base text-[#1B2A44] uppercase tracking-tight">
+              <h3 className="font-display font-bold text-base text-brand uppercase tracking-tight">
                 Filter Rentals
               </h3>
               <button
@@ -425,7 +426,7 @@ export const RentPage: React.FC = () => {
               </button>
               <button
                 onClick={() => setMobileFiltersOpen(false)}
-                className="flex-1 py-3 rounded-full bg-[#1B2A44] text-white font-display text-xs uppercase tracking-wider font-semibold text-center shadow-md cursor-pointer"
+                className="flex-1 py-3 rounded-full bg-brand text-brand-contrast font-display text-xs uppercase tracking-wider font-semibold text-center shadow-md cursor-pointer"
               >
                 Apply Filters
               </button>
@@ -476,7 +477,7 @@ export const RentPage: React.FC = () => {
                     <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                       <div>
                         <div className="flex items-center justify-between gap-2">
-                          <div className="font-display font-bold text-[0.95rem] text-[#1B2A44] leading-tight truncate">
+                          <div className="font-display font-bold text-[0.95rem] text-brand leading-tight truncate">
                             {formatRent(listing.monthlyRent)}
                           </div>
                           {listing.status && listing.status !== 'Available' && (
@@ -485,10 +486,10 @@ export const RentPage: React.FC = () => {
                             </span>
                           )}
                         </div>
-                        <h3 className="font-display font-semibold text-[0.82rem] text-[#1B2A44] line-clamp-2 mt-0.5 leading-snug">
+                        <h3 className="font-display font-semibold text-[0.82rem] text-brand line-clamp-2 mt-0.5 leading-snug">
                           {listing.title}
                         </h3>
-                        <div className="flex items-center gap-1 text-[0.72rem] text-[#2F4B73] font-medium mt-1 truncate">
+                        <div className="flex items-center gap-1 text-[0.72rem] text-accent font-medium mt-1 truncate">
                           <MapPin className="w-3 h-3 shrink-0" />
                           <span className="truncate">{listing.areaSociety}</span>
                         </div>
@@ -537,9 +538,9 @@ export const RentPage: React.FC = () => {
                     </div>
                     <div className="p-3.5 flex flex-col justify-between flex-1 space-y-2">
                       <div>
-                        <div className="font-display font-bold text-base text-[#1B2A44]">{formatRent(listing.monthlyRent)}</div>
-                        <h3 className="font-display font-bold text-sm text-[#1B2A44] line-clamp-1 mt-0.5">{listing.title}</h3>
-                        <div className="flex items-center gap-1 text-xs text-[#2F4B73] mt-1 truncate">
+                        <div className="font-display font-bold text-base text-brand">{formatRent(listing.monthlyRent)}</div>
+                        <h3 className="font-display font-bold text-sm text-brand line-clamp-1 mt-0.5">{listing.title}</h3>
+                        <div className="flex items-center gap-1 text-xs text-accent mt-1 truncate">
                           <MapPin className="w-3 h-3 shrink-0" />
                           <span className="truncate">{listing.areaSociety}</span>
                         </div>
@@ -606,16 +607,16 @@ export const RentPage: React.FC = () => {
 
                     <div className="p-6 sm:p-7 flex flex-col justify-between flex-1 space-y-4">
                       <div>
-                        <div className="flex items-center gap-1.5 text-xs text-[#2F4B73] font-semibold mb-1">
+                        <div className="flex items-center gap-1.5 text-xs text-accent font-semibold mb-1">
                           <MapPin className="w-3.5 h-3.5 shrink-0" />
                           <span className="truncate">{listing.areaSociety}</span>
                         </div>
 
-                        <h3 className="font-display font-extrabold text-xl text-[#1B2A44] uppercase tracking-tight group-hover:text-[#2F4B73] transition-colors">
+                        <h3 className="font-display font-extrabold text-xl text-brand uppercase tracking-tight group-hover:text-accent transition-colors">
                           {listing.title}
                         </h3>
 
-                        <div className="font-display font-bold text-xl text-[#1B2A44] mt-1.5">
+                        <div className="font-display font-bold text-xl text-brand mt-1.5">
                           {formatRent(listing.monthlyRent)}
                         </div>
 
@@ -633,14 +634,14 @@ export const RentPage: React.FC = () => {
                           <Bath className="w-3.5 h-3.5 text-slate-400" /> {listing.baths} Baths
                         </span>
                         <span>·</span>
-                        <span className="flex items-center gap-1 text-[#1B2A44] font-semibold">
-                          <Maximize2 className="w-3.5 h-3.5 text-[#2F4B73]" /> {listing.sizeOrFloor}
+                        <span className="flex items-center gap-1 text-brand font-semibold">
+                          <Maximize2 className="w-3.5 h-3.5 text-accent" /> {listing.sizeOrFloor}
                         </span>
                       </div>
 
-                      <div className="w-full py-3 px-5 rounded-full bg-slate-100 group-hover:bg-[#1B2A44] text-[#1B2A44] group-hover:text-white font-display text-xs uppercase tracking-widest font-semibold transition-all flex items-center justify-between">
+                      <div className="w-full py-3 px-5 rounded-full bg-slate-100 group-hover:bg-brand text-brand group-hover:text-brand-contrast font-display text-xs uppercase tracking-widest font-semibold transition-all flex items-center justify-between">
                         <span>View Rental Details</span>
-                        <span className="w-6 h-6 rounded-full bg-white text-[#1B2A44] flex items-center justify-center group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform">
+                        <span className="w-6 h-6 rounded-full bg-white text-brand flex items-center justify-center group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform">
                           <ArrowUpRight className="w-3.5 h-3.5" />
                         </span>
                       </div>
@@ -653,7 +654,7 @@ export const RentPage: React.FC = () => {
         ) : (
           <div className="bg-white rounded-3xl p-12 text-center border border-slate-100 shadow-md space-y-3">
             <Building className="w-12 h-12 text-slate-300 mx-auto" />
-            <h3 className="font-display font-bold text-lg text-[#1B2A44] uppercase">
+            <h3 className="font-display font-bold text-lg text-brand uppercase">
               No Homes Match Your Filters
             </h3>
             <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto font-body">
@@ -662,7 +663,7 @@ export const RentPage: React.FC = () => {
             <div className="pt-2">
               <button
                 onClick={handleClearFilters}
-                className="px-5 py-2.5 rounded-full bg-[#1B2A44] text-white font-display text-xs uppercase tracking-wider font-semibold hover:bg-[#2F4B73] transition-colors cursor-pointer"
+                className="px-5 py-2.5 rounded-full bg-brand text-brand-contrast font-display text-xs uppercase tracking-wider font-semibold hover:bg-accent transition-colors cursor-pointer"
               >
                 Reset All Filters
               </button>

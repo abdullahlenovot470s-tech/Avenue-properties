@@ -1,3 +1,5 @@
+import { BRAND_CONFIG } from '../config/brand.config';
+
 export type EnquiryWebhookSource =
   | 'Contact'
   | 'Consultation'
@@ -40,7 +42,7 @@ interface QueuedEnquiryPayload {
 
 const PENDING_ENQUIRIES_KEY = 'pendingEnquiries';
 const MAX_PENDING_ITEMS = 50;
-export const PENDING_QUEUE_EVENT = 'avenue-pending-enquiries-changed';
+export const PENDING_QUEUE_EVENT = `${BRAND_CONFIG.identity.storageKeyPrefix}-pending-enquiries-changed`;
 
 function getWebhookConfig(): { url: string; key: string } {
   const rawUrl = import.meta.env.VITE_ENQUIRY_WEBHOOK_URL;
@@ -52,6 +54,7 @@ function getWebhookConfig(): { url: string; key: string } {
 }
 
 export function isEnquiryWebhookConfigured(): boolean {
+  if (!BRAND_CONFIG.features.enableEnquiryWebhook) return false;
   const { url, key } = getWebhookConfig();
   return Boolean(url && key);
 }
@@ -183,6 +186,10 @@ export async function sendEnquiryToWebhook(
     return { skipped: true };
   }
 
+  if (!BRAND_CONFIG.features.enableEnquiryWebhook) {
+    return { skipped: true };
+  }
+
   const { url, key } = getWebhookConfig();
   if (!url || !key) {
     return { skipped: true };
@@ -190,7 +197,7 @@ export async function sendEnquiryToWebhook(
 
   const cleanSource = (stripHtmlTags(data.source) as EnquiryWebhookSource) || 'Other';
   const pageTitle =
-    typeof document !== 'undefined' ? stripHtmlTags(document.title) : 'Avenue Luxury Properties';
+    typeof document !== 'undefined' ? stripHtmlTags(document.title) : BRAND_CONFIG.identity.brandName;
 
   const cleanPayload: Omit<QueuedEnquiryPayload, 'queuedAt'> = {
     name: stripHtmlTags(data.name),

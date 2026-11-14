@@ -1,13 +1,44 @@
+import { BRAND_CONFIG } from '../config/brand.config.ts';
+
+/*
+ * ============================================================================
+ * EXAMPLE BUY PROPERTY ENTRY (COPY & EDIT TO ADD A LISTING FOR SALE)
+ * ============================================================================
+ *
+ * const EXAMPLE_BUY_PROPERTY: BuyProperty = {
+ *   id: 'buy-unique-slug',           // Unique ID for URLs and Firestore
+ *   title: '10 Marla Residence, DHA Phase 5',
+ *   city: 'Lahore',                  // Must match a city in BRAND_CONFIG.locale.mainCities
+ *   location: 'Sector C, DHA Phase 5, Lahore',
+ *   type: 'House',                   // 'House' | 'Apartment' | 'Plot'
+ *   price: 'PKR 4.2 Crore',          // Human-readable asking price
+ *   numericPrice: 42000000,          // Numeric price used for filtering & mortgage estimator
+ *   priceRange: '3-7 Cr',            // 'Under 1 Cr' | '1-3 Cr' | '3-7 Cr' | '7 Cr+'
+ *   area: '10 Marla',                // Display size string
+ *   areaCategory: '10 Marla',        // 'Up to 5 Marla' | '10 Marla' | '1 Kanal' | '2 Kanal+'
+ *   beds: 4,                         // 0 for Plots
+ *   baths: 5,                        // 0 for Plots
+ *   image: '/brand/buy-2.jpg',       // Primary image shown on cards (or https:// URL)
+ *   gallery: ['/brand/buy-2.jpg', '/brand/luxury-interior.jpg'], // Up to 4 images
+ *   description: 'Architectural summary displayed on the detail page.',
+ *   features: ['10kW Solar Net Metering', 'Clear Title & Transfer Ready'],
+ *   possession: 'Immediate Possession',
+ *   nocStatus: 'Society Transfer Verified',
+ *   status: 'Available',             // 'Available' | 'Under Offer' | 'Sold'
+ * };
+ * ============================================================================
+ */
+
 export interface BuyProperty {
   id: string;
   title: string;
-  city: 'Lahore' | 'Islamabad' | 'Karachi' | 'Rawalpindi' | 'Murree & Hills';
+  city: string;
   location: string;
   type: 'House' | 'Apartment' | 'Plot';
-  price: string; // e.g. "PKR 1.85 Crore" or "PKR 95 Lakh"
-  numericPrice: number; // in PKR
+  price: string;
+  numericPrice: number;
   priceRange: 'Under 1 Cr' | '1-3 Cr' | '3-7 Cr' | '7 Cr+';
-  area: string; // e.g. "5 Marla", "10 Marla", "1 Kanal", "2 Kanal", "240 Sq. Yd"
+  area: string;
   areaCategory: 'Up to 5 Marla' | '10 Marla' | '1 Kanal' | '2 Kanal+';
   beds: number;
   baths: number;
@@ -52,7 +83,6 @@ export function computeAreaCategory(area: string): BuyProperty['areaCategory'] {
 }
 
 export const BUY_PROPERTIES: BuyProperty[] = [
-  // 1. 5 Marla house Bahria Town Lahore PKR 1.85 Cr
   {
     id: 'buy-bahria-5m-lhr',
     title: '5 Marla Designer House, Bahria Town',
@@ -66,11 +96,11 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     areaCategory: 'Up to 5 Marla',
     beds: 3,
     baths: 3,
-    image: '/stock/photo-1600047509807-ba8f99d2cdde.jpg',
+    image: BRAND_CONFIG.images.buy1,
     gallery: [
-      '/stock/photo-1600047509807-ba8f99d2cdde.jpg',
-      '/stock/photo-1616046229478-9901c5536a45.jpg',
-      '/stock/photo-1617806118233-18e1de247200.jpg',
+      BRAND_CONFIG.images.buy1,
+      BRAND_CONFIG.images.homeRes3Int1,
+      BRAND_CONFIG.images.homeRes3Int2,
     ],
     description:
       'Impeccably finished 5 Marla double-storey house in Bahria Town Lahore Sector C. Features solid ash wood doors, Spanish porcelain floor tiles, imported sanitary ware, and dedicated car porch.',
@@ -84,8 +114,6 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     possession: 'Ready to Move',
     nocStatus: 'Bahria Town Transfer Ready',
   },
-
-  // 2. 10 Marla house DHA Phase 5 Lahore PKR 4.2 Cr
   {
     id: 'buy-dha5-10m-lhr',
     title: '10 Marla Luxury Residence, DHA Phase 5',
@@ -99,11 +127,11 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     areaCategory: '10 Marla',
     beds: 4,
     baths: 5,
-    image: '/stock/photo-1605276374104-dee2a0ed3cd6.jpg',
+    image: BRAND_CONFIG.images.buy2,
     gallery: [
-      '/stock/photo-1605276374104-dee2a0ed3cd6.jpg',
-      '/stock/photo-1600210492486-724fe5c67fb0.jpg',
-      '/stock/photo-1600607687939-ce8a6c25118c.jpg',
+      BRAND_CONFIG.images.buy2,
+      BRAND_CONFIG.images.luxuryInterior,
+      BRAND_CONFIG.images.homeRes1Int1,
     ],
     description:
       'Architecturally conceived 10 Marla bungalow in Sector C of DHA Phase 5 Lahore. High ceilings, expansive open-plan lounge, Turkish bath fixtures, and car porch for two executive sedans.',
@@ -117,8 +145,6 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     possession: 'Immediate Possession',
     nocStatus: 'DHA Lahore Verified',
   },
-
-  // 3. 3-bed apartment Clifton Karachi PKR 2.1 Cr
   {
     id: 'buy-clifton-3b-khi',
     title: '3-Bed Sea-Breeze Apartment, Clifton',
@@ -132,11 +158,11 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     areaCategory: '10 Marla',
     beds: 3,
     baths: 3,
-    image: '/stock/photo-1545324418-cc1a3fa10c00.jpg',
+    image: BRAND_CONFIG.images.buy3,
     gallery: [
-      '/stock/photo-1545324418-cc1a3fa10c00.jpg',
-      '/stock/photo-1600607687920-4e2a09cf159d.jpg',
-      '/stock/photo-1618221195710-dd6b41faaea6.jpg',
+      BRAND_CONFIG.images.buy3,
+      BRAND_CONFIG.images.approachWalkway,
+      BRAND_CONFIG.images.homeRes1Int2,
     ],
     description:
       'Corner 3-bedroom luxury condominium in Clifton Block 2 Karachi. Panoramic coastal skyline views, high-speed passenger and cargo elevators, and round-the-clock standby power backup.',
@@ -150,8 +176,6 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     possession: 'Vacant / Ready to Move',
     nocStatus: 'SBCA Approved & Sub-Lease Cleared',
   },
-
-  // 4. 1 Kanal plot DHA Phase 7 Lahore PKR 3.4 Cr
   {
     id: 'buy-dha7-1k-plot-lhr',
     title: '1 Kanal Prime Residential Plot, DHA Phase 7',
@@ -165,13 +189,10 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     areaCategory: '1 Kanal',
     beds: 0,
     baths: 0,
-    image: '/stock/photo-1500382017468-9049fed747ef.jpg',
-    gallery: [
-      '/stock/photo-1500382017468-9049fed747ef.jpg',
-      '/stock/photo-1600596542815-ffad4c1539a9.jpg',
-    ],
+    image: BRAND_CONFIG.images.buy4,
+    gallery: [BRAND_CONFIG.images.buy4, BRAND_CONFIG.images.fallbackVilla],
     description:
-      'Direct approach 1 Kanal residential plot located on a 60-foot wide avenue in Sector U, DHA Phase 7 Lahore. All development charges and possession utilities cleared, perfect for an architectural villa.',
+      'Direct approach 1 Kanal residential plot located on a 60-foot wide boulevard in Sector U, DHA Phase 7 Lahore. All development charges and possession utilities cleared, perfect for an architectural villa.',
     features: [
       '100% Possession Paid & Ready for Construction',
       'Facing 30-Kanal Community Park',
@@ -182,8 +203,6 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     possession: 'Immediate Possession Available',
     nocStatus: 'DHA Lahore Clean Allocation',
   },
-
-  // 5. 7 Marla house Bahria Town Rawalpindi PKR 1.4 Cr
   {
     id: 'buy-bahria8-7m-rwp',
     title: '7 Marla Modern Villa, Bahria Town',
@@ -197,11 +216,8 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     areaCategory: '10 Marla',
     beds: 3,
     baths: 3,
-    image: '/stock/photo-1513584684374-8bab748fbf90.jpg',
-    gallery: [
-      '/stock/photo-1513584684374-8bab748fbf90.jpg',
-      '/stock/photo-1580587771525-78b9dba3b914.jpg',
-    ],
+    image: BRAND_CONFIG.images.buy5,
+    gallery: [BRAND_CONFIG.images.buy5, BRAND_CONFIG.images.serviceVilla],
     description:
       'Brand new 7 Marla architect-built villa in Bahria Town Phase 8 Rawalpindi. Uninterrupted power grid supply, rooftop terrace overlooking the valley, and European fittings throughout.',
     features: [
@@ -214,8 +230,6 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     possession: 'Ready to Move',
     nocStatus: 'Bahria Town Verified Transfer',
   },
-
-  // 6. 2-bed apartment E-11 Islamabad PKR 95 Lakh
   {
     id: 'buy-e11-2b-isb',
     title: '2-Bed Scenic Apartment, Sector E-11',
@@ -229,11 +243,8 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     areaCategory: 'Up to 5 Marla',
     beds: 2,
     baths: 2,
-    image: '/stock/photo-1502672260266-1c1ef2d93688.jpg',
-    gallery: [
-      '/stock/photo-1502672260266-1c1ef2d93688.jpg',
-      '/stock/photo-1545324418-cc1a3fa10c00.jpg',
-    ],
+    image: BRAND_CONFIG.images.buy6,
+    gallery: [BRAND_CONFIG.images.buy6, BRAND_CONFIG.images.buy3],
     description:
       'High-demand 2-bedroom executive apartment on the 3rd floor in Sector E-11 Islamabad. Panoramic views of Margalla Hills, high rental yield, dual lifts, and dedicated underground parking slot.',
     features: [
@@ -246,8 +257,6 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     possession: 'Immediate Possession',
     nocStatus: 'CDA Building By-Laws Cleared',
   },
-
-  // Additional Residences for Sale
   {
     id: 'buy-margalla-2k-isb',
     title: 'The Margalla Pavilions, Sector F-7',
@@ -261,11 +270,8 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     areaCategory: '2 Kanal+',
     beds: 6,
     baths: 7,
-    image: '/stock/photo-1523217582562-09d0def993a6.jpg',
-    gallery: [
-      '/stock/photo-1523217582562-09d0def993a6.jpg',
-      '/stock/photo-1600121848594-d8644e57abab.jpg',
-    ],
+    image: BRAND_CONFIG.images.buy7,
+    gallery: [BRAND_CONFIG.images.buy7, BRAND_CONFIG.images.listingInteriorLiving],
     description:
       'Diplomatic enclave style estate sitting on 2 Kanal in Sector F-7 Islamabad. Features heated indoor pool, 25kW hybrid solar farm, Turkish travertine walls, and private security post.',
     features: [
@@ -291,11 +297,8 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     areaCategory: '2 Kanal+',
     beds: 5,
     baths: 6,
-    image: '/stock/photo-1570129477492-45c003edd2be.jpg',
-    gallery: [
-      '/stock/photo-1570129477492-45c003edd2be.jpg',
-      '/stock/photo-1598928506311-c55ded91a20c.jpg',
-    ],
+    image: BRAND_CONFIG.images.buy8,
+    gallery: [BRAND_CONFIG.images.buy8, BRAND_CONFIG.images.listingBahriaVilla],
     description:
       'Direct fairway-facing golf villa in Defence Raya Phase 6 Lahore. Bespoke deodar woodwork, infinity plunge pool overlooking hole 14, and landscaped courtyard lounge.',
     features: [
@@ -321,11 +324,8 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     areaCategory: '1 Kanal',
     beds: 4,
     baths: 4,
-    image: '/stock/photo-1588880331179-bc9b93a8cb5e.jpg',
-    gallery: [
-      '/stock/photo-1588880331179-bc9b93a8cb5e.jpg',
-      '/stock/photo-1505691938895-1758d7feb511.jpg',
-    ],
+    image: BRAND_CONFIG.images.buy9,
+    gallery: [BRAND_CONFIG.images.buy9, BRAND_CONFIG.images.listingF8Villa],
     description:
       'Charming pine residence nestled in the hills of Bhurban. Features central gas heating, cedar wood ceilings, expansive terrace over pine-covered valleys, and all-season paved road access.',
     features: [

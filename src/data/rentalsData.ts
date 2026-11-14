@@ -1,14 +1,45 @@
 import type { RentalListing } from '../types/index.ts';
+import { BRAND_CONFIG } from '../config/brand.config.ts';
+
+/*
+ * ============================================================================
+ * EXAMPLE RENTAL LISTING ENTRY (COPY & EDIT TO ADD A PROPERTY FOR RENT)
+ * ============================================================================
+ *
+ * const EXAMPLE_RENTAL_LISTING: RentalListing = {
+ *   id: 'rent-unique-id',            // Unique ID for URLs and Firestore
+ *   title: '10 Marla House, DHA Phase 5',
+ *   city: 'Lahore',                  // Must match BRAND_CONFIG.locale.mainCities
+ *   areaSociety: 'Sector C, DHA Phase 5, Lahore',
+ *   type: 'House',                   // 'House' | 'Apartment' | 'Upper Portion' | 'Lower Portion'
+ *   monthlyRent: 220000,             // Numeric monthly rent in BRAND_CONFIG.locale.currencyCode
+ *   beds: 4,
+ *   baths: 4,
+ *   sizeOrFloor: '10 Marla',         // Plot size or apartment floor level
+ *   furnished: 'Unfurnished',        // 'Furnished' | 'Unfurnished'
+ *   image: '/brand/rent-1.jpg',      // Primary cover photo
+ *   gallery: ['/brand/rent-1.jpg', '/brand/gallery-kitchen.jpg'], // Up to 4 images
+ *   availableFrom: '01/12/2025',     // DD/MM/YYYY or 'Immediate'
+ *   securityDeposit: "2 months' rent",
+ *   advanceRent: '1 month',
+ *   minContractPeriod: '11 months',
+ *   amenities: ['Solar & UPS Backup', '24/7 Security'],
+ *   description: 'Detailed lease description.',
+ *   status: 'Available',             // 'Available' | 'Rented'
+ * };
+ * ============================================================================
+ */
 
 export function formatRent(amount: number): string {
-  if (amount >= 100000) {
+  const { currencyCode, currencyLocale } = BRAND_CONFIG.locale;
+  if (currencyCode === 'PKR' && amount >= 100000) {
     const lakh = amount / 100000;
     const formattedLakh = Number.isInteger(lakh)
       ? lakh.toString()
       : lakh.toFixed(2).replace(/\.?0+$/, '');
-    return `PKR ${formattedLakh} Lakh / month`;
+    return `${currencyCode} ${formattedLakh} Lakh / month`;
   }
-  return `PKR ${amount.toLocaleString('en-PK')} / month`;
+  return `${currencyCode} ${amount.toLocaleString(currencyLocale)} / month`;
 }
 
 export const RENTAL_LISTINGS: RentalListing[] = [
@@ -18,16 +49,16 @@ export const RENTAL_LISTINGS: RentalListing[] = [
     city: 'Lahore',
     areaSociety: 'Sector C, DHA Phase 5, Lahore',
     type: 'House',
-    monthlyRent: 220000, // PKR 2.2 Lakh
+    monthlyRent: 220000,
     beds: 4,
     baths: 4,
     sizeOrFloor: '10 Marla',
     furnished: 'Unfurnished',
-    image: '/stock/photo-1512915922686-57c11dde9b6b.jpg',
+    image: BRAND_CONFIG.images.rent1,
     gallery: [
-      '/stock/photo-1512915922686-57c11dde9b6b.jpg',
-      '/stock/photo-1507089947368-19c1da9775ae.jpg',
-      '/stock/photo-1600566753151-384129cf4e3e.jpg',
+      BRAND_CONFIG.images.rent1,
+      BRAND_CONFIG.images.galleryKitchen,
+      BRAND_CONFIG.images.galleryDining,
     ],
     availableFrom: '01/12/2025',
     securityDeposit: "2 months' rent",
@@ -52,16 +83,16 @@ export const RENTAL_LISTINGS: RentalListing[] = [
     city: 'Lahore',
     areaSociety: 'Kasuri Road, Gulberg III, Lahore',
     type: 'Apartment',
-    monthlyRent: 110000, // PKR 1.1 Lakh
+    monthlyRent: 110000,
     beds: 2,
     baths: 2,
     sizeOrFloor: '5th Floor',
     furnished: 'Furnished',
-    image: '/stock/photo-1600210492486-724fe5c67fb0.jpg',
+    image: BRAND_CONFIG.images.rent2,
     gallery: [
-      '/stock/photo-1600210492486-724fe5c67fb0.jpg',
-      '/stock/photo-1600607687939-ce8a6c25118c.jpg',
-      '/stock/photo-1618221195710-dd6b41faaea6.jpg',
+      BRAND_CONFIG.images.rent2,
+      BRAND_CONFIG.images.homeRes1Int1,
+      BRAND_CONFIG.images.homeRes1Int2,
     ],
     availableFrom: '15/11/2025',
     securityDeposit: "2 months' rent",
@@ -86,16 +117,16 @@ export const RENTAL_LISTINGS: RentalListing[] = [
     city: 'Islamabad',
     areaSociety: 'Sector F-7/2, Islamabad',
     type: 'House',
-    monthlyRent: 550000, // PKR 5.5 Lakh
+    monthlyRent: 550000,
     beds: 5,
     baths: 5,
     sizeOrFloor: '1 Kanal',
     furnished: 'Unfurnished',
-    image: '/stock/photo-1600585154526-990dced4db0d.jpg',
+    image: BRAND_CONFIG.images.rent3,
     gallery: [
-      '/stock/photo-1600585154526-990dced4db0d.jpg',
-      '/stock/photo-1613977257363-707ba9348227.jpg',
-      '/stock/photo-1600573472550-8090b5e0745e.jpg',
+      BRAND_CONFIG.images.rent3,
+      BRAND_CONFIG.images.authVilla,
+      BRAND_CONFIG.images.homeRes1Ext,
     ],
     availableFrom: '01/12/2025',
     securityDeposit: "3 months' rent",
@@ -120,16 +151,16 @@ export const RENTAL_LISTINGS: RentalListing[] = [
     city: 'Rawalpindi',
     areaSociety: 'Civic Centre, Bahria Town Phase 4, Rawalpindi',
     type: 'Apartment',
-    monthlyRent: 85000, // PKR 85,000
+    monthlyRent: 85000,
     beds: 3,
     baths: 3,
     sizeOrFloor: '3rd Floor',
     furnished: 'Unfurnished',
-    image: '/stock/photo-1513694203232-719a280e022f.jpg',
+    image: BRAND_CONFIG.images.rent4,
     gallery: [
-      '/stock/photo-1513694203232-719a280e022f.jpg',
-      '/stock/photo-1600585152220-90363fe7e115.jpg',
-      '/stock/photo-1600566752355-35792bedcfea.jpg',
+      BRAND_CONFIG.images.rent4,
+      BRAND_CONFIG.images.listingDhaModern,
+      BRAND_CONFIG.images.rent5,
     ],
     availableFrom: '15/11/2025',
     securityDeposit: "2 months' rent",
@@ -153,16 +184,16 @@ export const RENTAL_LISTINGS: RentalListing[] = [
     city: 'Lahore',
     areaSociety: 'Sector C, Bahria Town, Lahore',
     type: 'House',
-    monthlyRent: 95000, // PKR 95,000
+    monthlyRent: 95000,
     beds: 3,
     baths: 3,
     sizeOrFloor: '5 Marla',
     furnished: 'Unfurnished',
-    image: '/stock/photo-1600566752355-35792bedcfea.jpg',
+    image: BRAND_CONFIG.images.rent5,
     gallery: [
-      '/stock/photo-1580587771525-78b9dba3b914.jpg',
-      '/stock/photo-1598928506311-c55ded91a20c.jpg',
-      '/stock/photo-1616486338812-3dadae4b4ace.jpg',
+      BRAND_CONFIG.images.serviceVilla,
+      BRAND_CONFIG.images.listingBahriaVilla,
+      BRAND_CONFIG.images.homeRes2Int1,
     ],
     availableFrom: '20/11/2025',
     securityDeposit: "2 months' rent",
@@ -187,16 +218,16 @@ export const RENTAL_LISTINGS: RentalListing[] = [
     city: 'Lahore',
     areaSociety: 'Sector B, DHA Phase 6, Lahore',
     type: 'Upper Portion',
-    monthlyRent: 160000, // PKR 1.6 Lakh
+    monthlyRent: 160000,
     beds: 3,
     baths: 3,
     sizeOrFloor: '1 Kanal',
     furnished: 'Unfurnished',
-    image: '/stock/photo-1512918728675-ed5a9ecdebfd.jpg',
+    image: BRAND_CONFIG.images.rent6,
     gallery: [
-      '/stock/photo-1512918728675-ed5a9ecdebfd.jpg',
-      '/stock/photo-1617806118233-18e1de247200.jpg',
-      '/stock/photo-1600566753190-17f0baa2a6c3.jpg',
+      BRAND_CONFIG.images.rent6,
+      BRAND_CONFIG.images.homeRes3Int2,
+      BRAND_CONFIG.images.authVillaAlt,
     ],
     availableFrom: '01/12/2025',
     securityDeposit: "2 months' rent",
@@ -221,16 +252,16 @@ export const RENTAL_LISTINGS: RentalListing[] = [
     city: 'Karachi',
     areaSociety: 'Block 2, Clifton, Karachi',
     type: 'Apartment',
-    monthlyRent: 110000, // PKR 1.1 Lakh
+    monthlyRent: 110000,
     beds: 2,
     baths: 2,
     sizeOrFloor: '8th Floor',
     furnished: 'Furnished',
-    image: '/stock/photo-1574362848149-11496d93a7c7.jpg',
+    image: BRAND_CONFIG.images.rent7,
     gallery: [
-      '/stock/photo-1574362848149-11496d93a7c7.jpg',
-      '/stock/photo-1600121848594-d8644e57abab.jpg',
-      '/stock/photo-1595526114035-0d45ed16cfbf.jpg',
+      BRAND_CONFIG.images.rent7,
+      BRAND_CONFIG.images.listingInteriorLiving,
+      BRAND_CONFIG.images.galleryBedroom,
     ],
     availableFrom: '15/11/2025',
     securityDeposit: "2 months' rent",
@@ -254,16 +285,16 @@ export const RENTAL_LISTINGS: RentalListing[] = [
     city: 'Karachi',
     areaSociety: 'Zone B, DHA Phase 8, Karachi',
     type: 'House',
-    monthlyRent: 450000, // PKR 4.5 Lakh
+    monthlyRent: 450000,
     beds: 5,
     baths: 6,
     sizeOrFloor: '500 Sq. Yd',
     furnished: 'Unfurnished',
-    image: '/stock/photo-1576941089067-2de3c901e126.jpg',
+    image: BRAND_CONFIG.images.rent8,
     gallery: [
-      '/stock/photo-1576941089067-2de3c901e126.jpg',
-      '/stock/photo-1600607687644-c7171b42498f.jpg',
-      '/stock/photo-1600566753151-384129cf4e3e.jpg',
+      BRAND_CONFIG.images.rent8,
+      BRAND_CONFIG.images.galleryTerrace,
+      BRAND_CONFIG.images.galleryDining,
     ],
     availableFrom: '01/12/2025',
     securityDeposit: "3 months' rent",
@@ -288,16 +319,16 @@ export const RENTAL_LISTINGS: RentalListing[] = [
     city: 'Karachi',
     areaSociety: 'Bukhari Commercial Area, DHA Phase 6, Karachi',
     type: 'Apartment',
-    monthlyRent: 150000, // PKR 1.5 Lakh
+    monthlyRent: 150000,
     beds: 3,
     baths: 3,
     sizeOrFloor: '6th Floor',
     furnished: 'Furnished',
-    image: '/stock/photo-1567496898669-ee935f5f647a.jpg',
+    image: BRAND_CONFIG.images.rent9,
     gallery: [
-      '/stock/photo-1567496898669-ee935f5f647a.jpg',
-      '/stock/photo-1560448204-e02f11c3d0e2.jpg',
-      '/stock/photo-1522771739844-6a9f6d5f14af.jpg',
+      BRAND_CONFIG.images.rent9,
+      BRAND_CONFIG.images.listingDhaCoastal,
+      BRAND_CONFIG.images.listingGulbergApt,
     ],
     availableFrom: '01/12/2025',
     securityDeposit: "2 months' rent",
@@ -321,16 +352,16 @@ export const RENTAL_LISTINGS: RentalListing[] = [
     city: 'Islamabad',
     areaSociety: 'Sector E-11/3, Islamabad',
     type: 'Apartment',
-    monthlyRent: 55000, // PKR 55,000
+    monthlyRent: 55000,
     beds: 1,
     baths: 1,
     sizeOrFloor: '2nd Floor',
     furnished: 'Furnished',
-    image: '/stock/photo-1486406146926-c627a92ad1ab.jpg',
+    image: BRAND_CONFIG.images.rent10,
     gallery: [
-      '/stock/photo-1486406146926-c627a92ad1ab.jpg',
-      '/stock/photo-1502672260266-1c1ef2d93688.jpg',
-      '/stock/photo-1554995207-c18c203602cb.jpg',
+      BRAND_CONFIG.images.rent10,
+      BRAND_CONFIG.images.buy6,
+      BRAND_CONFIG.images.listingInteriorLounge,
     ],
     availableFrom: '15/11/2025',
     securityDeposit: "2 months' rent",
@@ -353,16 +384,16 @@ export const RENTAL_LISTINGS: RentalListing[] = [
     city: 'Lahore',
     areaSociety: 'Askari 11, Bedian Road, Lahore',
     type: 'House',
-    monthlyRent: 105000, // PKR 1.05 Lakh
+    monthlyRent: 105000,
     beds: 4,
     baths: 4,
     sizeOrFloor: '8 Marla',
     furnished: 'Unfurnished',
-    image: '/stock/photo-1564013799919-ab600027ffc6.jpg',
+    image: BRAND_CONFIG.images.rent11,
     gallery: [
-      '/stock/photo-1564013799919-ab600027ffc6.jpg',
-      '/stock/photo-1616046229478-9901c5536a45.jpg',
-      '/stock/photo-1507089947368-19c1da9775ae.jpg',
+      BRAND_CONFIG.images.rent11,
+      BRAND_CONFIG.images.homeRes3Int1,
+      BRAND_CONFIG.images.galleryKitchen,
     ],
     availableFrom: '01/12/2025',
     securityDeposit: "2 months' rent",
@@ -387,16 +418,16 @@ export const RENTAL_LISTINGS: RentalListing[] = [
     city: 'Murree & Hills',
     areaSociety: 'PC Bhurban Road, Murree Hills',
     type: 'House',
-    monthlyRent: 90000, // PKR 90,000
+    monthlyRent: 90000,
     beds: 2,
     baths: 2,
     sizeOrFloor: '2-Bed Cottage',
     furnished: 'Furnished',
-    image: '/stock/photo-1520250497591-112f2f40a3f4.jpg',
+    image: BRAND_CONFIG.images.rent12,
     gallery: [
-      '/stock/photo-1520250497591-112f2f40a3f4.jpg',
-      '/stock/photo-1513694203232-719a280e022f.jpg',
-      '/stock/photo-1616486338812-3dadae4b4ace.jpg',
+      BRAND_CONFIG.images.rent12,
+      BRAND_CONFIG.images.rent4,
+      BRAND_CONFIG.images.homeRes2Int1,
     ],
     availableFrom: '15/11/2025',
     securityDeposit: "2 months' rent",

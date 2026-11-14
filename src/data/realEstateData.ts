@@ -1,30 +1,74 @@
-import type { PropertyListing, PortfolioProject, AvenueService, TeamMember, OfficeLocation } from '../types/index.ts';
-import { SITE_CONFIG } from '../config/siteConfig.ts';
+import type {
+  PropertyListing,
+  PortfolioProject,
+  BrandService,
+  TeamMember,
+  OfficeLocation,
+} from '../types/index.ts';
+import { BRAND_CONFIG } from '../config/brand.config.ts';
+
+/*
+ * ============================================================================
+ * EXAMPLE PORTFOLIO PROJECT & PROPERTY LISTING ENTRIES (COPY & EDIT TO ADD)
+ * ============================================================================
+ *
+ * const EXAMPLE_PORTFOLIO_PROJECT: PortfolioProject = {
+ *   id: 'unique-slug-id',            // Unique URL/Firestore ID (lowercase-with-hyphens)
+ *   title: 'PROJECT DISPLAY TITLE',  // Short uppercase title displayed on cards
+ *   location: 'Sector F-7, Islamabad', // Neighbourhood & city line
+ *   size: '1 Kanal',                 // Plot or floor size label shown on card
+ *   beds: 5,                         // Bedroom count
+ *   baths: 6,                        // Bathroom count
+ *   projectDelivered: '2025',        // Completion year string
+ *   image: '/brand/project-zenith.jpg', // Primary cover image path (or https:// URL)
+ *   summary: 'Concise architectural summary shown on listing cards and detail overview.',
+ *   architect: 'Studio Name',        // Lead design practice
+ *   valuation: 'PKR 12 Crore',       // Display valuation string
+ *   numericValuation: 120000000,     // Numeric valuation for mortgage/payment calculator
+ *   category: 'Islamabad',           // City filter category (match BRAND_CONFIG.locale.mainCities)
+ *   gallery: ['/brand/project-zenith.jpg', '/brand/gallery-kitchen.jpg'], // Up to 4 photos
+ *   status: 'Available',             // 'Available' | 'Under Offer' | 'Sold'
+ * };
+ *
+ * const EXAMPLE_PROPERTY_LISTING: PropertyListing = {
+ *   id: 'unique-listing-id',         // Unique ID
+ *   name: 'Villa Name',              // Display title
+ *   location: 'Phase 6, DHA Lahore', // Street / society / city
+ *   price: 'PKR 9.5 Crore',          // Formatted asking price
+ *   numericPrice: 95000000,          // Numeric asking price
+ *   beds: 5,
+ *   baths: 6,
+ *   sqft: '1 Kanal',                 // Size label
+ *   category: 'Lahore',              // City filter category
+ *   description: 'Main editorial overview.',
+ *   extendedStory: 'Extended neighborhood & transfer details.',
+ *   layoutVariant: 'exterior-left',  // 'exterior-left' | 'exterior-right' for Home alternating layout
+ *   exteriorImage: '/brand/home-res-1-ext.jpg',
+ *   interiorImages: ['/brand/home-res-1-int-1.jpg', '/brand/home-res-1-int-2.jpg'],
+ *   architecturalStyle: 'Modern Classic',
+ *   yearBuilt: 2024,
+ *   amenities: ['Solar Backup', '24/7 Security'],
+ *   architect: 'Architect Name',
+ *   lotSize: '1 Kanal Corner Plot',
+ *   featured: true,                  // Set true to appear in Home "Pick Your Perfect Home"
+ *   status: 'Available',             // 'Available' | 'Under Offer' | 'Sold'
+ * };
+ * ============================================================================
+ */
 
 export const HERO_ASSETS = {
-  // Direct images.unsplash.com URLs of modern luxury architecture
-  heroImage: '/stock/photo-1613490493576-7fde63acd811.jpg',
-  approachWalkway: '/stock/photo-1600607687920-4e2a09cf159d.jpg',
-  margallaRetreat: '/stock/photo-1512917774080-9991f1c4c750.jpg',
-  serviceVilla: '/stock/photo-1580587771525-78b9dba3b914.jpg',
-  luxuryInterior: '/stock/photo-1600210492486-724fe5c67fb0.jpg',
-  ctaBackground: '/stock/photo-1542314831-068cd1dbfeeb.jpg',
-  authVilla: '/stock/photo-1613977257363-707ba9348227.jpg',
-  authVillaMirrored: '/stock/photo-1600566753190-17f0baa2a6c3.jpg',
+  heroImage: BRAND_CONFIG.images.hero,
+  heroFallback: BRAND_CONFIG.images.heroFallback,
+  approachWalkway: BRAND_CONFIG.images.approachWalkway,
+  margallaRetreat: BRAND_CONFIG.images.about,
+  serviceVilla: BRAND_CONFIG.images.serviceVilla,
+  luxuryInterior: BRAND_CONFIG.images.luxuryInterior,
+  ctaBackground: BRAND_CONFIG.images.cta,
+  authVilla: BRAND_CONFIG.images.authVilla,
+  authVillaMirrored: BRAND_CONFIG.images.authVillaAlt,
 };
 
-export const HERO_STATS = [
-  {
-    value: '6,000+',
-    label: 'Happy Families',
-    sublabel: 'Transfers completed across DHA, CDA and premier societies'
-  },
-  {
-    value: '3,600+',
-    label: 'Properties Delivered',
-    sublabel: 'Completed residences with verified possession & approvals'
-  }
-];
+export const HERO_STATS = BRAND_CONFIG.stats.heroStats;
 
 export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
   {
@@ -35,16 +79,17 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     beds: 5,
     baths: 6,
     projectDelivered: '2024',
-    image: '/stock/photo-1518780664697-55e3ad937233.jpg',
-    summary: 'A contemporary mountain residence situated on a scenic ridge in Bhurban, featuring heated flooring, local stone work, and private pine forest views.',
+    image: BRAND_CONFIG.images.projectAspen,
+    summary:
+      'A contemporary mountain residence situated on a scenic ridge in Bhurban, featuring heated flooring, local stone work, and private pine forest views.',
     architect: 'Apex Design Partners (NCA Lahore)',
     valuation: 'PKR 6.5 Crore',
     numericValuation: 65000000,
     category: 'Murree & Hills',
     gallery: [
-      '/stock/photo-1518780664697-55e3ad937233.jpg',
-      '/stock/photo-1507089947368-19c1da9775ae.jpg',
-      '/stock/photo-1600573472550-8090b5e0745e.jpg',
+      BRAND_CONFIG.images.projectAspen,
+      BRAND_CONFIG.images.galleryKitchen,
+      BRAND_CONFIG.images.homeRes1Ext,
     ],
   },
   {
@@ -55,16 +100,17 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     beds: 5,
     baths: 6,
     projectDelivered: '2023',
-    image: '/stock/photo-1600596542815-ffad4c1539a9.jpg',
-    summary: 'Coastal modernist villa in Clifton Block 2 Karachi with private pool, acoustic double-glazing, dedicated guard room, and 99-year verified KDA lease.',
+    image: BRAND_CONFIG.images.projectObsidian,
+    summary:
+      'Coastal modernist villa in Clifton Block 2 Karachi with private pool, acoustic double-glazing, dedicated guard room, and 99-year verified KDA lease.',
     architect: 'Metropolis Architecture Studio (NED Karachi)',
     valuation: 'PKR 18 Crore',
     numericValuation: 180000000,
     category: 'Karachi',
     gallery: [
-      '/stock/photo-1600596542815-ffad4c1539a9.jpg',
-      '/stock/photo-1600566753376-12c8ab7fb75b.jpg',
-      '/stock/photo-1600607687644-c7171b42498f.jpg',
+      BRAND_CONFIG.images.projectObsidian,
+      BRAND_CONFIG.images.homeRes2Int2,
+      BRAND_CONFIG.images.galleryTerrace,
     ],
   },
   {
@@ -75,16 +121,17 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     beds: 5,
     baths: 6,
     projectDelivered: '2024',
-    image: '/stock/photo-1600585154340-be6161a56a0c.jpg',
-    summary: 'A peaceful residence under the Margalla Hills in Sector F-7 Islamabad with solid deodar woodwork, 15kW hybrid solar, and clear CDA title.',
+    image: BRAND_CONFIG.images.projectZenith,
+    summary:
+      'A peaceful residence under the Margalla Hills in Sector F-7 Islamabad with solid deodar woodwork, 15kW hybrid solar, and clear CDA title.',
     architect: 'Studio Raza Architects (PCATP)',
     valuation: 'PKR 14.5 Crore',
     numericValuation: 145000000,
     category: 'Islamabad',
     gallery: [
-      '/stock/photo-1600585154340-be6161a56a0c.jpg',
-      '/stock/photo-1618221195710-dd6b41faaea6.jpg',
-      '/stock/photo-1616486338812-3dadae4b4ace.jpg',
+      BRAND_CONFIG.images.projectZenith,
+      BRAND_CONFIG.images.homeRes1Int2,
+      BRAND_CONFIG.images.homeRes2Int1,
     ],
   },
   {
@@ -95,16 +142,17 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     beds: 5,
     baths: 6,
     projectDelivered: '2024',
-    image: '/stock/photo-1600566753086-00f18fb6b3ea.jpg',
-    summary: 'Fair-face architectural residence on a prominent boulevard in DHA Phase 6 Lahore, featuring Italian porcelain tile, solar microgrid, and instant transfer.',
+    image: BRAND_CONFIG.images.projectIronwood,
+    summary:
+      'Fair-face architectural residence on a prominent boulevard in DHA Phase 6 Lahore, featuring Italian porcelain tile, solar microgrid, and instant transfer.',
     architect: 'Malik & Associates (NUST)',
     valuation: 'PKR 9.5 Crore',
     numericValuation: 95000000,
     category: 'Lahore',
     gallery: [
-      '/stock/photo-1600566753086-00f18fb6b3ea.jpg',
-      '/stock/photo-1600566753151-384129cf4e3e.jpg',
-      '/stock/photo-1600573472550-8090b5e0745e.jpg',
+      BRAND_CONFIG.images.projectIronwood,
+      BRAND_CONFIG.images.galleryDining,
+      BRAND_CONFIG.images.homeRes1Ext,
     ],
   },
   {
@@ -115,77 +163,77 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     beds: 4,
     baths: 4,
     projectDelivered: '2023',
-    image: '/stock/photo-1512917774080-9991f1c4c750.jpg',
-    summary: 'Sculptural 10 Marla residence overlooking the scenic Margalla foothills in Bahria Enclave, designed with open courtyards and contemporary skylights.',
+    image: BRAND_CONFIG.images.projectReflection,
+    summary:
+      'Sculptural 10 Marla residence overlooking the scenic Margalla foothills in Bahria Enclave, designed with open courtyards and contemporary skylights.',
     architect: 'Hamza Siddiqui Architects (PCATP)',
     valuation: 'PKR 4.8 Crore',
     numericValuation: 48000000,
     category: 'Islamabad',
-    gallery: [
-      '/stock/photo-1512917774080-9991f1c4c750.jpg',
-      '/stock/photo-1595526114035-0d45ed16cfbf.jpg',
-    ],
+    gallery: [BRAND_CONFIG.images.projectReflection, BRAND_CONFIG.images.galleryBedroom],
   },
 ];
 
-export const SERVICES_OFFERED: AvenueService[] = [
+export const SERVICES_OFFERED: BrandService[] = [
   {
     id: 'acquisition-strategy',
     number: '01',
     title: 'Residential Acquisition Strategy',
-    description: 'We provide a refined approach to finding your next home across Pakistan\'s most prestigious societies. Our services include property sourcing, private site tours, fard and registry verification, and expert price negotiation to ensure you secure a home that offers both comfort and lasting capital appreciation.',
+    description:
+      "We provide a refined approach to finding your next home across Pakistan's most prestigious societies. Our services include property sourcing, private site tours, fard and registry verification, and expert price negotiation to ensure you secure a home that offers both comfort and lasting capital appreciation.",
     hasThumbnail: true,
-    thumbnailImage: '/stock/photo-1600585154526-990dced4db0d.jpg',
+    thumbnailImage: BRAND_CONFIG.images.serviceAcquisition,
     expandedDetails: [
       'Verified society transfer and registry documentation check',
       'FBR filer tax guidance and stamp duty / CVT optimization',
       'Dedicated assistance for overseas Pakistanis with power of attorney support',
-      'Structural vetting, load-shedding-proof solar audits and gas connection checks'
+      'Structural vetting, load-shedding-proof solar audits and gas connection checks',
     ],
     deliverables: [
       'Property Due Diligence Report (LDA / CDA / DHA / Bahria NOC Status)',
       'Comparative Price Analysis with Recent Society Transfers',
-      'Complete Registry, Transfer, and Possession Handover Coordination'
-    ]
+      'Complete Registry, Transfer, and Possession Handover Coordination',
+    ],
   },
   {
     id: 'portfolio-management',
     number: '02',
     title: 'Property Management & Advisory',
-    description: 'For property owners in Pakistan and overseas, we provide comprehensive management to protect and enhance your residential holdings. From vetting high-profile corporate and diplomatic tenants to regular maintenance and rent collection, we handle all details with utmost diligence.',
+    description:
+      'For property owners in Pakistan and overseas, we provide comprehensive management to protect and enhance your residential holdings. From vetting high-profile corporate and diplomatic tenants to regular maintenance and rent collection, we handle all details with utmost diligence.',
     hasThumbnail: true,
-    thumbnailImage: '/stock/photo-1600210492486-724fe5c67fb0.jpg',
+    thumbnailImage: BRAND_CONFIG.images.serviceManagement,
     expandedDetails: [
       'Diplomatic and multinational corporate tenant verification',
       'Quarterly preventative maintenance, solar servicing, and generator checkups',
       'Tenancy contracts drafted in accordance with local rental laws',
-      'Property tax, utility billing, and society maintenance handling'
+      'Property tax, utility billing, and society maintenance handling',
     ],
     deliverables: [
       'Digital Property Statement with Rental Yield Reports',
       'Scheduled Solar System & Generator Maintenance Calendar',
-      'Pre-Screened Tenant Placement Service'
-    ]
+      'Pre-Screened Tenant Placement Service',
+    ],
   },
   {
     id: 'capital-transactions',
     number: '03',
     title: 'Investment Advice & High-Value Sales',
-    description: 'Navigating premier property transactions in Pakistan requires deep local intelligence. Avenue structures high-value plot acquisitions, commercial floor purchases, and confidential resales between verified buyers.',
+    description: `Navigating premier property transactions in ${BRAND_CONFIG.locale.country} requires deep local intelligence. ${BRAND_CONFIG.identity.brandShortName} structures high-value plot acquisitions, commercial floor purchases, and confidential resales between verified buyers.`,
     hasThumbnail: true,
-    thumbnailImage: '/stock/photo-1600566753190-17f0baa2a6c3.jpg',
+    thumbnailImage: BRAND_CONFIG.images.serviceInvestment,
     expandedDetails: [
       'Prime commercial plots in Gulberg, DHA, and Blue Area Islamabad',
       'High-rental commercial floors and corporate office floors',
       'Installment plan advisory for upcoming approved developments',
-      'Confidential resale transactions between verified principals'
+      'Confidential resale transactions between verified principals',
     ],
     deliverables: [
       'Investment Analysis for Properties over PKR 15 Crore',
       'FBR Filer vs Non-Filer Tax Impact Comparison',
-      'Discreet Matching for High-Value Private Transactions'
-    ]
-  }
+      'Discreet Matching for High-Value Private Transactions',
+    ],
+  },
 ];
 
 // Backward compatibility alias
@@ -202,14 +250,13 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     baths: 6,
     sqft: '1,000 Sq. Yards',
     category: 'Karachi',
-    description: 'Architectural fair-face concrete villa in Clifton Block 2 Karachi with private pool, acoustic double-glazing, dedicated guard room, and 99-year verified KDA lease.',
-    extendedStory: 'Premier coastal architectural residence in Clifton Karachi. High boundary walls, sweet water connections, full solar setup with standby generator, and clean title registry.',
+    description:
+      'Architectural fair-face concrete villa in Clifton Block 2 Karachi with private pool, acoustic double-glazing, dedicated guard room, and 99-year verified KDA lease.',
+    extendedStory:
+      'Premier coastal architectural residence in Clifton Karachi. High boundary walls, sweet water connections, full solar setup with standby generator, and clean title registry.',
     layoutVariant: 'exterior-left',
-    exteriorImage: '/stock/photo-1600573472550-8090b5e0745e.jpg',
-    interiorImages: [
-      '/stock/photo-1600607687939-ce8a6c25118c.jpg',
-      '/stock/photo-1618221195710-dd6b41faaea6.jpg',
-    ],
+    exteriorImage: BRAND_CONFIG.images.homeRes1Ext,
+    interiorImages: [BRAND_CONFIG.images.homeRes1Int1, BRAND_CONFIG.images.homeRes1Int2],
     architecturalStyle: 'Contemporary Monolith',
     yearBuilt: 2024,
     architect: 'Metropolis Architecture Studio (NED Karachi)',
@@ -234,14 +281,13 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     baths: 6,
     sqft: '1 Kanal',
     category: 'Islamabad',
-    description: 'A peaceful residence at the foot of Margalla Hills with solid deodar woodwork, white travertine stone, and water features. Includes full solar setup, car porch, and separate servant quarter.',
-    extendedStory: 'CDA-approved property with verified fard and registry in Sector F-7, Islamabad. Designed with natural mountain light, wide terraces, underground water tank, and peaceful leafy surroundings.',
+    description:
+      'A peaceful residence at the foot of Margalla Hills with solid deodar woodwork, white travertine stone, and water features. Includes full solar setup, car porch, and separate servant quarter.',
+    extendedStory:
+      'CDA-approved property with verified fard and registry in Sector F-7, Islamabad. Designed with natural mountain light, wide terraces, underground water tank, and peaceful leafy surroundings.',
     layoutVariant: 'exterior-right',
-    exteriorImage: '/stock/photo-1613977257363-707ba9348227.jpg',
-    interiorImages: [
-      '/stock/photo-1616486338812-3dadae4b4ace.jpg',
-      '/stock/photo-1600566753376-12c8ab7fb75b.jpg',
-    ],
+    exteriorImage: BRAND_CONFIG.images.homeRes2Ext,
+    interiorImages: [BRAND_CONFIG.images.homeRes2Int1, BRAND_CONFIG.images.homeRes2Int2],
     architecturalStyle: 'Modern Organic',
     yearBuilt: 2023,
     architect: 'Studio Raza Architects (PCATP)',
@@ -266,14 +312,13 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     baths: 6,
     sqft: '1 Kanal',
     category: 'Lahore',
-    description: 'Spacious modern architectural villa with solid teak woodwork, double-height drawing room, landscaped side lawn, and swimming pool. Fitted with full solar backup and generator provisions.',
-    extendedStory: 'Situated on a prominent boulevard in DHA Phase 6 Lahore. Clear possession, all society dues cleared, and ready for immediate transfer with bank transfer or pay order.',
+    description:
+      'Spacious modern architectural villa with solid teak woodwork, double-height drawing room, landscaped side lawn, and swimming pool. Fitted with full solar backup and generator provisions.',
+    extendedStory:
+      'Situated on a prominent boulevard in DHA Phase 6 Lahore. Clear possession, all society dues cleared, and ready for immediate transfer with bank transfer or pay order.',
     layoutVariant: 'exterior-left',
-    exteriorImage: '/stock/photo-1580587771525-78b9dba3b914.jpg',
-    interiorImages: [
-      '/stock/photo-1616046229478-9901c5536a45.jpg',
-      '/stock/photo-1617806118233-18e1de247200.jpg',
-    ],
+    exteriorImage: BRAND_CONFIG.images.homeRes3Ext,
+    interiorImages: [BRAND_CONFIG.images.homeRes3Int1, BRAND_CONFIG.images.homeRes3Int2],
     architecturalStyle: 'Modern Classic',
     yearBuilt: 2024,
     architect: 'Malik & Associates (NUST)',
@@ -298,14 +343,13 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     baths: 6,
     sqft: '1 Kanal',
     category: 'Murree & Hills',
-    description: 'Stunning mountain villa in Bhurban with panoramic valley views, local pine woodwork, heavy insulation, heated floors, and backup power generator.',
-    extendedStory: 'Fully approved registry and mutation with clean revenue record. Perfect holiday home 5 minutes from Pearl Continental Bhurban, with road access throughout the year.',
+    description:
+      'Stunning mountain villa in Bhurban with panoramic valley views, local pine woodwork, heavy insulation, heated floors, and backup power generator.',
+    extendedStory:
+      'Fully approved registry and mutation with clean revenue record. Perfect holiday home 5 minutes from Pearl Continental Bhurban, with road access throughout the year.',
     layoutVariant: 'exterior-left',
-    exteriorImage: '/stock/photo-1542314831-068cd1dbfeeb.jpg',
-    interiorImages: [
-      '/stock/photo-1600607687644-c7171b42498f.jpg',
-      '/stock/photo-1595526114035-0d45ed16cfbf.jpg',
-    ],
+    exteriorImage: BRAND_CONFIG.images.cta,
+    interiorImages: [BRAND_CONFIG.images.galleryTerrace, BRAND_CONFIG.images.galleryBedroom],
     architecturalStyle: 'Contemporary Mountain Lodge',
     yearBuilt: 2023,
     architect: 'Apex Design Partners (NCA Lahore)',
@@ -330,14 +374,13 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     baths: 4,
     sqft: '10 Marla',
     category: 'Islamabad',
-    description: 'Sculptural 10 Marla residence overlooking the scenic Margalla foothills in Bahria Enclave, designed with open courtyards and contemporary skylights.',
-    extendedStory: 'Fully verified Bahria transfer with clear title. Features modern open kitchen, private rooftop terrace, underground water storage, and solar backup.',
+    description:
+      'Sculptural 10 Marla residence overlooking the scenic Margalla foothills in Bahria Enclave, designed with open courtyards and contemporary skylights.',
+    extendedStory:
+      'Fully verified Bahria transfer with clear title. Features modern open kitchen, private rooftop terrace, underground water storage, and solar backup.',
     layoutVariant: 'exterior-right',
-    exteriorImage: '/stock/photo-1522708323590-d24dbb6b0267.jpg',
-    interiorImages: [
-      '/stock/photo-1507089947368-19c1da9775ae.jpg',
-      '/stock/photo-1600607687939-ce8a6c25118c.jpg',
-    ],
+    exteriorImage: BRAND_CONFIG.images.listingFoothills,
+    interiorImages: [BRAND_CONFIG.images.galleryKitchen, BRAND_CONFIG.images.homeRes1Int1],
     architecturalStyle: 'Modernist Villa',
     yearBuilt: 2023,
     architect: 'Hamza Siddiqui Architects (PCATP)',
@@ -362,14 +405,13 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     baths: 5,
     sqft: '10 Marla',
     category: 'Lahore',
-    description: 'Brand new 10 Marla house in DHA Phase 5 Lahore. Features double-height lobby, modern Spanish tiles, imported sanitary fittings, and lush lawn.',
-    extendedStory: 'DHA transfer ready with all dues cleared. Located near Ring Road, international schools, and sports complex.',
+    description:
+      'Brand new 10 Marla house in DHA Phase 5 Lahore. Features double-height lobby, modern Spanish tiles, imported sanitary fittings, and lush lawn.',
+    extendedStory:
+      'DHA transfer ready with all dues cleared. Located near Ring Road, international schools, and sports complex.',
     layoutVariant: 'exterior-left',
-    exteriorImage: '/stock/photo-1600585152220-90363fe7e115.jpg',
-    interiorImages: [
-      '/stock/photo-1600566753086-00f18fb6b3ea.jpg',
-      '/stock/photo-1600566753151-384129cf4e3e.jpg',
-    ],
+    exteriorImage: BRAND_CONFIG.images.listingDhaModern,
+    interiorImages: [BRAND_CONFIG.images.projectIronwood, BRAND_CONFIG.images.galleryDining],
     architecturalStyle: 'Contemporary Suburban',
     yearBuilt: 2024,
     architect: 'Studio Raza Architects (PCATP)',
@@ -394,14 +436,13 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     baths: 6,
     sqft: '1 Kanal',
     category: 'Islamabad',
-    description: 'Executive 1 Kanal residence in leafy Sector F-8 Islamabad with solid woodwork, wide driveway, mountain breeze, and clear CDA title.',
-    extendedStory: 'Prime capital location with immediate CDA registry and mutation. Quiet residential street with diplomatic-grade security nearby.',
+    description:
+      'Executive 1 Kanal residence in leafy Sector F-8 Islamabad with solid woodwork, wide driveway, mountain breeze, and clear CDA title.',
+    extendedStory:
+      'Prime capital location with immediate CDA registry and mutation. Quiet residential street with diplomatic-grade security nearby.',
     layoutVariant: 'exterior-right',
-    exteriorImage: '/stock/photo-1505691938895-1758d7feb511.jpg',
-    interiorImages: [
-      '/stock/photo-1600607687939-ce8a6c25118c.jpg',
-      '/stock/photo-1600566753376-12c8ab7fb75b.jpg',
-    ],
+    exteriorImage: BRAND_CONFIG.images.listingF8Villa,
+    interiorImages: [BRAND_CONFIG.images.homeRes1Int1, BRAND_CONFIG.images.homeRes2Int2],
     architecturalStyle: 'Classic Executive',
     yearBuilt: 2023,
     architect: 'Apex Design Partners (NCA Lahore)',
@@ -426,14 +467,13 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     baths: 6,
     sqft: '500 Sq. Yards',
     category: 'Karachi',
-    description: 'Breezy coastal villa in DHA Phase 8 Karachi with private plunge pool, modular kitchen, rooftop sea-facing lounge, and 24/7 DHA security.',
-    extendedStory: 'Clean DHA transfer with zero encumbrance. Equipped with underground sweet water tanks, solar panels, and driver room.',
+    description:
+      'Breezy coastal villa in DHA Phase 8 Karachi with private plunge pool, modular kitchen, rooftop sea-facing lounge, and 24/7 DHA security.',
+    extendedStory:
+      'Clean DHA transfer with zero encumbrance. Equipped with underground sweet water tanks, solar panels, and driver room.',
     layoutVariant: 'exterior-left',
-    exteriorImage: '/stock/photo-1560448204-e02f11c3d0e2.jpg',
-    interiorImages: [
-      '/stock/photo-1513694203232-719a280e022f.jpg',
-      '/stock/photo-1600121848594-d8644e57abab.jpg',
-    ],
+    exteriorImage: BRAND_CONFIG.images.listingDhaCoastal,
+    interiorImages: [BRAND_CONFIG.images.rent4, BRAND_CONFIG.images.listingInteriorLiving],
     architecturalStyle: 'Modern Coastal',
     yearBuilt: 2024,
     architect: 'Metropolis Architecture Studio (NED)',
@@ -458,13 +498,13 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     baths: 4,
     sqft: '8 Marla',
     category: 'Lahore',
-    description: 'Immaculate double-storey 8 Marla house in Askari 11 Lahore. Strict gated entry, continuous gas and water supply, and landscaped park nearby.',
-    extendedStory: 'Immediate possession with GHQ/Askari direct transfer. Peaceful, safe living environment with community amenities.',
+    description:
+      'Immaculate double-storey 8 Marla house in Askari 11 Lahore. Strict gated entry, continuous gas and water supply, and landscaped park nearby.',
+    extendedStory:
+      'Immediate possession with GHQ/Askari direct transfer. Peaceful, safe living environment with community amenities.',
     layoutVariant: 'exterior-right',
-    exteriorImage: '/stock/photo-1599809275671-b5942cabc7a2.jpg',
-    interiorImages: [
-      '/stock/photo-1554995207-c18c203602cb.jpg',
-    ],
+    exteriorImage: BRAND_CONFIG.images.listingAskari,
+    interiorImages: [BRAND_CONFIG.images.listingInteriorLounge],
     architecturalStyle: 'Suburban Contemporary',
     yearBuilt: 2023,
     architect: 'Malik & Associates',
@@ -488,13 +528,13 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     baths: 4,
     sqft: '7 Marla',
     category: 'Rawalpindi',
-    description: 'Elevated corner house in Bahria Town Phase 7 Rawalpindi. Enjoys scenic hill views, double kitchen, and zero load-shedding via Bahria power grid.',
-    extendedStory: 'All society dues cleared with Bahria transfer readiness. Close to clock tower commercial hub and safari park.',
+    description:
+      'Elevated corner house in Bahria Town Phase 7 Rawalpindi. Enjoys scenic hill views, double kitchen, and zero load-shedding via Bahria power grid.',
+    extendedStory:
+      'All society dues cleared with Bahria transfer readiness. Close to clock tower commercial hub and safari park.',
     layoutVariant: 'exterior-left',
-    exteriorImage: '/stock/photo-1600566753190-17f0baa2a6c3.jpg',
-    interiorImages: [
-      '/stock/photo-1505691938895-1758d7feb511.jpg',
-    ],
+    exteriorImage: BRAND_CONFIG.images.authVillaAlt,
+    interiorImages: [BRAND_CONFIG.images.listingF8Villa],
     architecturalStyle: 'Modern Villa',
     yearBuilt: 2024,
     architect: 'Malik & Associates (NUST)',
@@ -518,13 +558,13 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     baths: 3,
     sqft: '3-Bed',
     category: 'Lahore',
-    description: 'High-end 3-bed apartment in the heart of Gulberg III Lahore. Features balcony views, dedicated basement parking, and full power backup generator.',
-    extendedStory: 'LDA approved high-rise complex with registered sublease. Walking distance to MM Alam Road dining and business centers.',
+    description:
+      'High-end 3-bed apartment in the heart of Gulberg III Lahore. Features balcony views, dedicated basement parking, and full power backup generator.',
+    extendedStory:
+      'LDA approved high-rise complex with registered sublease. Walking distance to MM Alam Road dining and business centers.',
     layoutVariant: 'exterior-right',
-    exteriorImage: '/stock/photo-1522771739844-6a9f6d5f14af.jpg',
-    interiorImages: [
-      '/stock/photo-1560448204-e02f11c3d0e2.jpg',
-    ],
+    exteriorImage: BRAND_CONFIG.images.listingGulbergApt,
+    interiorImages: [BRAND_CONFIG.images.listingDhaCoastal],
     architecturalStyle: 'Urban Modern',
     yearBuilt: 2024,
     architect: 'Studio Raza Architects (PCATP)',
@@ -548,13 +588,13 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     baths: 3,
     sqft: '5 Marla',
     category: 'Lahore',
-    description: 'Compact luxury 5 Marla home in Bahria Town Lahore with solid woodwork, designer false ceilings, and instant possession.',
-    extendedStory: 'Bahria Town direct transfer with verified NOC. Located near Grand Jamia Mosque and commercial boulevard.',
+    description:
+      'Compact luxury 5 Marla home in Bahria Town Lahore with solid woodwork, designer false ceilings, and instant possession.',
+    extendedStory:
+      'Bahria Town direct transfer with verified NOC. Located near Grand Jamia Mosque and commercial boulevard.',
     layoutVariant: 'exterior-left',
-    exteriorImage: '/stock/photo-1598928506311-c55ded91a20c.jpg',
-    interiorImages: [
-      '/stock/photo-1600566753086-00f18fb6b3ea.jpg',
-    ],
+    exteriorImage: BRAND_CONFIG.images.listingBahriaVilla,
+    interiorImages: [BRAND_CONFIG.images.projectIronwood],
     architecturalStyle: 'Modern Contemporary',
     yearBuilt: 2024,
     architect: 'Malik & Associates',
@@ -578,13 +618,13 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     baths: 2,
     sqft: '2-Bed',
     category: 'Karachi',
-    description: 'Cosmopolitan 2-bed apartment in Clifton Block 4 Karachi with sea breeze balcony, standby generator, and secure designated parking.',
-    extendedStory: 'Verified 99-year KDA lease with zero encumbrance. Walking distance to supermarkets, cafes, and Clifton beach.',
+    description:
+      'Cosmopolitan 2-bed apartment in Clifton Block 4 Karachi with sea breeze balcony, standby generator, and secure designated parking.',
+    extendedStory:
+      'Verified 99-year KDA lease with zero encumbrance. Walking distance to supermarkets, cafes, and Clifton beach.',
     layoutVariant: 'exterior-right',
-    exteriorImage: '/stock/photo-1600121848594-d8644e57abab.jpg',
-    interiorImages: [
-      '/stock/photo-1545324418-cc1a3fa10c00.jpg',
-    ],
+    exteriorImage: BRAND_CONFIG.images.listingInteriorLiving,
+    interiorImages: [BRAND_CONFIG.images.buy3],
     architecturalStyle: 'Modern Coastal',
     yearBuilt: 2023,
     architect: 'Metropolis Architecture Studio (NED)',
@@ -608,13 +648,13 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     baths: 1,
     sqft: '1-Bed',
     category: 'Islamabad',
-    description: 'Affordable modern 1-bed apartment in Sector E-11 Islamabad with open hill views, lift facility, and high rental return potential.',
-    extendedStory: 'Registered sublease in well-managed residential tower with ongoing security and maintenance management.',
+    description:
+      'Affordable modern 1-bed apartment in Sector E-11 Islamabad with open hill views, lift facility, and high rental return potential.',
+    extendedStory:
+      'Registered sublease in well-managed residential tower with ongoing security and maintenance management.',
     layoutVariant: 'exterior-left',
-    exteriorImage: '/stock/photo-1554995207-c18c203602cb.jpg',
-    interiorImages: [
-      '/stock/photo-1502672260266-1c1ef2d93688.jpg',
-    ],
+    exteriorImage: BRAND_CONFIG.images.listingInteriorLounge,
+    interiorImages: [BRAND_CONFIG.images.buy6],
     architecturalStyle: 'Contemporary Studio',
     yearBuilt: 2024,
     architect: 'Studio Raza Architects',
@@ -630,43 +670,21 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
   },
 ];
 
-export const TEAM_MEMBERS: TeamMember[] = [
-  {
-    name: 'Ahmed Raza Khan',
-    role: 'Managing Partner & Co-Founder',
-    location: 'Lahore',
-    bio: 'Over 20 years of experience in Pakistani residential property advisory, facilitating premier transactions across DHA, CDA sectors, and Bahria Town.',
-    avatarVariant: 'male',
-  },
-  {
-    name: 'Ayesha Siddiqui',
-    role: 'Principal Architectural Advisor',
-    location: 'Karachi',
-    bio: "Graduate of NCA Lahore and Member of PCATP. Ayesha leads Avenue's architectural verification, structural vetting, and design standards.",
-    avatarVariant: 'female',
-  },
-  {
-    name: 'Hamza Malik',
-    role: 'Head of Property Advisory & Overseas Desk',
-    location: 'Islamabad',
-    bio: 'IBA Karachi graduate specialising in property portfolio advisory, FBR tax compliance, and seamless transfers for overseas Pakistanis.',
-    avatarVariant: 'male',
-  },
-  {
-    name: 'Fatima Noor',
-    role: 'Director of Land Registry & Legal Audit',
-    location: 'Lahore',
-    bio: 'Advocate High Court specialising in LDA and CDA title scrutiny, fard verification, society approvals, and power of attorney execution.',
-    avatarVariant: 'hijab',
-  },
-];
+export const TEAM_MEMBERS: TeamMember[] = BRAND_CONFIG.team.map((member) => ({
+  name: member.name,
+  role: member.role,
+  location: member.location,
+  bio: member.bio,
+  avatarVariant: member.avatarVariant,
+  image: BRAND_CONFIG.images[member.photoKey],
+}));
 
-export const REGIONAL_OFFICES: OfficeLocation[] = SITE_CONFIG.offices.map((office) => ({
+export const REGIONAL_OFFICES: OfficeLocation[] = BRAND_CONFIG.contact.offices.map((office) => ({
   city: office.city,
   address: office.address,
   phone: office.phone,
   email: office.email,
-  image: '',
+  image: BRAND_CONFIG.images[office.imageKey],
   directors: office.directors,
 }));
 
