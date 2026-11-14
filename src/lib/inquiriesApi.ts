@@ -1,4 +1,5 @@
 import { parseApiResponse, SERVER_UNREACHABLE_MESSAGE } from './http';
+import { isEnquiryWebhookConfigured } from '../services/enquiryWebhook';
 
 export interface InquiryPayload {
   name: string;
@@ -53,7 +54,10 @@ export async function submitInquiry(
     const res = await fetch('/api/inquiries', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        webhookDispatched: isEnquiryWebhookConfigured(),
+      }),
     });
     const parsed = await parseApiResponse<{
       success?: boolean;

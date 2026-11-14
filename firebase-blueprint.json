@@ -35,9 +35,19 @@
           "type": "boolean",
           "description": "Whether user email is verified"
         },
+        "provider": {
+          "type": "string",
+          "enum": ["email", "google"],
+          "description": "Sign-in provider used for account creation"
+        },
         "createdAt": {
           "type": "string",
           "description": "ISO timestamp of account creation",
+          "maxLength": 64
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "description": "ISO timestamp of most recent sign-in",
           "maxLength": 64
         },
         "savedPropertyIds": {

@@ -1,5 +1,10 @@
 export type PakistanLocationCategory = 'All' | 'Lahore' | 'Islamabad' | 'Karachi' | 'Rawalpindi' | 'Murree & Hills';
 
+export type ProjectStatus = 'Available' | 'Under Offer' | 'Sold';
+export type BuyStatus = 'Available' | 'Under Offer' | 'Sold';
+export type RentStatus = 'Available' | 'Rented';
+export type PropertyStatus = 'Available' | 'Under Offer' | 'Sold' | 'Rented';
+
 export interface PropertyListing {
   id: string;
   name: string;
@@ -21,6 +26,7 @@ export interface PropertyListing {
   architect?: string;
   lotSize?: string;
   featured?: boolean;
+  status?: ProjectStatus;
 }
 
 export interface PortfolioProject {
@@ -38,6 +44,7 @@ export interface PortfolioProject {
   numericValuation?: number;
   category: 'Lahore' | 'Islamabad' | 'Karachi' | 'Rawalpindi' | 'Murree & Hills';
   gallery: string[];
+  status?: ProjectStatus;
 }
 
 export interface RentalListing {
@@ -59,6 +66,7 @@ export interface RentalListing {
   minContractPeriod: string; // "11 months"
   amenities: string[];
   description: string;
+  status?: RentStatus;
 }
 
 export interface AvenueService {

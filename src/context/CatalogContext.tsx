@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { PORTFOLIO_PROJECTS, PROPERTY_LISTINGS } from '../data/realEstateData';
 import { BUY_PROPERTIES, BuyProperty } from '../data/buyPropertiesData';
 import { RENTAL_LISTINGS } from '../data/rentalsData';
-import { PortfolioProject, PropertyListing, RentalListing } from '../types';
+import { PortfolioProject, PropertyListing, RentalListing, ProjectStatus, BuyStatus, RentStatus } from '../types';
 import { useAuth } from './AuthContext';
 import { parseApiResponse, SERVER_UNREACHABLE_MESSAGE } from '../lib/http';
 
@@ -21,13 +21,14 @@ export interface NewProjectInput {
   summary: string;
   image: string;
   gallery?: string[];
+  status?: ProjectStatus;
 }
 
 export interface NewBuyInput {
   title: string;
   city: CityOption;
   location: string;
-  type: 'House' | 'Apartment' | 'Plot' | 'Penthouse';
+  type: 'House' | 'Apartment' | 'Plot';
   price: string;
   area: string;
   beds: number;
@@ -38,6 +39,7 @@ export interface NewBuyInput {
   features: string;
   possession: string;
   nocStatus: string;
+  status?: BuyStatus;
 }
 
 export interface NewRentInput {
@@ -58,6 +60,7 @@ export interface NewRentInput {
   minContractPeriod: string;
   amenities: string;
   description: string;
+  status?: RentStatus;
 }
 
 interface ActionResult {
@@ -74,10 +77,13 @@ interface CatalogContextType {
   backendReachable: boolean;
   refreshCatalog: () => Promise<void>;
   addProject: (input: NewProjectInput) => Promise<ActionResult>;
+  updateProject: (id: string, input: NewProjectInput) => Promise<ActionResult>;
   removeProject: (id: string) => Promise<ActionResult>;
   addBuyProperty: (input: NewBuyInput) => Promise<ActionResult>;
+  updateBuy: (id: string, input: NewBuyInput) => Promise<ActionResult>;
   removeBuyProperty: (id: string) => Promise<ActionResult>;
   addRentalListing: (input: NewRentInput) => Promise<ActionResult>;
+  updateRental: (id: string, input: NewRentInput) => Promise<ActionResult>;
   removeRentalListing: (id: string) => Promise<ActionResult>;
   resetCatalog: (section: 'projects' | 'buy' | 'rent' | 'all') => Promise<ActionResult>;
 }
@@ -181,6 +187,17 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'Could not add project.'
     );
 
+  const updateProject = (id: string, input: NewProjectInput) =>
+    executeMutation(
+      `/api/catalog/projects/${encodeURIComponent(id)}`,
+      {
+        method: 'PUT',
+        headers: authHeaders(true),
+        body: JSON.stringify(input),
+      },
+      'Could not update project.'
+    );
+
   const removeProject = (id: string) =>
     executeMutation(
       `/api/catalog/projects/${encodeURIComponent(id)}`,
@@ -202,6 +219,17 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'Could not add property.'
     );
 
+  const updateBuy = (id: string, input: NewBuyInput) =>
+    executeMutation(
+      `/api/catalog/buy/${encodeURIComponent(id)}`,
+      {
+        method: 'PUT',
+        headers: authHeaders(true),
+        body: JSON.stringify(input),
+      },
+      'Could not update property.'
+    );
+
   const removeBuyProperty = (id: string) =>
     executeMutation(
       `/api/catalog/buy/${encodeURIComponent(id)}`,
@@ -221,6 +249,17 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
         body: JSON.stringify(input),
       },
       'Could not add rental listing.'
+    );
+
+  const updateRental = (id: string, input: NewRentInput) =>
+    executeMutation(
+      `/api/catalog/rent/${encodeURIComponent(id)}`,
+      {
+        method: 'PUT',
+        headers: authHeaders(true),
+        body: JSON.stringify(input),
+      },
+      'Could not update rental listing.'
     );
 
   const removeRentalListing = (id: string) =>
@@ -255,10 +294,13 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
         backendReachable,
         refreshCatalog,
         addProject,
+        updateProject,
         removeProject,
         addBuyProperty,
+        updateBuy,
         removeBuyProperty,
         addRentalListing,
+        updateRental,
         removeRentalListing,
         resetCatalog,
       }}

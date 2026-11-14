@@ -8,12 +8,19 @@ import { UserProfile } from '../types';
 import {
   signInWithPopup,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
   sendEmailVerification,
+  sendPasswordResetEmail,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
   signOut,
   onAuthStateChanged,
   User as FirebaseUser,
 } from 'firebase/auth';
-import { auth, googleProvider } from '../lib/firebase';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { auth, db, googleProvider, handleFirestoreError, OperationType } from '../lib/firebase';
 import { parseApiResponse, SERVER_UNREACHABLE_MESSAGE } from '../lib/http';
 
 interface AuthActionResult {
@@ -126,6 +133,49 @@ function storeSessionToken(key: string, token: string | undefined, persistInLoca
   }
 }
 
+function readLocalSavedIds(uid: string): string[] {
+  try {
+    const raw = localStorage.getItem(`${USER_SAVED_PREFIX}${uid}`);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((id) => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function resolveFirebaseProvider(fbUser: FirebaseUser): 'google' | 'email' {
+  return fbUser.providerData.some((p) => p.providerId === 'google.com') ? 'google' : 'email';
+}
+
+function mapFirebaseAuthError(code: string | undefined, fallback: string): string {
+  switch (code) {
+    case 'auth/email-already-in-use':
+      return 'An account with this email already exists. Please sign in or use Forgot Password.';
+    case 'auth/invalid-email':
+      return 'Please provide a valid email address.';
+    case 'auth/weak-password':
+      return 'Password must be at least 8 characters long.';
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'Incorrect email or password. Please verify and try again.';
+    case 'auth/user-disabled':
+      return 'This account has been disabled. Please contact Avenue support.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts detected. Please wait a few minutes and try again.';
+    case 'auth/network-request-failed':
+      return 'Network error while connecting to Firebase. Please check your connection.';
+    case 'auth/operation-not-allowed':
+      return 'Email/Password authentication is disabled in Firebase Console. Enable it under Authentication > Sign-in method.';
+    case 'auth/unauthorized-domain': {
+      const host = typeof window !== 'undefined' ? window.location.hostname : '';
+      return `Unauthorized domain (${host}). Please add this domain in Firebase Console > Authentication > Settings > Authorized domains.`;
+    }
+    default:
+      return fallback;
+  }
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -151,6 +201,122 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     guestSavedRef.current = guestSavedIds;
   }, [guestSavedIds]);
 
+  const syncUserProfileToFirestore = async (
+    fbUser: FirebaseUser,
+    providerOverride?: 'email' | 'google'
+  ): Promise<{ phone?: string; savedPropertyIds: string[]; createdAt: string }> => {
+    const uid = fbUser.uid;
+    const localPhone = localStorage.getItem(`${USER_PHONE_PREFIX}${uid}`) || '';
+    let localSaved = readLocalSavedIds(uid);
+    if (guestSavedRef.current.length > 0) {
+      localSaved = Array.from(new Set([...localSaved, ...guestSavedRef.current])).slice(0, 100);
+      localStorage.setItem(`${USER_SAVED_PREFIX}${uid}`, JSON.stringify(localSaved));
+      localStorage.removeItem(GUEST_SAVED_KEY);
+      setGuestSavedIds([]);
+    }
+
+    const fallbackCreatedAt = (fbUser.metadata.creationTime || new Date().toISOString()).slice(0, 64);
+    if (!fbUser.emailVerified || !fbUser.email) {
+      return {
+        phone: localPhone || undefined,
+        savedPropertyIds: localSaved,
+        createdAt: fallbackCreatedAt,
+      };
+    }
+
+    const userPath = `users/${uid}`;
+    const userRef = doc(db, 'users', uid);
+    const provider = providerOverride || resolveFirebaseProvider(fbUser);
+    const cleanName = (fbUser.displayName || fbUser.email.split('@')[0] || 'Avenue Member')
+      .trim()
+      .slice(0, 120);
+    const cleanEmail = fbUser.email.trim().toLowerCase().slice(0, 254);
+    const cleanPhoto =
+      fbUser.photoURL && fbUser.photoURL.length <= 1000 ? fbUser.photoURL : undefined;
+    const nowIso = new Date().toISOString().slice(0, 64);
+
+    try {
+      let existingData: Record<string, unknown> | null = null;
+      try {
+        const snap = await getDoc(userRef);
+        if (snap.exists()) {
+          existingData = snap.data() as Record<string, unknown>;
+        }
+      } catch (err) {
+        handleFirestoreError(err, OperationType.GET, userPath);
+      }
+
+      const firestoreSaved = Array.isArray(existingData?.savedPropertyIds)
+        ? (existingData.savedPropertyIds as unknown[]).filter(
+            (id): id is string => typeof id === 'string'
+          )
+        : [];
+      const mergedSaved = Array.from(new Set([...firestoreSaved, ...localSaved])).slice(0, 100);
+      localStorage.setItem(`${USER_SAVED_PREFIX}${uid}`, JSON.stringify(mergedSaved));
+
+      const firestorePhone =
+        typeof existingData?.phone === 'string' ? existingData.phone.trim().slice(0, 32) : '';
+      const mergedPhone = (localPhone || firestorePhone).slice(0, 32);
+      if (mergedPhone) {
+        localStorage.setItem(`${USER_PHONE_PREFIX}${uid}`, mergedPhone);
+      }
+
+      const createdAt =
+        typeof existingData?.createdAt === 'string' && existingData.createdAt
+          ? existingData.createdAt.slice(0, 64)
+          : fallbackCreatedAt;
+
+      if (!existingData) {
+        const createPayload: Record<string, unknown> = {
+          id: uid,
+          email: cleanEmail,
+          name: cleanName,
+          emailVerified: true,
+          provider,
+          createdAt,
+          lastLoginAt: nowIso,
+          savedPropertyIds: mergedSaved,
+        };
+        if (cleanPhoto) createPayload.photoURL = cleanPhoto;
+        if (mergedPhone) createPayload.phone = mergedPhone;
+
+        try {
+          await setDoc(userRef, createPayload);
+        } catch (err) {
+          handleFirestoreError(err, OperationType.CREATE, userPath);
+        }
+      } else {
+        const updatePayload: Record<string, unknown> = {
+          name: cleanName,
+          emailVerified: true,
+          provider,
+          lastLoginAt: nowIso,
+          savedPropertyIds: mergedSaved,
+        };
+        if (cleanPhoto) updatePayload.photoURL = cleanPhoto;
+        if (mergedPhone) updatePayload.phone = mergedPhone;
+
+        try {
+          await updateDoc(userRef, updatePayload);
+        } catch (err) {
+          handleFirestoreError(err, OperationType.UPDATE, userPath);
+        }
+      }
+
+      return {
+        phone: mergedPhone || undefined,
+        savedPropertyIds: mergedSaved,
+        createdAt,
+      };
+    } catch {
+      return {
+        phone: localPhone || undefined,
+        savedPropertyIds: localSaved,
+        createdAt: fallbackCreatedAt,
+      };
+    }
+  };
+
   const hydrateUserSession = (
     baseUser: {
       id: string;
@@ -166,8 +332,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     userToken?: string
   ): UserProfile => {
     const storedPhone = localStorage.getItem(`${USER_PHONE_PREFIX}${baseUser.id}`) || '';
-    const storedSavedRaw = localStorage.getItem(`${USER_SAVED_PREFIX}${baseUser.id}`);
-    let savedIds: string[] = storedSavedRaw ? JSON.parse(storedSavedRaw) : [];
+    let savedIds = readLocalSavedIds(baseUser.id);
 
     if (guestSavedRef.current.length > 0) {
       savedIds = Array.from(new Set([...savedIds, ...guestSavedRef.current]));
@@ -281,7 +446,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return runSync;
   };
 
-  // Listen to Firebase auth state changes (Google Sign-In or verified Firebase accounts)
+  // Listen to Firebase auth state changes (Google Sign-In or verified Firebase email/password accounts)
   useEffect(() => {
     let active = true;
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
@@ -293,8 +458,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Never mark unverified email/password Firebase users as logged in
         if (fbUser.emailVerified || isGoogle) {
           const storedPhone = localStorage.getItem(`${USER_PHONE_PREFIX}${fbUser.uid}`) || '';
-          const storedSavedRaw = localStorage.getItem(`${USER_SAVED_PREFIX}${fbUser.uid}`);
-          let savedIds: string[] = storedSavedRaw ? JSON.parse(storedSavedRaw) : [];
+          let savedIds = readLocalSavedIds(fbUser.uid);
 
           if (guestSavedRef.current.length > 0) {
             savedIds = Array.from(new Set([...savedIds, ...guestSavedRef.current]));
@@ -319,6 +483,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
             savedPropertyIds: savedIds,
           });
+
+          const firestoreSynced = await syncUserProfileToFirestore(fbUser);
+          if (active) {
+            setCurrentUser((prev) =>
+              prev && prev.id === fbUser.uid
+                ? {
+                    ...prev,
+                    phone: firestoreSynced.phone || prev.phone,
+                    savedPropertyIds: firestoreSynced.savedPropertyIds,
+                    createdAt: firestoreSynced.createdAt,
+                  }
+                : prev
+            );
+          }
 
           if (fbUser.email) {
             await syncGoogleUserWithBackend(fbUser);
@@ -401,16 +579,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sessionStorage.removeItem(USER_TOKEN_KEY);
       setManagementToken(null);
 
-      const storedPhone = localStorage.getItem(`${USER_PHONE_PREFIX}${fbUser.uid}`) || '';
-      const storedSavedRaw = localStorage.getItem(`${USER_SAVED_PREFIX}${fbUser.uid}`);
-      let savedIds: string[] = storedSavedRaw ? JSON.parse(storedSavedRaw) : [];
-
-      if (guestSavedRef.current.length > 0) {
-        savedIds = Array.from(new Set([...savedIds, ...guestSavedRef.current]));
-        localStorage.setItem(`${USER_SAVED_PREFIX}${fbUser.uid}`, JSON.stringify(savedIds));
-        localStorage.removeItem(GUEST_SAVED_KEY);
-        setGuestSavedIds([]);
-      }
+      const firestoreSynced = await syncUserProfileToFirestore(fbUser, 'google');
 
       setFirebaseUser(fbUser);
       setCurrentUser({
@@ -418,11 +587,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Avenue Member',
         email: fbUser.email || '',
         photoURL: fbUser.photoURL || undefined,
-        phone: storedPhone || undefined,
+        phone: firestoreSynced.phone,
         emailVerified: true,
         role: 'client',
-        createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
-        savedPropertyIds: savedIds,
+        createdAt: firestoreSynced.createdAt,
+        savedPropertyIds: firestoreSynced.savedPropertyIds,
       });
 
       let isMgmt = false;
@@ -468,7 +637,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // 2. Email & Password Login
+  // 2. Email & Password Login (supports Management/legacy backend login + Firebase Email/Password)
   const loginWithEmail = async (
     email: string,
     password: string,
@@ -491,119 +660,193 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error?: string;
       }>(response);
 
-      if (parsed.unreachable || !parsed.data) {
-        return {
-          success: false,
-          error:
-            'Authentication server is temporarily unreachable. Please try again shortly or use Google Sign-In.',
-        };
-      }
-
-      const data = parsed.data;
-
-      if (parsed.ok && data.success && data.user) {
+      if (parsed.ok && parsed.data?.success && parsed.data.user) {
         const profile = hydrateUserSession(
-          data.user,
+          parsed.data.user,
           rememberMe,
-          data.managementToken,
-          data.userToken
+          parsed.data.managementToken,
+          parsed.data.userToken
         );
         return { success: true, isManagement: profile.role === 'management' };
       }
 
-      if (parsed.status === 403 && data.unverified) {
-        return { success: false, unverified: true };
+      if (parsed.status === 403 && parsed.data?.unverified) {
+        return { success: false, unverified: true, provider: 'server' };
       }
 
-      // If account isn't in backend store, optionally check Firebase Email/Password if enabled
-      if (parsed.status === 401) {
+      if (parsed.status === 429) {
+        return {
+          success: false,
+          error: parsed.data?.error || 'Too many failed login attempts. Please try again shortly.',
+        };
+      }
+
+      // Firebase Email/Password authentication (primary path for client email accounts)
+      if (parsed.status === 401 || parsed.unreachable || !parsed.data) {
         try {
+          await setPersistence(
+            auth,
+            rememberMe ? browserLocalPersistence : browserSessionPersistence
+          );
           const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
           const fbUser = userCredential.user;
+          await fbUser.reload();
+
           if (!fbUser.emailVerified) {
-            return { success: false, unverified: true };
+            return { success: false, unverified: true, provider: 'firebase' };
           }
-          return { success: true };
+
+          await fbUser.getIdToken(true);
+          const firestoreSynced = await syncUserProfileToFirestore(fbUser, 'email');
+          setFirebaseUser(fbUser);
+          setCurrentUser({
+            id: fbUser.uid,
+            name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Avenue Member',
+            email: fbUser.email || cleanEmail,
+            photoURL: fbUser.photoURL || undefined,
+            phone: firestoreSynced.phone,
+            emailVerified: true,
+            role: 'client',
+            createdAt: firestoreSynced.createdAt,
+            savedPropertyIds: firestoreSynced.savedPropertyIds,
+          });
+
+          const syncResult = await syncGoogleUserWithBackend(fbUser);
+          return { success: true, isManagement: syncResult.isManagement };
         } catch (fbError: any) {
-          if (fbError?.code === 'auth/too-many-requests') {
-            return {
-              success: false,
-              error: 'Too many unsuccessful attempts. Please reset your password or try again later.',
-            };
-          }
           return {
             success: false,
-            error: data.error || 'Incorrect email or password. Please verify and try again.',
+            error: mapFirebaseAuthError(
+              fbError?.code,
+              parsed.data?.error || 'Incorrect email or password. Please verify and try again.'
+            ),
           };
         }
       }
 
       return {
         success: false,
-        error: data.error || 'Sign in failed. Please try again.',
+        error: parsed.data?.error || 'Sign in failed. Please try again.',
       };
     } catch {
-      return {
-        success: false,
-        error:
-          'Unable to reach the authentication server. Please check your connection or use Google Sign-In.',
-      };
+      try {
+        await setPersistence(
+          auth,
+          rememberMe ? browserLocalPersistence : browserSessionPersistence
+        );
+        const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
+        const fbUser = userCredential.user;
+        await fbUser.reload();
+
+        if (!fbUser.emailVerified) {
+          return { success: false, unverified: true, provider: 'firebase' };
+        }
+
+        await fbUser.getIdToken(true);
+        const firestoreSynced = await syncUserProfileToFirestore(fbUser, 'email');
+        setFirebaseUser(fbUser);
+        setCurrentUser({
+          id: fbUser.uid,
+          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Avenue Member',
+          email: fbUser.email || cleanEmail,
+          photoURL: fbUser.photoURL || undefined,
+          phone: firestoreSynced.phone,
+          emailVerified: true,
+          role: 'client',
+          createdAt: firestoreSynced.createdAt,
+          savedPropertyIds: firestoreSynced.savedPropertyIds,
+        });
+        return { success: true, isManagement: false };
+      } catch (fbError: any) {
+        return {
+          success: false,
+          error: mapFirebaseAuthError(
+            fbError?.code,
+            'Unable to reach the authentication server. Please check your connection or use Google Sign-In.'
+          ),
+        };
+      }
     }
   };
 
-  // 3. Signup with Email & Password + Free Email Verification API
+  // 3. Signup with Email & Password via Firebase Auth + Real Email Verification Link
   const signupWithEmail = async (data: {
     name: string;
     email: string;
     password: string;
   }): Promise<AuthActionResult> => {
+    const cleanName = data.name.trim();
+    const cleanEmail = data.email.trim().toLowerCase();
+
     try {
-      const response = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: data.name.trim(),
-          email: data.email.trim().toLowerCase(),
-          password: data.password,
-        }),
-      });
-      const parsed = await parseApiResponse<{
-        success?: boolean;
-        error?: string;
-        previewUrl?: string;
-        provider?: string;
-      }>(response);
-
-      if (parsed.unreachable || !parsed.data) {
-        return {
-          success: false,
-          error:
-            'Authentication server is temporarily unreachable. Please try again shortly or use Google Sign-In.',
-        };
-      }
-
-      const result = parsed.data;
-      if (!parsed.ok || !result.success) {
-        return {
-          success: false,
-          error: result.error || 'Registration failed. Please try again.',
-        };
-      }
+      const credential = await createUserWithEmailAndPassword(auth, cleanEmail, data.password);
+      await updateProfile(credential.user, { displayName: cleanName });
+      await sendEmailVerification(credential.user);
+      setFirebaseUser(credential.user);
 
       return {
         success: true,
-        previewUrl: result.previewUrl,
-        provider: result.provider,
+        provider: 'firebase',
       };
-    } catch {
+    } catch (fbError: any) {
+      // Only fall back to backend email OTP if Email/Password provider is disabled in Firebase Console
+      if (fbError?.code === 'auth/operation-not-allowed') {
+        try {
+          const response = await fetch('/api/auth/signup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: cleanName,
+              email: cleanEmail,
+              password: data.password,
+            }),
+          });
+          const parsed = await parseApiResponse<{
+            success?: boolean;
+            error?: string;
+            previewUrl?: string;
+            provider?: string;
+          }>(response);
+
+          if (parsed.unreachable || !parsed.data) {
+            return {
+              success: false,
+              error: mapFirebaseAuthError(fbError?.code, SERVER_UNREACHABLE_MESSAGE),
+            };
+          }
+
+          const result = parsed.data;
+          if (!parsed.ok || !result.success) {
+            return {
+              success: false,
+              error: result.error || 'Registration failed. Please try again.',
+            };
+          }
+
+          return {
+            success: true,
+            previewUrl: result.previewUrl,
+            provider: result.provider,
+          };
+        } catch {
+          return {
+            success: false,
+            error: mapFirebaseAuthError(fbError?.code, SERVER_UNREACHABLE_MESSAGE),
+          };
+        }
+      }
+
       return {
         success: false,
-        error: SERVER_UNREACHABLE_MESSAGE,
+        error: mapFirebaseAuthError(
+          fbError?.code,
+          fbError?.message || 'Could not create your account. Please try again.'
+        ),
       };
     }
   };
 
-  // 4. Verify Email with 6-digit OTP Code
+  // 4. Verify Email with 6-digit OTP Code (used when server OTP fallback was issued)
   const verifyEmailWithCode = async (email: string, code: string): Promise<AuthActionResult> => {
     try {
       const response = await fetch('/api/auth/verify-email', {
@@ -640,9 +883,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // 5. Resend verification email
+  // 5. Resend verification email (prefers Firebase auth.currentUser if signed in unverified)
   const resendVerificationEmail = async (email?: string): Promise<AuthActionResult> => {
     const cleanEmail = email?.trim().toLowerCase();
+
+    if (
+      auth.currentUser &&
+      !auth.currentUser.emailVerified &&
+      (!cleanEmail || auth.currentUser.email?.toLowerCase() === cleanEmail)
+    ) {
+      try {
+        await sendEmailVerification(auth.currentUser);
+        return { success: true, provider: 'firebase' };
+      } catch (error: any) {
+        return {
+          success: false,
+          error: mapFirebaseAuthError(
+            error?.code,
+            error?.message || 'Failed to resend verification email.'
+          ),
+        };
+      }
+    }
+
     if (cleanEmail) {
       try {
         const response = await fetch('/api/auth/resend-verification', {
@@ -675,20 +938,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    try {
-      if (auth.currentUser) {
-        await sendEmailVerification(auth.currentUser);
-        return { success: true };
-      }
-      return { success: false, error: 'No email address provided to verify.' };
-    } catch (error: any) {
-      return { success: false, error: error?.message || 'Failed to resend verification email.' };
-    }
+    return { success: false, error: 'No email address provided to verify.' };
   };
 
-  // 6. Reload & check if email was verified (via link click or Firebase)
+  // 6. Reload & check if email was verified (checks Firebase user first, then server OTP fallback)
   const checkEmailVerified = async (email?: string): Promise<boolean> => {
     const cleanEmail = email?.trim().toLowerCase();
+
+    if (
+      auth.currentUser &&
+      (!cleanEmail || auth.currentUser.email?.toLowerCase() === cleanEmail)
+    ) {
+      try {
+        await auth.currentUser.reload();
+        if (auth.currentUser.emailVerified) {
+          const fb = auth.currentUser;
+          await fb.getIdToken(true);
+          const firestoreSynced = await syncUserProfileToFirestore(fb);
+          setFirebaseUser(fb);
+          setCurrentUser({
+            id: fb.uid,
+            name: fb.displayName || fb.email?.split('@')[0] || 'Avenue Member',
+            email: fb.email || cleanEmail || '',
+            photoURL: fb.photoURL || undefined,
+            phone: firestoreSynced.phone,
+            emailVerified: true,
+            role: 'client',
+            createdAt: firestoreSynced.createdAt,
+            savedPropertyIds: firestoreSynced.savedPropertyIds,
+          });
+          await syncGoogleUserWithBackend(fb);
+          return true;
+        }
+      } catch {
+        return false;
+      }
+    }
+
     if (cleanEmail) {
       try {
         const response = await fetch('/api/auth/check-verified', {
@@ -706,35 +992,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return true;
         }
       } catch {
-        // Fallback to Firebase check below
+        return false;
       }
     }
 
-    try {
-      if (auth.currentUser) {
-        await auth.currentUser.reload();
-        if (auth.currentUser.emailVerified) {
-          const fb = auth.currentUser;
-          hydrateUserSession({
-            id: fb.uid,
-            name: fb.displayName || fb.email?.split('@')[0] || 'Avenue Member',
-            email: fb.email || '',
-            photoURL: fb.photoURL || undefined,
-            emailVerified: true,
-            createdAt: fb.metadata.creationTime || new Date().toISOString(),
-          });
-          return true;
-        }
-      }
-      return false;
-    } catch {
-      return false;
-    }
+    return false;
   };
 
-  // 7. Send password reset email (uniform server response prevents email enumeration)
+  // 7. Send password reset email (uses Firebase sendPasswordResetEmail with backend fallback)
   const sendPasswordReset = async (email: string): Promise<AuthActionResult> => {
     const cleanEmail = email.trim().toLowerCase();
+    const uniformMessage =
+      'If an account exists for that email address, a password reset link has been sent to your inbox.';
+
+    try {
+      await sendPasswordResetEmail(auth, cleanEmail);
+      return {
+        success: true,
+        provider: 'firebase',
+        message: uniformMessage,
+      };
+    } catch (fbError: any) {
+      if (fbError?.code === 'auth/too-many-requests') {
+        return {
+          success: false,
+          error: mapFirebaseAuthError(fbError.code, 'Too many password reset requests.'),
+        };
+      }
+      if (fbError?.code === 'auth/invalid-email') {
+        return {
+          success: false,
+          error: 'Please enter a valid email address.',
+        };
+      }
+    }
+
     try {
       const response = await fetch('/api/auth/forgot-password', {
         method: 'POST',
@@ -749,29 +1041,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         provider?: string;
       }>(response);
 
-      if (parsed.unreachable || !parsed.data) {
-        return { success: false, error: SERVER_UNREACHABLE_MESSAGE };
-      }
-
-      const data = parsed.data;
-      if (parsed.ok && data.success) {
+      if (parsed.ok && parsed.data?.success) {
         return {
           success: true,
-          message:
-            data.message ||
-            'If an account exists for that email address, a password reset code has been sent.',
-          previewUrl: data.previewUrl,
-          provider: data.provider,
+          message: parsed.data.message || uniformMessage,
+          previewUrl: parsed.data.previewUrl,
+          provider: parsed.data.provider,
         };
       }
-
-      return { success: false, error: data.error || 'Could not send reset email.' };
     } catch {
-      return { success: false, error: SERVER_UNREACHABLE_MESSAGE };
+      // Fall through to uniform response
     }
+
+    return {
+      success: true,
+      provider: 'firebase',
+      message: uniformMessage,
+    };
   };
 
-  // 8. Complete password reset with 6-digit code
+  // 8. Complete password reset with 6-digit code (server OTP fallback)
   const confirmPasswordResetWithCode = async (
     email: string,
     code: string,
@@ -800,12 +1089,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // 9. Update phone number (strictly optional on Profile, authenticated with Bearer token)
+  // 9. Update phone number (persisted in Firestore + localStorage + backend)
   const updateUserPhone = (phone: string) => {
     if (!currentUser) return;
-    const updated = { ...currentUser, phone };
+    const cleanPhone = phone.trim().slice(0, 32);
+    const updated = { ...currentUser, phone: cleanPhone || undefined };
     setCurrentUser(updated);
-    localStorage.setItem(`${USER_PHONE_PREFIX}${currentUser.id}`, phone);
+    localStorage.setItem(`${USER_PHONE_PREFIX}${currentUser.id}`, cleanPhone);
     if (localStorage.getItem(EMAIL_SESSION_KEY)) {
       localStorage.setItem(EMAIL_SESSION_KEY, JSON.stringify(updated));
     } else if (sessionStorage.getItem(EMAIL_SESSION_KEY)) {
@@ -813,6 +1103,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     void (async () => {
+      if (auth.currentUser && auth.currentUser.uid === currentUser.id && auth.currentUser.emailVerified) {
+        const userPath = `users/${auth.currentUser.uid}`;
+        try {
+          await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+            phone: cleanPhone,
+          });
+        } catch (err) {
+          try {
+            handleFirestoreError(err, OperationType.UPDATE, userPath);
+          } catch {
+            // Logged structured Firestore error
+          }
+        }
+      }
+
       try {
         let token = getStoredToken(USER_TOKEN_KEY);
         if (!token && auth.currentUser) {
@@ -826,7 +1131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ phone }),
+          body: JSON.stringify({ phone: cleanPhone }),
         });
       } catch {
         // Best-effort sync; local phone update already saved
@@ -853,7 +1158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser(null);
   };
 
-  // 11. Saved properties management
+  // 11. Saved properties management (persisted to Firestore for verified users)
   const isPropertySaved = (id: string): boolean => {
     if (currentUser) {
       return currentUser.savedPropertyIds.includes(id);
@@ -866,7 +1171,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const alreadySaved = currentUser.savedPropertyIds.includes(id);
       const newSavedIds = alreadySaved
         ? currentUser.savedPropertyIds.filter((pId) => pId !== id)
-        : [...currentUser.savedPropertyIds, id];
+        : [...currentUser.savedPropertyIds, id].slice(0, 100);
 
       const updatedProfile: UserProfile = {
         ...currentUser,
@@ -880,6 +1185,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (sessionStorage.getItem(EMAIL_SESSION_KEY)) {
         sessionStorage.setItem(EMAIL_SESSION_KEY, JSON.stringify(updatedProfile));
       }
+
+      if (auth.currentUser && auth.currentUser.uid === currentUser.id && auth.currentUser.emailVerified) {
+        const userPath = `users/${auth.currentUser.uid}`;
+        void updateDoc(doc(db, 'users', auth.currentUser.uid), {
+          savedPropertyIds: newSavedIds,
+        }).catch((err) => {
+          try {
+            handleFirestoreError(err, OperationType.UPDATE, userPath);
+          } catch {
+            // Logged structured Firestore error
+          }
+        });
+      }
+
       return !alreadySaved;
     } else {
       const alreadySaved = guestSavedIds.includes(id);

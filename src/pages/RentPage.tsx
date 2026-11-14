@@ -475,8 +475,15 @@ export const RentPage: React.FC = () => {
                     {/* Text on right */}
                     <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                       <div>
-                        <div className="font-display font-bold text-[0.95rem] text-[#1B2A44] leading-tight">
-                          {formatRent(listing.monthlyRent)}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-display font-bold text-[0.95rem] text-[#1B2A44] leading-tight truncate">
+                            {formatRent(listing.monthlyRent)}
+                          </div>
+                          {listing.status && listing.status !== 'Available' && (
+                            <span className="shrink-0 px-2 py-0.5 rounded-full text-[9px] font-display uppercase tracking-wider font-bold bg-rose-600 text-white border border-rose-500">
+                              {listing.status}
+                            </span>
+                          )}
                         </div>
                         <h3 className="font-display font-semibold text-[0.82rem] text-[#1B2A44] line-clamp-2 mt-0.5 leading-snug">
                           {listing.title}
@@ -511,8 +518,15 @@ export const RentPage: React.FC = () => {
                         alt={listing.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
-                      <div className="absolute top-2.5 left-2.5 glass-panel-dark px-2.5 py-0.5 rounded-full text-[9px] uppercase font-display text-white">
-                        {listing.city} · FOR RENT
+                      <div className="absolute top-2.5 left-2.5 right-12 flex flex-wrap gap-1.5">
+                        <span className="glass-panel-dark px-2.5 py-0.5 rounded-full text-[9px] uppercase font-display text-white">
+                          {listing.city} · FOR RENT
+                        </span>
+                        {listing.status && listing.status !== 'Available' && (
+                          <span className="px-2.5 py-0.5 rounded-full text-[9px] uppercase font-display font-bold bg-rose-600 text-white border border-rose-500">
+                            {listing.status}
+                          </span>
+                        )}
                       </div>
                       <button
                         onClick={(e) => handleHeartClick(e, listing.id, listing.title)}
@@ -559,7 +573,7 @@ export const RentPage: React.FC = () => {
                         className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
                       />
 
-                      <div className="absolute top-3.5 left-3.5 flex flex-wrap gap-1.5">
+                      <div className="absolute top-3.5 left-3.5 right-14 flex flex-wrap gap-1.5">
                         <span className="glass-panel-dark px-3 py-1 rounded-full text-[10px] uppercase font-display tracking-widest text-white">
                           {listing.city}
                         </span>
@@ -569,6 +583,11 @@ export const RentPage: React.FC = () => {
                         <span className="glass-panel-dark px-2.5 py-1 rounded-full text-[10px] uppercase font-display tracking-widest text-white/90">
                           {listing.type}
                         </span>
+                        {listing.status && listing.status !== 'Available' && (
+                          <span className="px-3 py-1 rounded-full text-[10px] uppercase font-display tracking-widest font-bold bg-rose-600 text-white border border-rose-500 shadow-sm">
+                            {listing.status}
+                          </span>
+                        )}
                       </div>
 
                       <button
@@ -620,7 +639,7 @@ export const RentPage: React.FC = () => {
                       </div>
 
                       <div className="w-full py-3 px-5 rounded-full bg-slate-100 group-hover:bg-[#1B2A44] text-[#1B2A44] group-hover:text-white font-display text-xs uppercase tracking-widest font-semibold transition-all flex items-center justify-between">
-                        <span>View Rental Dossier</span>
+                        <span>View Rental Details</span>
                         <span className="w-6 h-6 rounded-full bg-white text-[#1B2A44] flex items-center justify-center group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform">
                           <ArrowUpRight className="w-3.5 h-3.5" />
                         </span>

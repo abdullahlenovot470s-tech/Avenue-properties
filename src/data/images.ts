@@ -27,7 +27,7 @@ export const IMAGES = {
   // Signature Architectural Projects (Home & /projects)
   portfolio: {
     aspenRetreat: '/stock/photo-1518780664697-55e3ad937233.jpg',
-    obsidianMonolith: '/stock/photo-1600585152220-90363fe7e115.jpg',
+    obsidianMonolith: '/stock/photo-1600596542815-ffad4c1539a9.jpg',
     zenithPavilion: '/stock/photo-1600585154340-be6161a56a0c.jpg',
     ironwoodGallery: '/stock/photo-1600566753086-00f18fb6b3ea.jpg',
     reflectionResidence: '/stock/photo-1512917774080-9991f1c4c750.jpg',

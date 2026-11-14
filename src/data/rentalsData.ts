@@ -26,8 +26,8 @@ export const RENTAL_LISTINGS: RentalListing[] = [
     image: '/stock/photo-1512915922686-57c11dde9b6b.jpg',
     gallery: [
       '/stock/photo-1512915922686-57c11dde9b6b.jpg',
-      '/stock/photo-1600210492486-724fe5c67fb0.jpg',
-      '/stock/photo-1600566753086-00f18fb6b3ea.jpg',
+      '/stock/photo-1507089947368-19c1da9775ae.jpg',
+      '/stock/photo-1600566753151-384129cf4e3e.jpg',
     ],
     availableFrom: '01/12/2025',
     securityDeposit: "2 months' rent",
@@ -404,7 +404,7 @@ export const RENTAL_LISTINGS: RentalListing[] = [
     minContractPeriod: '11 months',
     amenities: [
       'Fully Furnished Mountain Style',
-      'Natural Fireplace & Electric Heating',
+      'Inverter Heating & Gas Heaters',
       'Pine Forest & Valley View Balcony',
       'Dedicated Car Porch Parking',
       'Electricity & Gas Cylinders',
@@ -412,6 +412,6 @@ export const RENTAL_LISTINGS: RentalListing[] = [
       '24/7 Security & Caretaker on Call',
     ],
     description:
-      'Charming 2-bed hillside cottage in Bhurban near PC Hotel. Fully furnished with fireplace, pine woodwork, private balcony looking over the Murree valley, and serene mountain air.',
+      'Charming 2-bed hillside cottage in Bhurban near PC Hotel. Fully furnished with electric heating, pine woodwork, private balcony looking over the Murree valley, and serene mountain air.',
   },
 ];

@@ -39,7 +39,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
             STRATEGIC PROPERTY & ARCHITECTURAL ADVISORY.
           </h1>
           <p className="font-body text-sm sm:text-base text-[#1B2A44]/80 leading-relaxed font-light">
-            We operate at the intersection of modern architecture and family property preservation, providing Pakistani buyers and overseas families with absolute transparency, verified documentation, and off-market access.
+            We operate at the intersection of modern architecture and family property preservation, providing Pakistani buyers and overseas families with absolute transparency, verified documentation, and private advisory access.
           </p>
         </div>
       </section>

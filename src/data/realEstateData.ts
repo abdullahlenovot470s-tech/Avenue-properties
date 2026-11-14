@@ -43,7 +43,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     category: 'Murree & Hills',
     gallery: [
       '/stock/photo-1518780664697-55e3ad937233.jpg',
-      '/stock/photo-1600585154526-990dced4db0d.jpg',
+      '/stock/photo-1507089947368-19c1da9775ae.jpg',
       '/stock/photo-1600573472550-8090b5e0745e.jpg',
     ],
   },
@@ -55,16 +55,16 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     beds: 5,
     baths: 6,
     projectDelivered: '2023',
-    image: '/stock/photo-1600585154340-be6161a56a0c.jpg',
+    image: '/stock/photo-1600596542815-ffad4c1539a9.jpg',
     summary: 'Coastal modernist villa in Clifton Block 2 Karachi with private pool, acoustic double-glazing, dedicated guard room, and 99-year verified KDA lease.',
     architect: 'Metropolis Architecture Studio (NED Karachi)',
     valuation: 'PKR 18 Crore',
     numericValuation: 180000000,
     category: 'Karachi',
     gallery: [
-      '/stock/photo-1600585154340-be6161a56a0c.jpg',
+      '/stock/photo-1600596542815-ffad4c1539a9.jpg',
       '/stock/photo-1600566753376-12c8ab7fb75b.jpg',
-      '/stock/photo-1600585154526-990dced4db0d.jpg',
+      '/stock/photo-1600607687644-c7171b42498f.jpg',
     ],
   },
   {
@@ -76,7 +76,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     baths: 6,
     projectDelivered: '2024',
     image: '/stock/photo-1600585154340-be6161a56a0c.jpg',
-    summary: 'A peaceful sanctuary under the Margalla Hills in Sector F-7 Islamabad with solid deodar woodwork, 15kW hybrid solar, and clear CDA title.',
+    summary: 'A peaceful residence under the Margalla Hills in Sector F-7 Islamabad with solid deodar woodwork, 15kW hybrid solar, and clear CDA title.',
     architect: 'Studio Raza Architects (PCATP)',
     valuation: 'PKR 14.5 Crore',
     numericValuation: 145000000,
@@ -103,7 +103,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     category: 'Lahore',
     gallery: [
       '/stock/photo-1600566753086-00f18fb6b3ea.jpg',
-      '/stock/photo-1600585154526-990dced4db0d.jpg',
+      '/stock/photo-1600566753151-384129cf4e3e.jpg',
       '/stock/photo-1600573472550-8090b5e0745e.jpg',
     ],
   },
@@ -123,7 +123,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     category: 'Islamabad',
     gallery: [
       '/stock/photo-1512917774080-9991f1c4c750.jpg',
-      '/stock/photo-1600210492486-724fe5c67fb0.jpg',
+      '/stock/photo-1595526114035-0d45ed16cfbf.jpg',
     ],
   },
 ];
@@ -133,7 +133,7 @@ export const SERVICES_OFFERED: AvenueService[] = [
     id: 'acquisition-strategy',
     number: '01',
     title: 'Residential Acquisition Strategy',
-    description: 'We provide a refined approach to finding your next home across Pakistan\'s most prestigious societies. Our services include property sourcing, private site tours, fard and registry verification, and expert price negotiation to ensure you secure a home that offers both sanctuary and lasting capital appreciation.',
+    description: 'We provide a refined approach to finding your next home across Pakistan\'s most prestigious societies. Our services include property sourcing, private site tours, fard and registry verification, and expert price negotiation to ensure you secure a home that offers both comfort and lasting capital appreciation.',
     hasThumbnail: true,
     thumbnailImage: '/stock/photo-1600585154526-990dced4db0d.jpg',
     expandedDetails: [
@@ -143,7 +143,7 @@ export const SERVICES_OFFERED: AvenueService[] = [
       'Structural vetting, load-shedding-proof solar audits and gas connection checks'
     ],
     deliverables: [
-      'Property Due Diligence Dossier (LDA / CDA / DHA / Bahria NOC Status)',
+      'Property Due Diligence Report (LDA / CDA / DHA / Bahria NOC Status)',
       'Comparative Price Analysis with Recent Society Transfers',
       'Complete Registry, Transfer, and Possession Handover Coordination'
     ]
@@ -202,7 +202,7 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     baths: 6,
     sqft: '1,000 Sq. Yards',
     category: 'Karachi',
-    description: 'Monumental fair-face concrete villa in Clifton Block 2 Karachi with private pool, acoustic double-glazing, dedicated guard room, and 99-year verified KDA lease.',
+    description: 'Architectural fair-face concrete villa in Clifton Block 2 Karachi with private pool, acoustic double-glazing, dedicated guard room, and 99-year verified KDA lease.',
     extendedStory: 'Premier coastal architectural residence in Clifton Karachi. High boundary walls, sweet water connections, full solar setup with standby generator, and clean title registry.',
     layoutVariant: 'exterior-left',
     exteriorImage: '/stock/photo-1600573472550-8090b5e0745e.jpg',
@@ -234,7 +234,7 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     baths: 6,
     sqft: '1 Kanal',
     category: 'Islamabad',
-    description: 'A peaceful sanctuary at the foot of Margalla Hills with solid deodar woodwork, white travertine stone, and water features. Includes full solar setup, car porch, and separate servant quarter.',
+    description: 'A peaceful residence at the foot of Margalla Hills with solid deodar woodwork, white travertine stone, and water features. Includes full solar setup, car porch, and separate servant quarter.',
     extendedStory: 'CDA-approved property with verified fard and registry in Sector F-7, Islamabad. Designed with natural mountain light, wide terraces, underground water tank, and peaceful leafy surroundings.',
     layoutVariant: 'exterior-right',
     exteriorImage: '/stock/photo-1613977257363-707ba9348227.jpg',
@@ -303,8 +303,8 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     layoutVariant: 'exterior-left',
     exteriorImage: '/stock/photo-1542314831-068cd1dbfeeb.jpg',
     interiorImages: [
-      '/stock/photo-1600585154526-990dced4db0d.jpg',
-      '/stock/photo-1600573472550-8090b5e0745e.jpg',
+      '/stock/photo-1600607687644-c7171b42498f.jpg',
+      '/stock/photo-1595526114035-0d45ed16cfbf.jpg',
     ],
     architecturalStyle: 'Contemporary Mountain Lodge',
     yearBuilt: 2023,
@@ -335,7 +335,7 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     layoutVariant: 'exterior-right',
     exteriorImage: '/stock/photo-1522708323590-d24dbb6b0267.jpg',
     interiorImages: [
-      '/stock/photo-1600210492486-724fe5c67fb0.jpg',
+      '/stock/photo-1507089947368-19c1da9775ae.jpg',
       '/stock/photo-1600607687939-ce8a6c25118c.jpg',
     ],
     architecturalStyle: 'Modernist Villa',
@@ -368,7 +368,7 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     exteriorImage: '/stock/photo-1600585152220-90363fe7e115.jpg',
     interiorImages: [
       '/stock/photo-1600566753086-00f18fb6b3ea.jpg',
-      '/stock/photo-1600210492486-724fe5c67fb0.jpg',
+      '/stock/photo-1600566753151-384129cf4e3e.jpg',
     ],
     architecturalStyle: 'Contemporary Suburban',
     yearBuilt: 2024,
@@ -431,8 +431,8 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     layoutVariant: 'exterior-left',
     exteriorImage: '/stock/photo-1560448204-e02f11c3d0e2.jpg',
     interiorImages: [
-      '/stock/photo-1600210492486-724fe5c67fb0.jpg',
-      '/stock/photo-1600585154526-990dced4db0d.jpg',
+      '/stock/photo-1513694203232-719a280e022f.jpg',
+      '/stock/photo-1600121848594-d8644e57abab.jpg',
     ],
     architecturalStyle: 'Modern Coastal',
     yearBuilt: 2024,
@@ -463,7 +463,7 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     layoutVariant: 'exterior-right',
     exteriorImage: '/stock/photo-1599809275671-b5942cabc7a2.jpg',
     interiorImages: [
-      '/stock/photo-1600585154340-be6161a56a0c.jpg',
+      '/stock/photo-1554995207-c18c203602cb.jpg',
     ],
     architecturalStyle: 'Suburban Contemporary',
     yearBuilt: 2023,
@@ -493,7 +493,7 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     layoutVariant: 'exterior-left',
     exteriorImage: '/stock/photo-1600566753190-17f0baa2a6c3.jpg',
     interiorImages: [
-      '/stock/photo-1600585154526-990dced4db0d.jpg',
+      '/stock/photo-1505691938895-1758d7feb511.jpg',
     ],
     architecturalStyle: 'Modern Villa',
     yearBuilt: 2024,
@@ -523,7 +523,7 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     layoutVariant: 'exterior-right',
     exteriorImage: '/stock/photo-1522771739844-6a9f6d5f14af.jpg',
     interiorImages: [
-      '/stock/photo-1600210492486-724fe5c67fb0.jpg',
+      '/stock/photo-1560448204-e02f11c3d0e2.jpg',
     ],
     architecturalStyle: 'Urban Modern',
     yearBuilt: 2024,
@@ -613,7 +613,7 @@ export const PROPERTY_LISTINGS: PropertyListing[] = [
     layoutVariant: 'exterior-left',
     exteriorImage: '/stock/photo-1554995207-c18c203602cb.jpg',
     interiorImages: [
-      '/stock/photo-1600210492486-724fe5c67fb0.jpg',
+      '/stock/photo-1502672260266-1c1ef2d93688.jpg',
     ],
     architecturalStyle: 'Contemporary Studio',
     yearBuilt: 2024,

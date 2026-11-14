@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Building2 } from 'lucide-react';
 
-const LOCAL_STOCK_FALLBACK = '/stock/photo-1600585154340-be6161a56a0c.jpg';
+const LOCAL_STOCK_FALLBACK = '/stock/photo-1600596542815-ffad4c1539a9.jpg';
 
 interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   fallbackSrc?: string;

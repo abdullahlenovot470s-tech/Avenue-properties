@@ -23,6 +23,8 @@ import {
   Download,
   AlertCircle,
 } from 'lucide-react';
+import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { ContactInquiryRecord, RegisteredAccountRecord } from '../lib/inquiriesApi';
@@ -113,10 +115,21 @@ export const ClientRecordsPage: React.FC = () => {
   const [confirmDeleteInquiryId, setConfirmDeleteInquiryId] = useState<string | null>(null);
 
   // Alerts & Pending Queue state
-  const alertsConfigured = isEnquiryWebhookConfigured();
+  const clientWebhookConfigured = isEnquiryWebhookConfigured();
+  const [serverAlertStatus, setServerAlertStatus] = useState<{
+    emailProvider: 'resend' | 'smtp' | 'none';
+    serverWebhookConfigured: boolean;
+    alertRecipient?: string;
+  } | null>(null);
+  const [testPreviewUrl, setTestPreviewUrl] = useState<string | undefined>(undefined);
   const [sendingTestAlert, setSendingTestAlert] = useState(false);
   const [pendingCount, setPendingCount] = useState<number>(() => getPendingEnquiriesCount());
   const [retryingQueue, setRetryingQueue] = useState(false);
+
+  const alertsConfigured =
+    clientWebhookConfigured ||
+    Boolean(serverAlertStatus?.serverWebhookConfigured) ||
+    (serverAlertStatus?.emailProvider !== undefined && serverAlertStatus.emailProvider !== 'none');
 
   // Section 2 state (Registered Accounts)
   const [accountSearch, setAccountSearch] = useState('');
@@ -136,11 +149,35 @@ export const ClientRecordsPage: React.FC = () => {
       if (isManual) setRefreshing(true);
       setRecordsError(null);
       try {
-        const res = await fetch('/api/management/records', {
-          headers: {
-            Authorization: `Bearer ${managementToken}`,
-          },
-        });
+        const [res, alertRes] = await Promise.all([
+          fetch('/api/management/records', {
+            headers: {
+              Authorization: `Bearer ${managementToken}`,
+            },
+          }),
+          fetch('/api/management/alerts-status', {
+            headers: {
+              Authorization: `Bearer ${managementToken}`,
+            },
+          }).catch(() => null),
+        ]);
+
+        if (alertRes) {
+          const parsedAlerts = await parseApiResponse<{
+            success?: boolean;
+            emailProvider?: 'resend' | 'smtp' | 'none';
+            serverWebhookConfigured?: boolean;
+            alertRecipient?: string;
+          }>(alertRes);
+          if (parsedAlerts.ok && parsedAlerts.data?.success) {
+            setServerAlertStatus({
+              emailProvider: parsedAlerts.data.emailProvider || 'none',
+              serverWebhookConfigured: Boolean(parsedAlerts.data.serverWebhookConfigured),
+              alertRecipient: parsedAlerts.data.alertRecipient,
+            });
+          }
+        }
+
         const parsed = await parseApiResponse<{
           success?: boolean;
           error?: string;
@@ -161,7 +198,57 @@ export const ClientRecordsPage: React.FC = () => {
           showToast(msg, 'error');
         } else {
           setInquiries(Array.isArray(parsed.data.inquiries) ? parsed.data.inquiries : []);
-          setAccounts(Array.isArray(parsed.data.accounts) ? parsed.data.accounts : []);
+          const backendAccounts = Array.isArray(parsed.data.accounts) ? parsed.data.accounts : [];
+          const mergedByEmail = new Map<string, RegisteredAccountRecord>();
+          for (const acc of backendAccounts) {
+            if (acc.email) {
+              mergedByEmail.set(acc.email.toLowerCase(), acc);
+            }
+          }
+
+          // Also read verified client profiles persisted directly in Firestore /users
+          if (auth.currentUser?.emailVerified) {
+            try {
+              const snap = await getDocs(collection(db, 'users'));
+              const currentAdminEmail = (auth.currentUser.email || '').toLowerCase();
+              snap.docs.forEach((docSnap) => {
+                const data = docSnap.data() as Record<string, unknown>;
+                const email = String(data.email || '').trim().toLowerCase();
+                if (!email || email === currentAdminEmail) return;
+                const existing = mergedByEmail.get(email);
+                const fsRecord: RegisteredAccountRecord = {
+                  id: String(data.id || docSnap.id),
+                  name: String(data.name || existing?.name || email.split('@')[0]),
+                  email,
+                  emailVerified: data.emailVerified !== undefined ? Boolean(data.emailVerified) : true,
+                  provider:
+                    data.provider === 'google' || data.provider === 'email'
+                      ? data.provider
+                      : existing?.provider || 'email',
+                  photoURL: typeof data.photoURL === 'string' ? data.photoURL : existing?.photoURL,
+                  phone: typeof data.phone === 'string' && data.phone ? data.phone : existing?.phone,
+                  createdAt:
+                    typeof data.createdAt === 'string' && data.createdAt
+                      ? data.createdAt
+                      : existing?.createdAt || new Date().toISOString(),
+                  lastLoginAt:
+                    typeof data.lastLoginAt === 'string' ? data.lastLoginAt : existing?.lastLoginAt,
+                };
+                mergedByEmail.set(email, fsRecord);
+              });
+            } catch (err) {
+              try {
+                handleFirestoreError(err, OperationType.LIST, 'users');
+              } catch {
+                // Non-fatal fallback to backend accounts list
+              }
+            }
+          }
+
+          const combinedAccounts = Array.from(mergedByEmail.values()).sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          setAccounts(combinedAccounts);
         }
       } catch {
         setRecordsError(SERVER_UNREACHABLE_MESSAGE);
@@ -189,22 +276,68 @@ export const ClientRecordsPage: React.FC = () => {
     };
   }, []);
 
-  const handleSendTestAlert = () => {
+  const handleSendTestAlert = async () => {
     setSendingTestAlert(true);
-    void sendEnquiryToWebhook({
-      name: 'TEST ENQUIRY',
-      email: '',
-      phone: '',
-      city: '',
-      interest: '',
-      budget: '',
-      message: 'Test from the management page',
-      source: 'Management test',
-    }).finally(() => {
-      setSendingTestAlert(false);
+    setTestPreviewUrl(undefined);
+
+    let clientSent = false;
+    if (clientWebhookConfigured) {
+      const webhookRes = await sendEnquiryToWebhook({
+        name: 'TEST ENQUIRY',
+        email: '',
+        phone: '',
+        city: '',
+        interest: '',
+        budget: '',
+        message: 'Test from the management page',
+        source: 'Management test',
+      });
+      clientSent = Boolean(webhookRes.sent);
       setPendingCount(getPendingEnquiriesCount());
-    });
-    showToast('Test sent. Check your email in a minute.', 'success');
+    }
+
+    let serverSent = false;
+    let previewUrl: string | undefined;
+    if (managementToken) {
+      try {
+        const res = await fetch('/api/management/test-alert', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${managementToken}`,
+          },
+        });
+        const parsed = await parseApiResponse<{
+          success?: boolean;
+          deliveredToInbox?: boolean;
+          webhookSent?: boolean;
+          previewUrl?: string;
+          error?: string;
+        }>(res);
+        if (parsed.ok && parsed.data) {
+          serverSent = Boolean(parsed.data.success);
+          previewUrl = parsed.data.previewUrl;
+        }
+      } catch {
+        // Ignore network error and rely on clientSent status
+      }
+    }
+
+    setSendingTestAlert(false);
+
+    if (clientSent || serverSent) {
+      showToast('Test alert sent. Check your email in a minute.', 'success');
+    } else if (previewUrl) {
+      setTestPreviewUrl(previewUrl);
+      showToast(
+        'No live email/webhook configured yet — generated an Ethereal test preview instead.',
+        'info'
+      );
+    } else {
+      showToast(
+        'Email alerts are not configured. Set RESEND_API_KEY, SMTP_*, or VITE_ENQUIRY_WEBHOOK_URL.',
+        'error'
+      );
+    }
   };
 
   const handleRetryQueue = async () => {
@@ -296,17 +429,32 @@ export const ClientRecordsPage: React.FC = () => {
         },
       });
       const parsed = await parseApiResponse<{ success?: boolean; error?: string }>(res);
+
+      let deletedFromFirestore = false;
+      if (auth.currentUser?.emailVerified) {
+        try {
+          await deleteDoc(doc(db, 'users', id));
+          deletedFromFirestore = true;
+        } catch (err) {
+          try {
+            handleFirestoreError(err, OperationType.DELETE, `users/${id}`);
+          } catch {
+            // Best-effort Firestore delete
+          }
+        }
+      }
+
       setConfirmDeleteAccountId(null);
-      if (parsed.unreachable || !parsed.data) {
+      if ((parsed.ok && parsed.data?.success) || deletedFromFirestore) {
+        setAccounts((prev) => prev.filter((acc) => acc.id !== id));
+        showToast(`Removed registered account "${email}".`, 'info');
+      } else if (parsed.unreachable || !parsed.data) {
         showToast(SERVER_UNREACHABLE_MESSAGE, 'error');
       } else if (parsed.status === 401) {
         showToast(parsed.data.error || 'Management session expired. Please sign in again.', 'error');
         void logout();
-      } else if (!parsed.ok || !parsed.data.success) {
-        showToast(parsed.data.error || 'Could not delete account record.', 'error');
       } else {
-        setAccounts((prev) => prev.filter((acc) => acc.id !== id));
-        showToast(`Removed registered account "${email}".`, 'info');
+        showToast(parsed.data.error || 'Could not delete account record.', 'error');
       }
     } catch {
       setConfirmDeleteAccountId(null);
@@ -503,12 +651,36 @@ export const ClientRecordsPage: React.FC = () => {
                         : 'bg-amber-50 text-amber-800 border-amber-200'
                     }`}
                   >
-                    {alertsConfigured ? 'Email alerts: configured' : 'Email alerts: not configured'}
+                    {alertsConfigured ? 'Email alerts: active' : 'Email alerts: not configured'}
                   </span>
                 </div>
                 <p className="font-body text-xs text-slate-600">
-                  Daily report is sent automatically at about 8 PM PKT by the alert service
+                  {alertsConfigured ? (
+                    <>
+                      Enquiry alerts active
+                      {serverAlertStatus?.emailProvider && serverAlertStatus.emailProvider !== 'none'
+                        ? ` (${serverAlertStatus.emailProvider.toUpperCase()} to ${serverAlertStatus.alertRecipient || 'management'})`
+                        : ''}
+                      {clientWebhookConfigured || serverAlertStatus?.serverWebhookConfigured
+                        ? ' • Google Sheet webhook & daily 8 PM PKT report enabled'
+                        : ''}
+                    </>
+                  ) : (
+                    'Set RESEND_API_KEY / SMTP_* for instant email alerts or VITE_ENQUIRY_WEBHOOK_URL + VITE_ENQUIRY_KEY for Google Sheet & daily 8 PM PKT reports.'
+                  )}
                 </p>
+                {testPreviewUrl && (
+                  <p className="font-body text-xs">
+                    <a
+                      href={testPreviewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#2F4B73] hover:underline font-semibold"
+                    >
+                      Open Ethereal test email preview →
+                    </a>
+                  </p>
+                )}
               </div>
             </div>
 
@@ -519,7 +691,7 @@ export const ClientRecordsPage: React.FC = () => {
               className="px-4 py-2 rounded-full bg-white hover:bg-[#1B2A44] hover:text-white text-[#1B2A44] border border-slate-200 text-xs font-display uppercase tracking-wider font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 disabled:opacity-60"
             >
               <Bell className="w-3.5 h-3.5" />
-              <span>Send test alert</span>
+              <span>{sendingTestAlert ? 'Testing...' : 'Send test alert'}</span>
             </button>
           </div>
 

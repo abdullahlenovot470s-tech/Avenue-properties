@@ -18,8 +18,9 @@ Copy `.env.example` to `.env` for local development or configure these variables
 - `PORT` — HTTP port (defaults to `3000`).
 - `NODE_ENV` — Set to `production` when serving the built frontend via `npm start`.
 - `APP_URL` — Public origin URL (e.g. `https://your-domain.com`) used inside email verification links.
-- `EMAIL_FROM`, `RESEND_API_KEY` (or `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`) — Outbound transactional email delivery for signup verification and password reset codes (falls back to Ethereal test mail when unset).
-- `VITE_ENQUIRY_WEBHOOK_URL`, `VITE_ENQUIRY_KEY` — Google Apps Script Web App endpoint and spam-deterrent key used by enquiry forms and as a fallback if the backend is unreachable.
+- `EMAIL_FROM`, `RESEND_API_KEY` (or `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`) — Outbound transactional email delivery for instant enquiry email alerts to `ADMIN_ALERT_EMAIL` (or `MANAGEMENT_EMAIL`) and server fallback auth emails.
+- `ADMIN_ALERT_EMAIL` — Optional override recipient email address for instant enquiry alerts.
+- `VITE_ENQUIRY_WEBHOOK_URL`, `VITE_ENQUIRY_KEY` (and optional server-side `ENQUIRY_WEBHOOK_URL`, `ENQUIRY_KEY`) — Google Apps Script Web App endpoint and spam-deterrent key used by enquiry forms and as a fallback if the backend is unreachable.
 
 ## Run Locally
 

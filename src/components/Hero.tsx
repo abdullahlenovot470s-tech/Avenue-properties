@@ -81,7 +81,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenConsultation }) => {
             </h1>
 
             <p className="mt-2.5 sm:mt-3 font-body text-white/80 font-light leading-relaxed max-w-md line-clamp-2 text-xs sm:text-base">
-              Premium residences built for monumental lives, bringing modern architecture and complete peace of mind to Pakistan's most distinguished addresses.
+              Premium residences built for modern family living, bringing timeless architecture and complete peace of mind to Pakistan's most distinguished addresses.
             </p>
 
             <div className="mt-4 sm:mt-5">

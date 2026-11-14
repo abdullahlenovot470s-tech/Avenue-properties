@@ -30,9 +30,26 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email_verified == true &&
+        request.auth.token.email == 'abdullah.lenovot470s@gmail.com';
+    }
+
     function isValidUser(data) {
       return data.keys().hasAll(['id', 'email', 'name']) &&
-        data.keys().hasOnly(['id', 'email', 'name', 'photoURL', 'phone', 'emailVerified', 'createdAt', 'savedPropertyIds']) &&
+        data.keys().hasOnly([
+          'id',
+          'email',
+          'name',
+          'photoURL',
+          'phone',
+          'emailVerified',
+          'provider',
+          'createdAt',
+          'lastLoginAt',
+          'savedPropertyIds'
+        ]) &&
         isValidId(data.id) &&
         data.id == request.auth.uid &&
         data.email is string && data.email.size() > 0 && data.email.size() <= 254 &&
@@ -40,19 +57,41 @@ service cloud.firestore {
         (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000)) &&
         (!('phone' in data) || (data.phone is string && data.phone.size() <= 32)) &&
         (!('emailVerified' in data) || data.emailVerified is bool) &&
+        (!('provider' in data) || (data.provider is string && data.provider in ['email', 'google'])) &&
         (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64)) &&
-        (!('savedPropertyIds' in data) || (data.savedPropertyIds is list && data.savedPropertyIds.size() <= 100 && (data.savedPropertyIds.size() == 0 || data.savedPropertyIds[0] is string)));
+        (!('lastLoginAt' in data) || (data.lastLoginAt is string && data.lastLoginAt.size() <= 64)) &&
+        (!('savedPropertyIds' in data) || (
+          data.savedPropertyIds is list &&
+          data.savedPropertyIds.size() <= 100 &&
+          (data.savedPropertyIds.size() == 0 || data.savedPropertyIds[0] is string)
+        ));
     }
 
     match /users/{userId} {
-      allow get: if isValidId(userId) && isOwner(userId);
-      allow create: if isValidId(userId) && isVerifiedUser() && isOwner(userId) && isValidUser(incoming());
-      allow update: if isValidId(userId) && isVerifiedUser() && isOwner(userId) && isValidUser(incoming()) &&
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId) &&
+        isVerifiedUser() &&
+        isOwner(userId) &&
+        isValidUser(incoming()) &&
+        incoming().email == request.auth.token.email;
+      allow update: if isValidId(userId) &&
+        isVerifiedUser() &&
+        isOwner(userId) &&
+        isValidUser(incoming()) &&
         incoming().id == existing().id &&
         incoming().email == existing().email &&
         (!('createdAt' in existing()) || incoming().createdAt == existing().createdAt) &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'photoURL', 'phone', 'emailVerified', 'savedPropertyIds']);
-      allow delete: if isValidId(userId) && isOwner(userId);
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'name',
+          'photoURL',
+          'phone',
+          'emailVerified',
+          'provider',
+          'lastLoginAt',
+          'savedPropertyIds'
+        ]);
+      allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
     }
 
     // Server-only collections managed exclusively by Express via Firebase Admin SDK

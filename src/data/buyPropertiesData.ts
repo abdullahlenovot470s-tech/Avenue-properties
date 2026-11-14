@@ -3,7 +3,7 @@ export interface BuyProperty {
   title: string;
   city: 'Lahore' | 'Islamabad' | 'Karachi' | 'Rawalpindi' | 'Murree & Hills';
   location: string;
-  type: 'House' | 'Apartment' | 'Plot' | 'Penthouse';
+  type: 'House' | 'Apartment' | 'Plot';
   price: string; // e.g. "PKR 1.85 Crore" or "PKR 95 Lakh"
   numericPrice: number; // in PKR
   priceRange: 'Under 1 Cr' | '1-3 Cr' | '3-7 Cr' | '7 Cr+';
@@ -17,6 +17,38 @@ export interface BuyProperty {
   features: string[];
   possession: string;
   nocStatus: string;
+  status?: 'Available' | 'Under Offer' | 'Sold';
+}
+
+export function computeAreaCategory(area: string): BuyProperty['areaCategory'] {
+  const lower = String(area || '').toLowerCase();
+  const match = lower.match(/(\d+(?:,\d+)*(?:\.\d+)?)/);
+  const numericValue = match ? parseFloat(match[1].replace(/,/g, '')) : NaN;
+
+  let marlas = NaN;
+  if (!Number.isNaN(numericValue) && numericValue > 0) {
+    if (lower.includes('kanal')) {
+      marlas = numericValue * 20;
+    } else if (lower.includes('marla')) {
+      marlas = numericValue;
+    } else if (lower.includes('sq. yd') || lower.includes('sq yd') || lower.includes('yard') || lower.includes('gaz')) {
+      marlas = numericValue / 25;
+    } else if (lower.includes('sq. ft') || lower.includes('sq ft') || lower.includes('sqft')) {
+      marlas = numericValue / 225;
+    }
+  }
+
+  if (!Number.isNaN(marlas)) {
+    if (marlas >= 40) return '2 Kanal+';
+    if (marlas >= 20) return '1 Kanal';
+    if (marlas > 5) return '10 Marla';
+    return 'Up to 5 Marla';
+  }
+
+  if (lower.includes('2 kanal') || lower.includes('1,000') || lower.includes('1000')) return '2 Kanal+';
+  if (lower.includes('1 kanal') || lower.includes('500')) return '1 Kanal';
+  if (lower.includes('10 marla') || lower.includes('7 marla') || lower.includes('8 marla')) return '10 Marla';
+  return 'Up to 5 Marla';
 }
 
 export const BUY_PROPERTIES: BuyProperty[] = [
@@ -37,8 +69,8 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     image: '/stock/photo-1600047509807-ba8f99d2cdde.jpg',
     gallery: [
       '/stock/photo-1600047509807-ba8f99d2cdde.jpg',
-      '/stock/photo-1600585154340-be6161a56a0c.jpg',
-      '/stock/photo-1600566753086-00f18fb6b3ea.jpg',
+      '/stock/photo-1616046229478-9901c5536a45.jpg',
+      '/stock/photo-1617806118233-18e1de247200.jpg',
     ],
     description:
       'Impeccably finished 5 Marla double-storey house in Bahria Town Lahore Sector C. Features solid ash wood doors, Spanish porcelain floor tiles, imported sanitary ware, and dedicated car porch.',
@@ -136,7 +168,7 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     image: '/stock/photo-1500382017468-9049fed747ef.jpg',
     gallery: [
       '/stock/photo-1500382017468-9049fed747ef.jpg',
-      '/stock/photo-1600585154526-990dced4db0d.jpg',
+      '/stock/photo-1600596542815-ffad4c1539a9.jpg',
     ],
     description:
       'Direct approach 1 Kanal residential plot located on a 60-foot wide avenue in Sector U, DHA Phase 7 Lahore. All development charges and possession utilities cleared, perfect for an architectural villa.',
@@ -215,15 +247,15 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     nocStatus: 'CDA Building By-Laws Cleared',
   },
 
-  // Additional Monumental Residences for Sale
+  // Additional Residences for Sale
   {
     id: 'buy-margalla-2k-isb',
     title: 'The Margalla Pavilions, Sector F-7',
     city: 'Islamabad',
     location: 'Sector F-7/2, Islamabad',
     type: 'House',
-    price: 'PKR 38.5 Crore',
-    numericPrice: 385000000,
+    price: 'PKR 16.5 Crore',
+    numericPrice: 165000000,
     priceRange: '7 Cr+',
     area: '2 Kanal',
     areaCategory: '2 Kanal+',
@@ -232,7 +264,7 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     image: '/stock/photo-1523217582562-09d0def993a6.jpg',
     gallery: [
       '/stock/photo-1523217582562-09d0def993a6.jpg',
-      '/stock/photo-1600585154526-990dced4db0d.jpg',
+      '/stock/photo-1600121848594-d8644e57abab.jpg',
     ],
     description:
       'Diplomatic enclave style estate sitting on 2 Kanal in Sector F-7 Islamabad. Features heated indoor pool, 25kW hybrid solar farm, Turkish travertine walls, and private security post.',
@@ -252,8 +284,8 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     city: 'Lahore',
     location: 'Defence Raya Golf Resort, Phase 6, DHA Lahore',
     type: 'House',
-    price: 'PKR 24.5 Crore',
-    numericPrice: 245000000,
+    price: 'PKR 11.5 Crore',
+    numericPrice: 115000000,
     priceRange: '7 Cr+',
     area: '2 Kanal',
     areaCategory: '2 Kanal+',
@@ -262,13 +294,13 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     image: '/stock/photo-1570129477492-45c003edd2be.jpg',
     gallery: [
       '/stock/photo-1570129477492-45c003edd2be.jpg',
-      '/stock/photo-1600566753190-17f0baa2a6c3.jpg',
+      '/stock/photo-1598928506311-c55ded91a20c.jpg',
     ],
     description:
-      'Direct fairway-facing golf villa in Defence Raya Phase 6 Lahore. Bespoke deodar woodwork, infinity plunge pool overlooking hole 14, and basement cinema lounge.',
+      'Direct fairway-facing golf villa in Defence Raya Phase 6 Lahore. Bespoke deodar woodwork, infinity plunge pool overlooking hole 14, and landscaped courtyard lounge.',
     features: [
       'Overlooking 18-Hole Championship Golf Course',
-      'Private Basement Cinema & Cigar Room',
+      'Formal Drawing & Dining Hall',
       'DHA Phase 6 Supreme Gated Security',
       'German Double-Glazed Facade',
       'DHA Lahore Clean Allotment',
@@ -292,13 +324,13 @@ export const BUY_PROPERTIES: BuyProperty[] = [
     image: '/stock/photo-1588880331179-bc9b93a8cb5e.jpg',
     gallery: [
       '/stock/photo-1588880331179-bc9b93a8cb5e.jpg',
-      '/stock/photo-1512917774080-9991f1c4c750.jpg',
+      '/stock/photo-1505691938895-1758d7feb511.jpg',
     ],
     description:
-      'Charming pine sanctuary villa nestled in the hills of Bhurban. Features dual open fireplaces, cedar wood ceilings, expansive terrace over snow-capped valleys, and winter road heating.',
+      'Charming pine residence nestled in the hills of Bhurban. Features central gas heating, cedar wood ceilings, expansive terrace over pine-covered valleys, and all-season paved road access.',
     features: [
       '1 Kanal Pine Forest Elevation',
-      'Dual Stone Wood-Burning Fireplaces',
+      'Central Gas Heating & Water Heater',
       'Full Central Heating & Geyser System',
       'Scenic Valley & Sunset Views',
       'Clear Registry & Intiqal in Murree Tehsil',

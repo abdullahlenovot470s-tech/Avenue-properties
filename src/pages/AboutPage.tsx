@@ -39,7 +39,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
             DEFINING ARCHITECTURAL EXCELLENCE IN PAKISTAN.
           </h1>
           <p className="font-body text-sm sm:text-base text-[#1B2A44]/80 leading-relaxed font-light">
-            Founded on the belief that a home is a family's sanctuary and enduring legacy, Avenue bridges visionary modern architecture with clear legal titles and transparent transfers. We operate not merely as conventional agents, but as trusted advisors for Pakistan's premier family residences.
+            Founded on the belief that a home is a family's foundation and enduring legacy, Avenue bridges visionary modern architecture with clear legal titles and transparent transfers. We operate not merely as conventional agents, but as trusted advisors for Pakistan's premier family residences.
           </p>
 
           <div className="pt-2 flex items-center gap-4">

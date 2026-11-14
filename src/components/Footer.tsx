@@ -20,7 +20,7 @@ export const Footer: React.FC = () => {
               Avenue
             </Link>
             <p className="font-body text-xs sm:text-sm text-white/70 max-w-sm leading-relaxed">
-              Advisors for architectural residences and family sanctuaries in Pakistan. Bridging monumental design with clear titles and lasting peace of mind.
+              Advisors for architectural residences and family homes in Pakistan. Bridging modern design with clear titles and lasting peace of mind.
             </p>
             <div className="pt-2 flex items-center gap-3">
               <a

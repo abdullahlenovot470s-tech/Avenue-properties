@@ -53,6 +53,7 @@ export const BuyDetailPage: React.FC = () => {
   }, [id, buyProperties]);
 
   useEffect(() => {
+    setActivePhotoIdx(0);
     if (property) {
       document.title = `${property.title} | Properties for Sale | Avenue`;
     } else {
@@ -163,7 +164,10 @@ export const BuyDetailPage: React.FC = () => {
     return `PKR ${(amount / 100000).toFixed(1)} Lakh`;
   };
 
-  const images = property.gallery && property.gallery.length > 0 ? property.gallery : [property.image];
+  const rawImages = property.gallery && property.gallery.length > 0 ? property.gallery : [property.image];
+  const images = rawImages.filter(Boolean);
+  const currentImage = images[activePhotoIdx] || images[0] || property.image;
+  const isSold = property.status === 'Sold';
 
   return (
     <div className="min-h-screen pt-24 pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-6">
@@ -241,18 +245,31 @@ export const BuyDetailPage: React.FC = () => {
       <section className="bg-white rounded-[28px] sm:rounded-[36px] overflow-hidden p-4 sm:p-6 shadow-xl border border-slate-100">
         <div className="relative aspect-[16/9] lg:aspect-[21/9] w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-lg border border-slate-200">
           <SafeImage
-            src={images[activePhotoIdx] || property.image}
+            src={currentImage}
             alt={property.title}
             priority={true}
             className="w-full h-full object-cover"
           />
 
           <div className="absolute top-4 left-4 glass-panel-dark px-3.5 py-1.5 rounded-full text-xs font-display uppercase tracking-widest text-white">
-            Photo {activePhotoIdx + 1} of {images.length}
+            Photo {Math.min(activePhotoIdx + 1, images.length)} of {images.length}
           </div>
 
-          <div className="absolute top-4 right-4 glass-panel-dark px-3.5 py-1.5 rounded-full text-xs font-display uppercase tracking-widest text-emerald-300">
-            {property.city} • {property.type}
+          <div className="absolute top-4 right-4 flex flex-wrap items-center justify-end gap-2">
+            {property.status && property.status !== 'Available' && (
+              <span
+                className={`px-3.5 py-1.5 rounded-full text-xs font-display uppercase tracking-widest font-bold shadow-md ${
+                  property.status === 'Sold'
+                    ? 'bg-rose-600 text-white'
+                    : 'bg-amber-500 text-white'
+                }`}
+              >
+                {property.status}
+              </span>
+            )}
+            <div className="glass-panel-dark px-3.5 py-1.5 rounded-full text-xs font-display uppercase tracking-widest text-emerald-300">
+              {property.city} • {property.type}
+            </div>
           </div>
         </div>
 
@@ -282,9 +299,22 @@ export const BuyDetailPage: React.FC = () => {
           <div className="bg-white rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 shadow-xl border border-slate-100 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-100 pb-6">
               <div>
-                <div className="flex items-center gap-2 text-xs font-semibold text-[#2F4B73] mb-1.5">
-                  <MapPin className="w-4 h-4" />
-                  <span>{property.location}</span>
+                <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[#2F4B73]">
+                    <MapPin className="w-4 h-4" />
+                    <span>{property.location}</span>
+                  </div>
+                  {property.status && property.status !== 'Available' && (
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-display uppercase tracking-wider font-bold ${
+                        property.status === 'Sold'
+                          ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                          : 'bg-amber-100 text-amber-800 border border-amber-200'
+                      }`}
+                    >
+                      {property.status}
+                    </span>
+                  )}
                 </div>
                 <h1 className="font-display font-extrabold text-3xl sm:text-4xl text-[#1B2A44] uppercase tracking-tight">
                   {property.title}
@@ -499,7 +529,7 @@ export const BuyDetailPage: React.FC = () => {
                   <input
                     type="email"
                     required
-                    placeholder="e.g. bilal.khan@gmail.com"
+                    placeholder="e.g. bilal.khan@example.com"
                     value={tourEmail}
                     onChange={(e) => setTourEmail(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-[#2F4B73] focus:bg-white"
@@ -538,7 +568,13 @@ export const BuyDetailPage: React.FC = () => {
                     disabled={tourSubmitting}
                     className="w-full py-3.5 px-6 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] disabled:opacity-60 text-white font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <span>{tourSubmitting ? 'Submitting Request...' : 'Request Private Showing'}</span>
+                    <span>
+                      {tourSubmitting
+                        ? 'Submitting Request...'
+                        : isSold
+                        ? 'Ask about similar properties'
+                        : 'Request Private Showing'}
+                    </span>
                     <Send className="w-3.5 h-3.5" />
                   </button>
                 </div>

@@ -193,7 +193,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     <div className="relative">
                       <input
                         type="email"
-                        placeholder="e.g. tariq.mehmood@gmail.com"
+                        placeholder="e.g. tariq.mehmood@example.com"
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/40 text-xs sm:text-sm focus:outline-none focus:border-white/50"

@@ -50,6 +50,7 @@ export const SignupPage: React.FC = () => {
   const [verifyError, setVerifyError] = useState('');
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [emailPreviewUrl, setEmailPreviewUrl] = useState<string | undefined>(undefined);
+  const [verifyProvider, setVerifyProvider] = useState<'firebase' | 'server'>('firebase');
   const [resendCooldown, setResendCooldown] = useState(0);
   const [checkingVerification, setCheckingVerification] = useState(false);
 
@@ -144,12 +145,19 @@ export const SignupPage: React.FC = () => {
     setLoading(false);
 
     if (result.success) {
+      const isFirebaseFlow = result.provider === 'firebase';
+      setVerifyProvider(isFirebaseFlow ? 'firebase' : 'server');
       setEmailPreviewUrl(result.previewUrl);
       setVerificationCode('');
       setVerifyError('');
       setStep('verify');
       setResendCooldown(60);
-      showToast('Verification email sent! Check your inbox for the 6-digit code.', 'success');
+      showToast(
+        isFirebaseFlow
+          ? 'Verification link sent! Check your inbox and click the link to activate your account.'
+          : 'Verification email sent! Check your inbox for the 6-digit code.',
+        'success'
+      );
     } else {
       setErrors((prev) => ({
         ...prev,
@@ -445,8 +453,17 @@ export const SignupPage: React.FC = () => {
                     Verify Your Email
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-600 font-body leading-relaxed max-w-sm mx-auto">
-                    We sent a 6-digit code and verification link to{' '}
-                    <span className="font-bold text-[#1B2A44]">{maskEmail(formData.email)}</span>.
+                    {verifyProvider === 'firebase' ? (
+                      <>
+                        We sent a verification link to{' '}
+                        <span className="font-bold text-[#1B2A44]">{maskEmail(formData.email)}</span>. Open your inbox (check spam if needed), click the link, then confirm below.
+                      </>
+                    ) : (
+                      <>
+                        We sent a 6-digit code and verification link to{' '}
+                        <span className="font-bold text-[#1B2A44]">{maskEmail(formData.email)}</span>.
+                      </>
+                    )}
                   </p>
                 </div>
 
@@ -467,50 +484,64 @@ export const SignupPage: React.FC = () => {
                   </div>
                 )}
 
-                <form onSubmit={handleVerifyCodeSubmit} className="space-y-3">
-                  <div>
-                    <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1.5 text-center">
-                      Enter 6-Digit Verification Code
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={6}
-                      placeholder="123456"
-                      value={verificationCode}
-                      onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                      className="w-full py-3 px-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-[#2F4B73] focus:outline-none text-center font-mono text-xl font-bold tracking-[0.4em] text-[#1B2A44]"
-                    />
-                    {verifyError && (
-                      <p className="text-[11px] text-rose-500 font-body mt-1.5 text-center">
-                        {verifyError}
-                      </p>
-                    )}
-                  </div>
+                {verifyProvider === 'server' && (
+                  <form onSubmit={handleVerifyCodeSubmit} className="space-y-3">
+                    <div>
+                      <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1.5 text-center">
+                        Enter 6-Digit Verification Code
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="123456"
+                        value={verificationCode}
+                        onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                        className="w-full py-3 px-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-[#2F4B73] focus:outline-none text-center font-mono text-xl font-bold tracking-[0.4em] text-[#1B2A44]"
+                      />
+                      {verifyError && (
+                        <p className="text-[11px] text-rose-500 font-body mt-1.5 text-center">
+                          {verifyError}
+                        </p>
+                      )}
+                    </div>
 
-                  <button
-                    type="submit"
-                    disabled={verifyingCode}
-                    className="w-full py-3.5 px-6 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] text-white font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 active:scale-[0.99]"
-                  >
-                    {verifyingCode ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    )}
-                    <span>{verifyingCode ? 'Verifying...' : 'Verify & Activate Account'}</span>
-                  </button>
-                </form>
+                    <button
+                      type="submit"
+                      disabled={verifyingCode}
+                      className="w-full py-3.5 px-6 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] text-white font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 active:scale-[0.99]"
+                    >
+                      {verifyingCode ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      )}
+                      <span>{verifyingCode ? 'Verifying...' : 'Verify & Activate Account'}</span>
+                    </button>
+                  </form>
+                )}
 
                 <div className="space-y-2.5">
                   <button
                     type="button"
                     onClick={handleVerifyCheck}
                     disabled={checkingVerification}
-                    className="w-full py-3 px-6 rounded-full bg-slate-100 hover:bg-slate-200 text-[#1B2A44] font-display font-semibold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    className={`w-full py-3.5 px-6 rounded-full font-display font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      verifyProvider === 'firebase'
+                        ? 'bg-[#1B2A44] hover:bg-[#2F4B73] text-white shadow-md'
+                        : 'bg-slate-100 hover:bg-slate-200 text-[#1B2A44] font-semibold'
+                    }`}
                   >
-                    {checkingVerification && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                    <span>I've clicked the link in my email</span>
+                    {checkingVerification ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    )}
+                    <span>
+                      {checkingVerification
+                        ? 'Checking Verification...'
+                        : "I've verified my email"}
+                    </span>
                   </button>
 
                   <button

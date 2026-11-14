@@ -12,7 +12,14 @@ import { getFirestore as getAdminFirestore, type Firestore } from 'firebase-admi
 import { PORTFOLIO_PROJECTS, PROPERTY_LISTINGS } from './src/data/realEstateData.ts';
 import { BUY_PROPERTIES, type BuyProperty } from './src/data/buyPropertiesData.ts';
 import { RENTAL_LISTINGS } from './src/data/rentalsData.ts';
-import type { PortfolioProject, PropertyListing, RentalListing } from './src/types/index.ts';
+import type {
+  PortfolioProject,
+  PropertyListing,
+  RentalListing,
+  ProjectStatus,
+  BuyStatus,
+  RentStatus,
+} from './src/types/index.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
 const MANAGEMENT_EMAIL = (process.env.MANAGEMENT_EMAIL || '').trim().toLowerCase();
@@ -623,6 +630,138 @@ async function removeCatalogRent(id: string): Promise<{ removed: boolean; catalo
   return { removed: true, catalog: await getCatalog() };
 }
 
+function mapProjectToPropertyListing(
+  existing: PropertyListing,
+  item: PortfolioProject
+): PropertyListing {
+  const parsedYear = Number(item.projectDelivered);
+  return {
+    ...existing,
+    id: existing.id,
+    name: item.title,
+    location: item.location,
+    price: item.valuation,
+    numericPrice: item.numericValuation ?? existing.numericPrice,
+    beds: item.beds,
+    baths: item.baths,
+    sqft: item.size,
+    category: item.category,
+    description: item.summary,
+    exteriorImage: item.gallery[0] || item.image,
+    interiorImages: item.gallery.slice(1),
+    yearBuilt: Number.isFinite(parsedYear) && parsedYear > 1900 ? parsedYear : existing.yearBuilt,
+    architect: item.architect,
+    status: item.status,
+  };
+}
+
+async function updateCatalogProject(
+  id: string,
+  item: PortfolioProject
+): Promise<{ updated: boolean; catalog: CatalogStore }> {
+  if (!firestoreDb) {
+    const idx = memoryCatalog.projects.findIndex((p) => p.id === id);
+    if (idx !== -1) {
+      const nextProjects = [...memoryCatalog.projects];
+      nextProjects[idx] = item;
+      memoryCatalog = { ...memoryCatalog, projects: nextProjects };
+      return { updated: true, catalog: memoryCatalog };
+    }
+    const listingIdx = memoryCatalog.listings.findIndex((l) => l.id === id);
+    if (listingIdx === -1) {
+      return { updated: false, catalog: memoryCatalog };
+    }
+    const nextListings = [...memoryCatalog.listings];
+    nextListings[listingIdx] = mapProjectToPropertyListing(nextListings[listingIdx], item);
+    memoryCatalog = { ...memoryCatalog, listings: nextListings };
+    return { updated: true, catalog: memoryCatalog };
+  }
+  await ensureCatalogSeeded();
+  const ref = firestoreDb.collection('catalog_projects').doc(id);
+  const snap = await ref.get();
+  if (snap.exists) {
+    const existingData = snap.data() as Record<string, unknown>;
+    const sortOrder = typeof existingData._sortOrder === 'number' ? existingData._sortOrder : Date.now();
+    await ref.set({
+      ...stripUndefined(item as unknown as Record<string, unknown>),
+      _sortOrder: sortOrder,
+    });
+    return { updated: true, catalog: await getCatalog() };
+  }
+  const listingRef = firestoreDb.collection('catalog_listings').doc(id);
+  const listingSnap = await listingRef.get();
+  if (!listingSnap.exists) {
+    return { updated: false, catalog: await getCatalog() };
+  }
+  const existingListingData = listingSnap.data() as PropertyListing & { _sortOrder?: number };
+  const sortOrder =
+    typeof existingListingData._sortOrder === 'number' ? existingListingData._sortOrder : Date.now();
+  const updatedListing = mapProjectToPropertyListing(existingListingData, item);
+  await listingRef.set({
+    ...stripUndefined(updatedListing as unknown as Record<string, unknown>),
+    _sortOrder: sortOrder,
+  });
+  return { updated: true, catalog: await getCatalog() };
+}
+
+async function updateCatalogBuy(
+  id: string,
+  item: BuyProperty
+): Promise<{ updated: boolean; catalog: CatalogStore }> {
+  if (!firestoreDb) {
+    const idx = memoryCatalog.buy.findIndex((b) => b.id === id);
+    if (idx === -1) {
+      return { updated: false, catalog: memoryCatalog };
+    }
+    const nextBuy = [...memoryCatalog.buy];
+    nextBuy[idx] = item;
+    memoryCatalog = { ...memoryCatalog, buy: nextBuy };
+    return { updated: true, catalog: memoryCatalog };
+  }
+  await ensureCatalogSeeded();
+  const ref = firestoreDb.collection('catalog_buy').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    return { updated: false, catalog: await getCatalog() };
+  }
+  const existingData = snap.data() as Record<string, unknown>;
+  const sortOrder = typeof existingData._sortOrder === 'number' ? existingData._sortOrder : Date.now();
+  await ref.set({
+    ...stripUndefined(item as unknown as Record<string, unknown>),
+    _sortOrder: sortOrder,
+  });
+  return { updated: true, catalog: await getCatalog() };
+}
+
+async function updateCatalogRent(
+  id: string,
+  item: RentalListing
+): Promise<{ updated: boolean; catalog: CatalogStore }> {
+  if (!firestoreDb) {
+    const idx = memoryCatalog.rent.findIndex((r) => r.id === id);
+    if (idx === -1) {
+      return { updated: false, catalog: memoryCatalog };
+    }
+    const nextRent = [...memoryCatalog.rent];
+    nextRent[idx] = item;
+    memoryCatalog = { ...memoryCatalog, rent: nextRent };
+    return { updated: true, catalog: memoryCatalog };
+  }
+  await ensureCatalogSeeded();
+  const ref = firestoreDb.collection('catalog_rent').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    return { updated: false, catalog: await getCatalog() };
+  }
+  const existingData = snap.data() as Record<string, unknown>;
+  const sortOrder = typeof existingData._sortOrder === 'number' ? existingData._sortOrder : Date.now();
+  await ref.set({
+    ...stripUndefined(item as unknown as Record<string, unknown>),
+    _sortOrder: sortOrder,
+  });
+  return { updated: true, catalog: await getCatalog() };
+}
+
 async function resetCatalogSection(section: string): Promise<CatalogStore> {
   const defaults = normalizeCatalogImages(getDefaultCatalog());
   if (!firestoreDb) {
@@ -904,10 +1043,8 @@ setInterval(() => {
 }, 5 * 60 * 1000).unref();
 
 function getClientIp(req: Request): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.trim()) {
-    return forwarded.split(',')[0].trim();
-  }
+  // Rely on Express req.ip (configured with trust proxy = 1) rather than the first
+  // client-controlled X-Forwarded-For entry, which visitors can spoof to bypass limits.
   return req.ip || req.socket.remoteAddress || 'unknown';
 }
 
@@ -1054,6 +1191,159 @@ async function sendEmail(params: {
   };
 }
 
+function getServerEmailDeliveryMode(): 'resend' | 'smtp' | 'none' {
+  if ((process.env.RESEND_API_KEY || '').trim()) return 'resend';
+  if (
+    (process.env.SMTP_HOST || '').trim() &&
+    (process.env.SMTP_USER || '').trim() &&
+    (process.env.SMTP_PASS || '').trim()
+  ) {
+    return 'smtp';
+  }
+  return 'none';
+}
+
+function getAlertRecipientEmail(): string {
+  return (
+    (process.env.ADMIN_ALERT_EMAIL || '').trim() ||
+    MANAGEMENT_EMAIL ||
+    DEFAULT_MANAGEMENT_GOOGLE_EMAIL
+  ).toLowerCase();
+}
+
+function getServerWebhookConfig(): { url: string; key: string } {
+  const url = (
+    process.env.ENQUIRY_WEBHOOK_URL ||
+    process.env.VITE_ENQUIRY_WEBHOOK_URL ||
+    ''
+  ).trim();
+  const key = (process.env.ENQUIRY_KEY || process.env.VITE_ENQUIRY_KEY || '').trim();
+  return { url, key };
+}
+
+function formatAlertPktTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.toLocaleString('en-PK', {
+    timeZone: 'Asia/Karachi',
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })} PKT`;
+}
+
+function buildInquiryAlertEmailText(record: ContactInquiryRecord): string {
+  const lines = [
+    `New Avenue Luxury Properties Enquiry (${record.source})`,
+    `Time: ${formatAlertPktTime(record.createdAt)}`,
+    `Name: ${record.name}`,
+    record.email ? `Email: ${record.email}` : '',
+    record.phone ? `Phone: ${record.phone}` : '',
+    record.office ? `City / Desk: ${record.office}` : '',
+    record.subject ? `Interest: ${record.subject}` : '',
+    record.propertyTitle ? `Property: ${record.propertyTitle}` : '',
+    record.preferredDate ? `Preferred Date: ${record.preferredDate}` : '',
+    record.timeframe ? `Timeframe / Budget: ${record.timeframe}` : '',
+    record.message ? `Message: ${record.message}` : '',
+  ].filter(Boolean);
+  return lines.join('\n');
+}
+
+function buildInquiryAlertEmailHtml(record: ContactInquiryRecord): string {
+  const row = (label: string, val?: string) =>
+    val
+      ? `<tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:12px;font-weight:700;text-transform:uppercase;width:150px;">${escapeHtml(label)}</td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;color:#1B2A44;font-size:13px;">${escapeHtml(val)}</td></tr>`
+      : '';
+
+  return `
+    <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px 16px;">
+      <div style="background:#1B2A44;color:#ffffff;padding:24px 28px;border-radius:18px 18px 0 0;">
+        <div style="font-size:20px;font-weight:800;letter-spacing:-0.4px;">Avenue Enquiry Alert</div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.8px;color:#94a3b8;margin-top:4px;">${escapeHtml(record.source)} &bull; ${escapeHtml(formatAlertPktTime(record.createdAt))}</div>
+      </div>
+      <div style="background:#ffffff;padding:24px 28px;border-radius:0 0 18px 18px;border:1px solid #e2e8f0;border-top:none;">
+        <table style="width:100%;border-collapse:collapse;">
+          ${row('Name', record.name)}
+          ${row('Email', record.email)}
+          ${row('Phone', record.phone)}
+          ${row('City / Desk', record.office)}
+          ${row('Interest', record.subject)}
+          ${row('Property', record.propertyTitle)}
+          ${row('Preferred Date', record.preferredDate)}
+          ${row('Timeframe / Budget', record.timeframe)}
+          ${row('Message', record.message)}
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+async function dispatchInquiryAlert(
+  record: ContactInquiryRecord,
+  options?: { skipWebhook?: boolean; allowEtherealPreview?: boolean }
+): Promise<{
+  deliveredToInbox: boolean;
+  emailProvider: 'resend' | 'smtp' | 'ethereal' | 'none';
+  webhookSent: boolean;
+  previewUrl?: string;
+}> {
+  const emailMode = getServerEmailDeliveryMode();
+  const webhookConfig = getServerWebhookConfig();
+  const recipient = getAlertRecipientEmail();
+
+  let deliveredToInbox = false;
+  let usedEmailProvider: 'resend' | 'smtp' | 'ethereal' | 'none' = 'none';
+  let previewUrl: string | undefined;
+
+  if (emailMode !== 'none' || options?.allowEtherealPreview) {
+    try {
+      const emailResult = await sendEmail({
+        to: recipient,
+        subject: `[Avenue] New Enquiry: ${record.name} (${record.source})`,
+        text: buildInquiryAlertEmailText(record),
+        html: buildInquiryAlertEmailHtml(record),
+      });
+      usedEmailProvider = emailResult.provider;
+      previewUrl = emailResult.previewUrl;
+      deliveredToInbox = emailResult.provider === 'resend' || emailResult.provider === 'smtp';
+    } catch (err) {
+      console.warn('[Alert] Email delivery failed:', err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  let webhookSent = false;
+  if (!options?.skipWebhook && webhookConfig.url && webhookConfig.key) {
+    try {
+      const res = await fetch(webhookConfig.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          key: webhookConfig.key,
+          name: record.name,
+          email: record.email,
+          phone: record.phone,
+          city: record.office,
+          interest: record.subject,
+          budget: record.timeframe || '',
+          message: record.message,
+          source: record.source,
+          page: `Avenue (${record.source})`,
+          website: '',
+        }),
+      });
+      webhookSent = res.ok;
+    } catch (err) {
+      console.warn('[Alert] Server webhook dispatch failed:', err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return {
+    deliveredToInbox,
+    emailProvider: usedEmailProvider,
+    webhookSent,
+    previewUrl,
+  };
+}
+
 function getBaseUrl(req: Request): string {
   if (process.env.APP_URL && process.env.APP_URL !== 'MY_APP_URL') {
     return process.env.APP_URL.replace(/\/$/, '');
@@ -1150,14 +1440,335 @@ function computePriceRange(numericPrice: number): BuyProperty['priceRange'] {
 }
 
 function computeAreaCategory(area: string): BuyProperty['areaCategory'] {
-  const lower = area.toLowerCase();
+  const lower = String(area || '').toLowerCase();
+  const match = lower.match(/(\d+(?:,\d+)*(?:\.\d+)?)/);
+  const numericValue = match ? parseFloat(match[1].replace(/,/g, '')) : NaN;
+
+  let marlas = NaN;
+  if (!Number.isNaN(numericValue) && numericValue > 0) {
+    if (lower.includes('kanal')) {
+      marlas = numericValue * 20;
+    } else if (lower.includes('marla')) {
+      marlas = numericValue;
+    } else if (lower.includes('sq. yd') || lower.includes('sq yd') || lower.includes('yard') || lower.includes('gaz')) {
+      marlas = numericValue / 25;
+    } else if (lower.includes('sq. ft') || lower.includes('sq ft') || lower.includes('sqft')) {
+      marlas = numericValue / 225;
+    }
+  }
+
+  if (!Number.isNaN(marlas)) {
+    if (marlas >= 40) return '2 Kanal+';
+    if (marlas >= 20) return '1 Kanal';
+    if (marlas > 5) return '10 Marla';
+    return 'Up to 5 Marla';
+  }
+
   if (lower.includes('2 kanal') || lower.includes('1,000') || lower.includes('1000')) return '2 Kanal+';
   if (lower.includes('1 kanal') || lower.includes('500')) return '1 Kanal';
   if (lower.includes('10 marla') || lower.includes('7 marla') || lower.includes('8 marla')) return '10 Marla';
   return 'Up to 5 Marla';
 }
 
-const DEFAULT_FALLBACK_IMAGE = '/stock/photo-1600585154340-be6161a56a0c.jpg';
+const DEFAULT_FALLBACK_IMAGE = '/stock/photo-1600596542815-ffad4c1539a9.jpg';
+const MAX_GALLERY_IMAGES = 4;
+const MAX_CATALOG_ITEM_BYTES = 800 * 1024;
+const ALLOWED_PROJECT_STATUSES: readonly ProjectStatus[] = ['Available', 'Under Offer', 'Sold'];
+const ALLOWED_BUY_STATUSES: readonly BuyStatus[] = ['Available', 'Under Offer', 'Sold'];
+const ALLOWED_RENT_STATUSES: readonly RentStatus[] = ['Available', 'Rented'];
+
+function isValidCatalogImage(value: string): boolean {
+  if (!value) return false;
+  if (value.startsWith('data:image/jpeg;base64,')) {
+    return value.length > 'data:image/jpeg;base64,'.length;
+  }
+  if (value.startsWith('/')) {
+    return value.length > 1;
+  }
+  return /^https?:\/\/\S+$/i.test(value);
+}
+
+function validateGalleryAndMainImage(
+  body: Record<string, unknown>
+): { ok: true; image: string; gallery: string[] } | { ok: false; error: string } {
+  if (body.gallery !== undefined && !Array.isArray(body.gallery)) {
+    return {
+      ok: false,
+      error: 'Gallery must be an array of up to 4 image URLs or data:image/jpeg;base64 strings.',
+    };
+  }
+
+  const galleryInput = Array.isArray(body.gallery)
+    ? body.gallery.map((g: unknown) => String(g ?? '').trim()).filter(Boolean)
+    : [];
+
+  if (galleryInput.length > MAX_GALLERY_IMAGES) {
+    return {
+      ok: false,
+      error: `Up to ${MAX_GALLERY_IMAGES} images are allowed per listing.`,
+    };
+  }
+
+  if (galleryInput.length > 0) {
+    for (const entry of galleryInput) {
+      if (!isValidCatalogImage(entry)) {
+        return {
+          ok: false,
+          error: 'Each gallery image must be a valid URL or data:image/jpeg;base64 string.',
+        };
+      }
+    }
+    return { ok: true, image: galleryInput[0], gallery: galleryInput };
+  }
+
+  const mainImage = String(body.image ?? '').trim() || DEFAULT_FALLBACK_IMAGE;
+  if (!isValidCatalogImage(mainImage)) {
+    return {
+      ok: false,
+      error: 'Main image must be a valid URL or data:image/jpeg;base64 string.',
+    };
+  }
+  return { ok: true, image: mainImage, gallery: [mainImage] };
+}
+
+function validateItemStatus<T extends string>(
+  raw: unknown,
+  allowed: readonly T[],
+  label: string
+): { ok: true; status: T } | { ok: false; error: string } {
+  if (raw === undefined || raw === null || String(raw).trim() === '') {
+    return { ok: true, status: 'Available' as T };
+  }
+  const value = String(raw).trim() as T;
+  if (!allowed.includes(value)) {
+    return {
+      ok: false,
+      error: `Invalid status "${value}" for ${label}. Allowed values: ${allowed.join(', ')}.`,
+    };
+  }
+  return { ok: true, status: value };
+}
+
+function checkCatalogItemSize(item: unknown): string | null {
+  const bytes = Buffer.byteLength(JSON.stringify(item), 'utf8');
+  if (bytes > MAX_CATALOG_ITEM_BYTES) {
+    return 'Listing payload (including images) exceeds the 800 KB size limit. Please use smaller compressed images or fewer photos.';
+  }
+  return null;
+}
+
+function buildProjectFromBody(
+  id: string,
+  body: Record<string, unknown>
+): { ok: true; item: PortfolioProject } | { ok: false; error: string } {
+  const title = String(body.title || '').trim();
+  const location = String(body.location || '').trim();
+  const category = normalizeCity(String(body.category || 'Lahore'));
+  const valuation = String(body.valuation || '').trim();
+  const size = String(body.size || '').trim() || '1 Kanal';
+  const beds = Math.max(0, Number(body.beds ?? 5) || 0);
+  const baths = Math.max(0, Number(body.baths ?? 5) || 0);
+  const projectDelivered = String(body.projectDelivered || new Date().getFullYear()).trim();
+  const architect = String(body.architect || 'Avenue Design Atelier').trim();
+  const summary =
+    String(body.summary || '').trim() ||
+    `Architectural residence located in ${location || category} with verified title and transfer documentation.`;
+
+  if (!title || !location || !valuation) {
+    return {
+      ok: false,
+      error: 'Project title, location, and valuation/price are required.',
+    };
+  }
+
+  const statusCheck = validateItemStatus(body.status, ALLOWED_PROJECT_STATUSES, 'projects');
+  if (!statusCheck.ok) return statusCheck;
+
+  const mediaCheck = validateGalleryAndMainImage(body);
+  if (!mediaCheck.ok) return mediaCheck;
+
+  const fallbackVal =
+    typeof body.numericValuation === 'number' && body.numericValuation > 0
+      ? body.numericValuation
+      : 100000000;
+
+  const item: PortfolioProject = {
+    id,
+    title,
+    location,
+    size,
+    beds,
+    baths,
+    projectDelivered,
+    image: mediaCheck.image,
+    summary,
+    architect,
+    valuation,
+    numericValuation: parseNumericPKR(valuation, fallbackVal),
+    category,
+    gallery: mediaCheck.gallery,
+    status: statusCheck.status,
+  };
+
+  const sizeError = checkCatalogItemSize(item);
+  if (sizeError) return { ok: false, error: sizeError };
+
+  return { ok: true, item };
+}
+
+function buildBuyFromBody(
+  id: string,
+  body: Record<string, unknown>
+): { ok: true; item: BuyProperty } | { ok: false; error: string } {
+  const title = String(body.title || '').trim();
+  const city = normalizeCity(String(body.city || 'Lahore'));
+  const location = String(body.location || '').trim();
+  const rawType = String(body.type || 'House').trim();
+  const allowedTypes: BuyProperty['type'][] = ['House', 'Apartment', 'Plot'];
+  const type: BuyProperty['type'] = allowedTypes.includes(rawType as BuyProperty['type'])
+    ? (rawType as BuyProperty['type'])
+    : 'House';
+  const price = String(body.price || '').trim();
+  const area = String(body.area || '').trim() || '10 Marla';
+  const beds = type === 'Plot' ? 0 : Math.max(0, Number(body.beds ?? 4) || 0);
+  const baths = type === 'Plot' ? 0 : Math.max(0, Number(body.baths ?? 4) || 0);
+  const description =
+    String(body.description || '').trim() ||
+    `Verified ${type.toLowerCase()} for sale in ${location || city} with clear society transfer documentation.`;
+  const featuresInput = Array.isArray(body.features)
+    ? body.features.map((f: unknown) => String(f).trim()).filter(Boolean)
+    : String(body.features || '')
+        .split(',')
+        .map((f) => f.trim())
+        .filter(Boolean);
+  const features =
+    featuresInput.length > 0
+      ? featuresInput
+      : ['Verified Clear Title', '24/7 Society Security', 'All Utilities Available'];
+  const possession = String(body.possession || 'Ready to Move').trim();
+  const nocStatus = String(body.nocStatus || 'Society Transfer Ready').trim();
+
+  if (!title || !location || !price) {
+    return {
+      ok: false,
+      error: 'Property title, location, and price are required.',
+    };
+  }
+
+  const statusCheck = validateItemStatus(body.status, ALLOWED_BUY_STATUSES, 'buy properties');
+  if (!statusCheck.ok) return statusCheck;
+
+  const mediaCheck = validateGalleryAndMainImage(body);
+  if (!mediaCheck.ok) return mediaCheck;
+
+  const fallbackPrice =
+    typeof body.numericPrice === 'number' && body.numericPrice > 0 ? body.numericPrice : 35000000;
+  const numericPrice = parseNumericPKR(price, fallbackPrice);
+
+  const item: BuyProperty = {
+    id,
+    title,
+    city,
+    location,
+    type,
+    price,
+    numericPrice,
+    priceRange: computePriceRange(numericPrice),
+    area,
+    areaCategory: computeAreaCategory(area),
+    beds,
+    baths,
+    image: mediaCheck.image,
+    gallery: mediaCheck.gallery,
+    description,
+    features,
+    possession,
+    nocStatus,
+    status: statusCheck.status,
+  };
+
+  const sizeError = checkCatalogItemSize(item);
+  if (sizeError) return { ok: false, error: sizeError };
+
+  return { ok: true, item };
+}
+
+function buildRentFromBody(
+  id: string,
+  body: Record<string, unknown>
+): { ok: true; item: RentalListing } | { ok: false; error: string } {
+  const title = String(body.title || '').trim();
+  const city = normalizeCity(String(body.city || 'Lahore'));
+  const areaSociety = String(body.areaSociety || '').trim();
+  const rawType = String(body.type || 'House').trim();
+  const allowedTypes: RentalListing['type'][] = ['Apartment', 'House', 'Upper Portion', 'Lower Portion'];
+  const type: RentalListing['type'] = allowedTypes.includes(rawType as RentalListing['type'])
+    ? (rawType as RentalListing['type'])
+    : 'House';
+  const monthlyRent = Number(body.monthlyRent);
+  const beds = Math.max(1, Number(body.beds ?? 3) || 3);
+  const baths = Math.max(1, Number(body.baths ?? 3) || 3);
+  const sizeOrFloor = String(body.sizeOrFloor || '').trim() || '10 Marla';
+  const furnished: RentalListing['furnished'] =
+    String(body.furnished || 'Unfurnished') === 'Furnished' ? 'Furnished' : 'Unfurnished';
+  const availableFrom = String(body.availableFrom || 'Immediate').trim();
+  const securityDeposit = String(body.securityDeposit || "2 months' rent").trim();
+  const advanceRent = String(body.advanceRent || '1 month').trim();
+  const minContractPeriod = String(body.minContractPeriod || '11 months').trim();
+  const amenitiesInput = Array.isArray(body.amenities)
+    ? body.amenities.map((a: unknown) => String(a).trim()).filter(Boolean)
+    : String(body.amenities || '')
+        .split(',')
+        .map((a) => a.trim())
+        .filter(Boolean);
+  const amenities =
+    amenitiesInput.length > 0
+      ? amenitiesInput
+      : ['Electricity & Sui Gas Connected', '24/7 Gated Security', 'Reserved Parking'];
+  const description =
+    String(body.description || '').trim() ||
+    `Well-maintained ${furnished.toLowerCase()} ${type.toLowerCase()} available for lease in ${areaSociety || city}.`;
+
+  if (!title || !areaSociety || !monthlyRent || Number.isNaN(monthlyRent) || monthlyRent <= 0) {
+    return {
+      ok: false,
+      error: 'Rental title, society/location, and a valid monthly rent in PKR are required.',
+    };
+  }
+
+  const statusCheck = validateItemStatus(body.status, ALLOWED_RENT_STATUSES, 'rental listings');
+  if (!statusCheck.ok) return statusCheck;
+
+  const mediaCheck = validateGalleryAndMainImage(body);
+  if (!mediaCheck.ok) return mediaCheck;
+
+  const item: RentalListing = {
+    id,
+    title,
+    city,
+    areaSociety,
+    type,
+    monthlyRent: Math.round(monthlyRent),
+    beds,
+    baths,
+    sizeOrFloor,
+    furnished,
+    image: mediaCheck.image,
+    gallery: mediaCheck.gallery,
+    availableFrom,
+    securityDeposit,
+    advanceRent,
+    minContractPeriod,
+    amenities,
+    description,
+    status: statusCheck.status,
+  };
+
+  const sizeError = checkCatalogItemSize(item);
+  if (sizeError) return { ok: false, error: sizeError };
+
+  return { ok: true, item };
+}
 
 const loginLimiter = createRateLimiter({
   bucket: 'login',
@@ -1231,54 +1842,38 @@ async function startServer() {
 
   app.post('/api/catalog/projects', requireManagement, async (req: Request, res: Response) => {
     try {
-      const body = req.body || {};
-      const title = String(body.title || '').trim();
-      const location = String(body.location || '').trim();
-      const category = normalizeCity(String(body.category || 'Lahore'));
-      const valuation = String(body.valuation || '').trim();
-      const size = String(body.size || '').trim() || '1 Kanal';
-      const beds = Math.max(0, Number(body.beds ?? 5) || 0);
-      const baths = Math.max(0, Number(body.baths ?? 5) || 0);
-      const projectDelivered = String(body.projectDelivered || new Date().getFullYear()).trim();
-      const architect = String(body.architect || 'Avenue Design Atelier').trim();
-      const summary =
-        String(body.summary || '').trim() ||
-        `Architectural residence located in ${location || category} with verified title and transfer documentation.`;
-      const image = String(body.image || '').trim() || DEFAULT_FALLBACK_IMAGE;
-      const galleryInput = Array.isArray(body.gallery)
-        ? body.gallery.map((g: unknown) => String(g).trim()).filter(Boolean)
-        : [];
-      const gallery = galleryInput.length > 0 ? galleryInput : [image];
-
-      if (!title || !location || !valuation) {
-        return res.status(400).json({
-          success: false,
-          error: 'Project title, location, and valuation/price are required.',
-        });
+      const built = buildProjectFromBody(
+        `proj-${crypto.randomBytes(5).toString('hex')}`,
+        (req.body || {}) as Record<string, unknown>
+      );
+      if (!built.ok) {
+        return res.status(400).json({ success: false, error: built.error });
       }
 
-      const newProject: PortfolioProject = {
-        id: `proj-${crypto.randomBytes(5).toString('hex')}`,
-        title,
-        location,
-        size,
-        beds,
-        baths,
-        projectDelivered,
-        image,
-        summary,
-        architect,
-        valuation,
-        numericValuation: parseNumericPKR(valuation, 100000000),
-        category,
-        gallery,
-      };
-
-      const catalog = await addCatalogProject(newProject);
-      return res.status(201).json({ success: true, item: newProject, catalog });
+      const catalog = await addCatalogProject(built.item);
+      return res.status(201).json({ success: true, item: built.item, catalog });
     } catch (err) {
       console.error('POST /api/catalog/projects error:', err);
       return res.status(500).json({ success: false, error: 'Could not add project.' });
+    }
+  });
+
+  app.put('/api/catalog/projects/:id', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id || '').trim();
+      const built = buildProjectFromBody(id, (req.body || {}) as Record<string, unknown>);
+      if (!built.ok) {
+        return res.status(400).json({ success: false, error: built.error });
+      }
+
+      const { updated, catalog } = await updateCatalogProject(id, built.item);
+      if (!updated) {
+        return res.status(404).json({ success: false, error: 'Project item not found.' });
+      }
+      return res.json({ success: true, item: built.item, catalog });
+    } catch (err) {
+      console.error('PUT /api/catalog/projects error:', err);
+      return res.status(500).json({ success: false, error: 'Could not update project.' });
     }
   });
 
@@ -1298,74 +1893,38 @@ async function startServer() {
 
   app.post('/api/catalog/buy', requireManagement, async (req: Request, res: Response) => {
     try {
-      const body = req.body || {};
-      const title = String(body.title || '').trim();
-      const city = normalizeCity(String(body.city || 'Lahore'));
-      const location = String(body.location || '').trim();
-      const rawType = String(body.type || 'House').trim();
-      const allowedTypes: BuyProperty['type'][] = ['House', 'Apartment', 'Plot', 'Penthouse'];
-      const type: BuyProperty['type'] = allowedTypes.includes(rawType as BuyProperty['type'])
-        ? (rawType as BuyProperty['type'])
-        : 'House';
-      const price = String(body.price || '').trim();
-      const area = String(body.area || '').trim() || '10 Marla';
-      const beds = type === 'Plot' ? 0 : Math.max(0, Number(body.beds ?? 4) || 0);
-      const baths = type === 'Plot' ? 0 : Math.max(0, Number(body.baths ?? 4) || 0);
-      const image = String(body.image || '').trim() || DEFAULT_FALLBACK_IMAGE;
-      const galleryInput = Array.isArray(body.gallery)
-        ? body.gallery.map((g: unknown) => String(g).trim()).filter(Boolean)
-        : [];
-      const gallery = galleryInput.length > 0 ? galleryInput : [image];
-      const description =
-        String(body.description || '').trim() ||
-        `Verified ${type.toLowerCase()} for sale in ${location || city} with clear society transfer documentation.`;
-      const featuresInput = Array.isArray(body.features)
-        ? body.features.map((f: unknown) => String(f).trim()).filter(Boolean)
-        : String(body.features || '')
-            .split(',')
-            .map((f) => f.trim())
-            .filter(Boolean);
-      const features =
-        featuresInput.length > 0
-          ? featuresInput
-          : ['Verified Clear Title', '24/7 Society Security', 'All Utilities Available'];
-      const possession = String(body.possession || 'Ready to Move').trim();
-      const nocStatus = String(body.nocStatus || 'Society Transfer Ready').trim();
-
-      if (!title || !location || !price) {
-        return res.status(400).json({
-          success: false,
-          error: 'Property title, location, and price are required.',
-        });
+      const built = buildBuyFromBody(
+        `buy-${crypto.randomBytes(5).toString('hex')}`,
+        (req.body || {}) as Record<string, unknown>
+      );
+      if (!built.ok) {
+        return res.status(400).json({ success: false, error: built.error });
       }
 
-      const numericPrice = parseNumericPKR(body.numericPrice ?? price, 35000000);
-      const newBuy: BuyProperty = {
-        id: `buy-${crypto.randomBytes(5).toString('hex')}`,
-        title,
-        city,
-        location,
-        type,
-        price,
-        numericPrice,
-        priceRange: computePriceRange(numericPrice),
-        area,
-        areaCategory: computeAreaCategory(area),
-        beds,
-        baths,
-        image,
-        gallery,
-        description,
-        features,
-        possession,
-        nocStatus,
-      };
-
-      const catalog = await addCatalogBuy(newBuy);
-      return res.status(201).json({ success: true, item: newBuy, catalog });
+      const catalog = await addCatalogBuy(built.item);
+      return res.status(201).json({ success: true, item: built.item, catalog });
     } catch (err) {
       console.error('POST /api/catalog/buy error:', err);
       return res.status(500).json({ success: false, error: 'Could not add property.' });
+    }
+  });
+
+  app.put('/api/catalog/buy/:id', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id || '').trim();
+      const built = buildBuyFromBody(id, (req.body || {}) as Record<string, unknown>);
+      if (!built.ok) {
+        return res.status(400).json({ success: false, error: built.error });
+      }
+
+      const { updated, catalog } = await updateCatalogBuy(id, built.item);
+      if (!updated) {
+        return res.status(404).json({ success: false, error: 'Property not found.' });
+      }
+      return res.json({ success: true, item: built.item, catalog });
+    } catch (err) {
+      console.error('PUT /api/catalog/buy error:', err);
+      return res.status(500).json({ success: false, error: 'Could not update property.' });
     }
   });
 
@@ -1385,77 +1944,38 @@ async function startServer() {
 
   app.post('/api/catalog/rent', requireManagement, async (req: Request, res: Response) => {
     try {
-      const body = req.body || {};
-      const title = String(body.title || '').trim();
-      const city = normalizeCity(String(body.city || 'Lahore'));
-      const areaSociety = String(body.areaSociety || '').trim();
-      const rawType = String(body.type || 'House').trim();
-      const allowedTypes: RentalListing['type'][] = ['Apartment', 'House', 'Upper Portion', 'Lower Portion'];
-      const type: RentalListing['type'] = allowedTypes.includes(rawType as RentalListing['type'])
-        ? (rawType as RentalListing['type'])
-        : 'House';
-      const monthlyRent = Number(body.monthlyRent);
-      const beds = Math.max(1, Number(body.beds ?? 3) || 3);
-      const baths = Math.max(1, Number(body.baths ?? 3) || 3);
-      const sizeOrFloor = String(body.sizeOrFloor || '').trim() || '10 Marla';
-      const furnished: RentalListing['furnished'] =
-        String(body.furnished || 'Unfurnished') === 'Furnished' ? 'Furnished' : 'Unfurnished';
-      const image = String(body.image || '').trim() || DEFAULT_FALLBACK_IMAGE;
-      const galleryInput = Array.isArray(body.gallery)
-        ? body.gallery.map((g: unknown) => String(g).trim()).filter(Boolean)
-        : [];
-      const gallery = galleryInput.length > 0 ? galleryInput : [image];
-      const availableFrom = String(body.availableFrom || 'Immediate').trim();
-      const securityDeposit = String(body.securityDeposit || "2 months' rent").trim();
-      const advanceRent = String(body.advanceRent || '1 month').trim();
-      const minContractPeriod = String(body.minContractPeriod || '11 months').trim();
-      const amenitiesInput = Array.isArray(body.amenities)
-        ? body.amenities.map((a: unknown) => String(a).trim()).filter(Boolean)
-        : String(body.amenities || '')
-            .split(',')
-            .map((a) => a.trim())
-            .filter(Boolean);
-      const amenities =
-        amenitiesInput.length > 0
-          ? amenitiesInput
-          : ['Electricity & Sui Gas Connected', '24/7 Gated Security', 'Reserved Parking'];
-      const description =
-        String(body.description || '').trim() ||
-        `Well-maintained ${furnished.toLowerCase()} ${type.toLowerCase()} available for lease in ${areaSociety || city}.`;
-
-      if (!title || !areaSociety || !monthlyRent || Number.isNaN(monthlyRent) || monthlyRent <= 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'Rental title, society/location, and a valid monthly rent in PKR are required.',
-        });
+      const built = buildRentFromBody(
+        `rent-${crypto.randomBytes(5).toString('hex')}`,
+        (req.body || {}) as Record<string, unknown>
+      );
+      if (!built.ok) {
+        return res.status(400).json({ success: false, error: built.error });
       }
 
-      const newRental: RentalListing = {
-        id: `rent-${crypto.randomBytes(5).toString('hex')}`,
-        title,
-        city,
-        areaSociety,
-        type,
-        monthlyRent: Math.round(monthlyRent),
-        beds,
-        baths,
-        sizeOrFloor,
-        furnished,
-        image,
-        gallery,
-        availableFrom,
-        securityDeposit,
-        advanceRent,
-        minContractPeriod,
-        amenities,
-        description,
-      };
-
-      const catalog = await addCatalogRent(newRental);
-      return res.status(201).json({ success: true, item: newRental, catalog });
+      const catalog = await addCatalogRent(built.item);
+      return res.status(201).json({ success: true, item: built.item, catalog });
     } catch (err) {
       console.error('POST /api/catalog/rent error:', err);
       return res.status(500).json({ success: false, error: 'Could not add rental listing.' });
+    }
+  });
+
+  app.put('/api/catalog/rent/:id', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id || '').trim();
+      const built = buildRentFromBody(id, (req.body || {}) as Record<string, unknown>);
+      if (!built.ok) {
+        return res.status(400).json({ success: false, error: built.error });
+      }
+
+      const { updated, catalog } = await updateCatalogRent(id, built.item);
+      if (!updated) {
+        return res.status(404).json({ success: false, error: 'Rental listing not found.' });
+      }
+      return res.json({ success: true, item: built.item, catalog });
+    } catch (err) {
+      console.error('PUT /api/catalog/rent error:', err);
+      return res.status(500).json({ success: false, error: 'Could not update rental listing.' });
     }
   });
 
@@ -1864,6 +2384,8 @@ async function startServer() {
 
       const existing = await getUserByEmail(verified.email);
       const now = new Date().toISOString();
+      const resolvedProvider: 'email' | 'google' =
+        verified.signInProvider === 'google.com' ? 'google' : 'email';
       let syncedUser: StoredUser;
       let statusCode = 200;
 
@@ -1873,7 +2395,7 @@ async function startServer() {
         existing.emailVerified = true;
         if (verified.photoURL) existing.photoURL = verified.photoURL;
         existing.lastLoginAt = now;
-        if (!existing.provider) existing.provider = 'google';
+        if (!existing.provider) existing.provider = resolvedProvider;
         await saveUser(existing);
         syncedUser = existing;
       } else {
@@ -1884,7 +2406,7 @@ async function startServer() {
           passwordHash: '',
           salt: '',
           emailVerified: true,
-          provider: 'google',
+          provider: resolvedProvider,
           photoURL: verified.photoURL,
           createdAt: now,
           lastLoginAt: now,
@@ -2135,10 +2657,60 @@ async function startServer() {
       };
 
       await createInquiry(record);
+      void dispatchInquiryAlert(record, {
+        skipWebhook: Boolean(body.webhookDispatched),
+      }).catch((err) => {
+        console.warn('[Alert] Inquiry notification dispatch failed:', err);
+      });
       return res.status(201).json({ success: true, inquiry: record });
     } catch (err) {
       console.error('POST /api/inquiries error:', err);
       return res.status(500).json({ success: false, error: 'Could not submit inquiry right now.' });
+    }
+  });
+
+  app.get('/api/management/alerts-status', requireManagement, (_req: Request, res: Response) => {
+    const emailProvider = getServerEmailDeliveryMode();
+    const webhook = getServerWebhookConfig();
+    return res.json({
+      success: true,
+      emailProvider,
+      serverWebhookConfigured: Boolean(webhook.url && webhook.key),
+      alertRecipient: getAlertRecipientEmail(),
+    });
+  });
+
+  app.post('/api/management/test-alert', requireManagement, async (_req: Request, res: Response) => {
+    try {
+      const testRecord: ContactInquiryRecord = {
+        id: `test-${crypto.randomBytes(4).toString('hex')}`,
+        name: 'TEST ENQUIRY',
+        email: '',
+        phone: '',
+        office: 'Lahore',
+        subject: 'Alert Diagnostics Test',
+        message: 'Test from the Avenue management portal.',
+        source: 'Management test',
+        status: 'new',
+        createdAt: new Date().toISOString(),
+      };
+      const result = await dispatchInquiryAlert(testRecord, {
+        allowEtherealPreview: true,
+      });
+      return res.json({
+        success: result.deliveredToInbox || result.webhookSent,
+        deliveredToInbox: result.deliveredToInbox,
+        emailProvider: result.emailProvider,
+        webhookSent: result.webhookSent,
+        alertRecipient: getAlertRecipientEmail(),
+        previewUrl: result.previewUrl,
+      });
+    } catch (err) {
+      console.error('POST /api/management/test-alert error:', err);
+      return res.status(500).json({
+        success: false,
+        error: 'Could not run alert test right now.',
+      });
     }
   });
 

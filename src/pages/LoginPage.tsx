@@ -41,6 +41,7 @@ export const LoginPage: React.FC = () => {
 
   // Unverified state handling
   const [isUnverified, setIsUnverified] = useState(false);
+  const [unverifiedProvider, setUnverifiedProvider] = useState<'firebase' | 'server'>('firebase');
   const [verificationCode, setVerificationCode] = useState('');
   const [verifyError, setVerifyError] = useState('');
   const [verifyingCode, setVerifyingCode] = useState(false);
@@ -48,9 +49,10 @@ export const LoginPage: React.FC = () => {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [checkingVerification, setCheckingVerification] = useState(false);
 
-  // Forgot password modal (2-step: request email -> enter code & new password)
+  // Forgot password modal
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotStep, setForgotStep] = useState<'request' | 'reset' | 'done'>('request');
+  const [forgotProvider, setForgotProvider] = useState<'firebase' | 'server'>('firebase');
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotError, setForgotError] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
@@ -136,6 +138,7 @@ export const LoginPage: React.FC = () => {
       }
     } else if (result.unverified) {
       setIsUnverified(true);
+      setUnverifiedProvider(result.provider === 'firebase' ? 'firebase' : 'server');
       setVerificationCode('');
       setVerifyError('');
       setResendCooldown(0);
@@ -226,11 +229,12 @@ export const LoginPage: React.FC = () => {
     setForgotLoading(false);
 
     if (result.success) {
+      setForgotProvider(result.provider === 'firebase' ? 'firebase' : 'server');
       setForgotPreviewUrl(result.previewUrl);
       setForgotStep('reset');
       showToast(
         result.message ||
-          'If an account exists for that email address, a password reset code has been sent.',
+          'If an account exists for that email address, password reset instructions have been sent.',
         'success'
       );
     } else {
@@ -310,7 +314,7 @@ export const LoginPage: React.FC = () => {
               "Your next address is waiting."
             </p>
             <p className="font-body text-xs text-white/70 mt-2">
-              Access off-market residences, verified registry records, and private listings.
+              Access private residences, verified registry records, and exclusive listings.
             </p>
           </div>
         </div>
@@ -334,7 +338,10 @@ export const LoginPage: React.FC = () => {
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-600 font-body leading-relaxed max-w-sm mx-auto">
                     Your account{' '}
-                    <span className="font-bold text-[#1B2A44]">{maskEmail(email)}</span> is awaiting verification. Enter the 6-digit code from your email or resend a fresh link below.
+                    <span className="font-bold text-[#1B2A44]">{maskEmail(email)}</span> is awaiting verification.{' '}
+                    {unverifiedProvider === 'firebase'
+                      ? 'Click the verification link sent to your inbox, or resend a fresh link below.'
+                      : 'Enter the 6-digit code from your email or resend a fresh link below.'}
                   </p>
                 </div>
 
@@ -355,47 +362,53 @@ export const LoginPage: React.FC = () => {
                   </div>
                 )}
 
-                <form onSubmit={handleVerifyCodeSubmit} className="space-y-3">
-                  <div>
-                    <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1.5 text-center">
-                      Enter 6-Digit Verification Code
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={6}
-                      placeholder="123456"
-                      value={verificationCode}
-                      onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                      className="w-full py-3 px-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-[#2F4B73] focus:outline-none text-center font-mono text-xl font-bold tracking-[0.4em] text-[#1B2A44]"
-                    />
-                    {verifyError && (
-                      <p className="text-[11px] text-rose-500 font-body mt-1.5 text-center">
-                        {verifyError}
-                      </p>
-                    )}
-                  </div>
+                {unverifiedProvider === 'server' && (
+                  <form onSubmit={handleVerifyCodeSubmit} className="space-y-3">
+                    <div>
+                      <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1.5 text-center">
+                        Enter 6-Digit Verification Code
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="123456"
+                        value={verificationCode}
+                        onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                        className="w-full py-3 px-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-[#2F4B73] focus:outline-none text-center font-mono text-xl font-bold tracking-[0.4em] text-[#1B2A44]"
+                      />
+                      {verifyError && (
+                        <p className="text-[11px] text-rose-500 font-body mt-1.5 text-center">
+                          {verifyError}
+                        </p>
+                      )}
+                    </div>
 
-                  <button
-                    type="submit"
-                    disabled={verifyingCode}
-                    className="w-full py-3.5 px-6 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] text-white font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
-                  >
-                    {verifyingCode ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    )}
-                    <span>{verifyingCode ? 'Verifying...' : 'Verify & Sign In'}</span>
-                  </button>
-                </form>
+                    <button
+                      type="submit"
+                      disabled={verifyingCode}
+                      className="w-full py-3.5 px-6 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] text-white font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+                    >
+                      {verifyingCode ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      )}
+                      <span>{verifyingCode ? 'Verifying...' : 'Verify & Sign In'}</span>
+                    </button>
+                  </form>
+                )}
 
                 <div className="space-y-2.5">
                   <button
                     type="button"
                     onClick={handleVerifyCheck}
                     disabled={checkingVerification}
-                    className="w-full py-3 px-6 rounded-full bg-slate-100 hover:bg-slate-200 text-[#1B2A44] font-display font-semibold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    className={`w-full py-3 px-6 rounded-full font-display text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      unverifiedProvider === 'firebase'
+                        ? 'bg-[#1B2A44] hover:bg-[#2F4B73] text-white font-bold shadow-md'
+                        : 'bg-slate-100 hover:bg-slate-200 text-[#1B2A44] font-semibold'
+                    }`}
                   >
                     {checkingVerification && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                     <span>I've verified my email</span>
@@ -620,7 +633,22 @@ export const LoginPage: React.FC = () => {
               </>
             )}
 
-            {forgotStep === 'reset' && (
+            {forgotStep === 'reset' && forgotProvider === 'firebase' && (
+              <div className="mt-4 space-y-4">
+                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs leading-relaxed">
+                  If an account exists for <strong>{forgotEmail}</strong>, a Firebase password reset link has been sent to your inbox (check spam if needed). Open the link to choose a new password, then return here to sign in.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(false)}
+                  className="w-full py-3 rounded-full bg-[#1B2A44] text-white font-display text-xs uppercase tracking-wider font-semibold cursor-pointer"
+                >
+                  Return to Sign In
+                </button>
+              </div>
+            )}
+
+            {forgotStep === 'reset' && forgotProvider === 'server' && (
               <>
                 <p className="text-xs text-slate-500 font-body mt-1">
                   If an account exists for <strong>{forgotEmail}</strong>, a 6-digit reset code has been sent. Enter the code and your new password below.

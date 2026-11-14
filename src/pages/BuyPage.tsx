@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useCatalog } from '../context/CatalogContext';
+import { computeAreaCategory } from '../data/buyPropertiesData';
 import { SafeImage } from '../components/common/SafeImage';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -18,6 +19,11 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react';
+
+const getStatusBadgeStyle = (status?: string) =>
+  status === 'Sold'
+    ? 'bg-rose-600 text-white border-rose-500'
+    : 'bg-amber-500 text-white border-amber-400';
 
 export const BuyPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -37,9 +43,9 @@ export const BuyPage: React.FC = () => {
   }, []);
 
   const cities = ['All', 'Lahore', 'Islamabad', 'Karachi', 'Rawalpindi', 'Murree & Hills'];
-  const types = ['All', 'House', 'Plot', 'Penthouse', 'Apartment'];
+  const types = ['All', 'House', 'Plot', 'Apartment'];
   const priceOptions = ['All', 'Under 5 Crore', '5 - 10 Crore', '10 - 20 Crore', '20 Crore+'];
-  const areaOptions = ['All', '10 Marla', '1 Kanal', '2 Kanal', '1,000 Sq. Yards+'];
+  const areaOptions = ['All', 'Up to 5 Marla', '10 Marla', '1 Kanal', '2 Kanal+'];
 
   const filteredProperties = useMemo(() => {
     return buyProperties.filter((prop) => {
@@ -54,7 +60,8 @@ export const BuyPage: React.FC = () => {
 
       let matchArea = true;
       if (selectedArea !== 'All') {
-        matchArea = prop.area.toLowerCase().includes(selectedArea.toLowerCase());
+        const category = prop.areaCategory || computeAreaCategory(prop.area);
+        matchArea = category === selectedArea;
       }
 
       const q = searchQuery.toLowerCase().trim();
@@ -425,8 +432,19 @@ export const BuyPage: React.FC = () => {
                     {/* Text on right */}
                     <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                       <div>
-                        <div className="font-display font-bold text-[0.95rem] text-[#1B2A44] leading-tight">
-                          {prop.price}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-display font-bold text-[0.95rem] text-[#1B2A44] leading-tight truncate">
+                            {prop.price}
+                          </div>
+                          {prop.status && prop.status !== 'Available' && (
+                            <span
+                              className={`shrink-0 px-2 py-0.5 rounded-full text-[9px] font-display uppercase tracking-wider font-bold border ${getStatusBadgeStyle(
+                                prop.status
+                              )}`}
+                            >
+                              {prop.status}
+                            </span>
+                          )}
                         </div>
                         <h3 className="font-display font-semibold text-[0.82rem] text-[#1B2A44] line-clamp-2 mt-0.5 leading-snug">
                           {prop.title}
@@ -463,8 +481,19 @@ export const BuyPage: React.FC = () => {
                         alt={prop.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
-                      <div className="absolute top-2.5 left-2.5 glass-panel-dark px-2.5 py-0.5 rounded-full text-[9px] uppercase font-display text-white">
-                        {prop.city} · {prop.type}
+                      <div className="absolute top-2.5 left-2.5 right-12 flex flex-wrap gap-1.5">
+                        <span className="glass-panel-dark px-2.5 py-0.5 rounded-full text-[9px] uppercase font-display text-white">
+                          {prop.city} · {prop.type}
+                        </span>
+                        {prop.status && prop.status !== 'Available' && (
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[9px] uppercase font-display font-bold border shadow-xs ${getStatusBadgeStyle(
+                              prop.status
+                            )}`}
+                          >
+                            {prop.status}
+                          </span>
+                        )}
                       </div>
                       <button
                         onClick={(e) => handleHeartClick(e, prop.id, prop.title)}
@@ -508,13 +537,22 @@ export const BuyPage: React.FC = () => {
                         height={600}
                         className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
                       />
-                      <div className="absolute top-3.5 left-3.5 flex flex-wrap gap-1.5">
+                      <div className="absolute top-3.5 left-3.5 right-14 flex flex-wrap gap-1.5">
                         <span className="glass-panel-dark px-3 py-1 rounded-full text-[10px] uppercase font-display tracking-widest text-white">
                           {prop.city}
                         </span>
                         <span className="glass-panel-dark px-2.5 py-1 rounded-full text-[10px] uppercase font-display tracking-widest text-emerald-300">
                           {prop.type}
                         </span>
+                        {prop.status && prop.status !== 'Available' && (
+                          <span
+                            className={`px-3 py-1 rounded-full text-[10px] uppercase font-display tracking-widest font-bold border shadow-sm ${getStatusBadgeStyle(
+                              prop.status
+                            )}`}
+                          >
+                            {prop.status}
+                          </span>
+                        )}
                       </div>
                       <button
                         onClick={(e) => handleHeartClick(e, prop.id, prop.title)}

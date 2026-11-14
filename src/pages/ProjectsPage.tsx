@@ -17,6 +17,12 @@ import {
   X,
   RotateCcw,
 } from 'lucide-react';
+import type { ProjectStatus } from '../types';
+
+const getStatusBadgeStyle = (status?: ProjectStatus) =>
+  status === 'Sold'
+    ? 'bg-rose-600 text-white border-rose-500'
+    : 'bg-amber-500 text-white border-amber-400';
 
 interface UnifiedProject {
   id: string;
@@ -32,6 +38,7 @@ interface UnifiedProject {
   architect: string;
   description: string;
   yearBuilt: number | string;
+  status?: ProjectStatus;
 }
 
 export const ProjectsPage: React.FC = () => {
@@ -60,6 +67,7 @@ export const ProjectsPage: React.FC = () => {
       architect: p.architect || p.architecturalStyle,
       description: p.description,
       yearBuilt: p.yearBuilt,
+      status: p.status,
     }));
 
     const listB: UnifiedProject[] = portfolioProjects.map((p) => {
@@ -82,6 +90,7 @@ export const ProjectsPage: React.FC = () => {
         architect: p.architect,
         description: p.summary,
         yearBuilt: p.projectDelivered,
+        status: p.status,
       };
     });
 
@@ -375,8 +384,19 @@ export const ProjectsPage: React.FC = () => {
                     {/* Text on right: price in bold, title max 2 lines, location with Pin, 1-line meta */}
                     <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                       <div>
-                        <div className="font-display font-bold text-[0.95rem] text-[#1B2A44] leading-tight">
-                          {project.price}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-display font-bold text-[0.95rem] text-[#1B2A44] leading-tight truncate">
+                            {project.price}
+                          </div>
+                          {project.status && project.status !== 'Available' && (
+                            <span
+                              className={`shrink-0 px-2 py-0.5 rounded-full text-[9px] font-display uppercase tracking-wider font-bold border ${getStatusBadgeStyle(
+                                project.status
+                              )}`}
+                            >
+                              {project.status}
+                            </span>
+                          )}
                         </div>
                         <h3 className="font-display font-semibold text-[0.82rem] text-[#1B2A44] line-clamp-2 mt-0.5 leading-snug">
                           {project.name}
@@ -414,8 +434,19 @@ export const ProjectsPage: React.FC = () => {
                         height={450}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
-                      <div className="absolute top-2.5 left-2.5 glass-panel-dark px-2.5 py-0.5 rounded-full text-[10px] uppercase font-display tracking-wider text-white">
-                        {project.category}
+                      <div className="absolute top-2.5 left-2.5 right-12 flex flex-wrap gap-1.5">
+                        <span className="glass-panel-dark px-2.5 py-0.5 rounded-full text-[10px] uppercase font-display tracking-wider text-white">
+                          {project.category}
+                        </span>
+                        {project.status && project.status !== 'Available' && (
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[9px] uppercase font-display font-bold border shadow-xs ${getStatusBadgeStyle(
+                              project.status
+                            )}`}
+                          >
+                            {project.status}
+                          </span>
+                        )}
                       </div>
                       <button
                         onClick={(e) => handleHeartClick(e, project.id, project.name)}
@@ -470,8 +501,19 @@ export const ProjectsPage: React.FC = () => {
                         className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
                       />
 
-                      <div className="absolute top-3.5 left-3.5 glass-panel-dark px-3 py-1 rounded-full text-[10px] uppercase font-display tracking-widest text-white">
-                        {project.category}
+                      <div className="absolute top-3.5 left-3.5 right-14 flex flex-wrap gap-1.5">
+                        <span className="glass-panel-dark px-3 py-1 rounded-full text-[10px] uppercase font-display tracking-widest text-white">
+                          {project.category}
+                        </span>
+                        {project.status && project.status !== 'Available' && (
+                          <span
+                            className={`px-3 py-1 rounded-full text-[10px] uppercase font-display tracking-widest font-bold border shadow-sm ${getStatusBadgeStyle(
+                              project.status
+                            )}`}
+                          >
+                            {project.status}
+                          </span>
+                        )}
                       </div>
 
                       <button

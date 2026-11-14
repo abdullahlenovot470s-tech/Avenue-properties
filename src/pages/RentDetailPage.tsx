@@ -50,6 +50,7 @@ export const RentDetailPage: React.FC = () => {
   }, [id, rentalListings]);
 
   useEffect(() => {
+    setActivePhotoIdx(0);
     if (listing) {
       document.title = `${listing.title} | Homes for Rent | Avenue`;
     } else {
@@ -78,6 +79,10 @@ export const RentDetailPage: React.FC = () => {
   }
 
   const saved = isPropertySaved(listing.id);
+  const rawImages = listing.gallery && listing.gallery.length > 0 ? listing.gallery : [listing.image];
+  const images = rawImages.filter(Boolean);
+  const currentImage = images[activePhotoIdx] || images[0] || listing.image;
+  const isRented = listing.status === 'Rented';
 
   const handleToggleHeart = () => {
     const isNowSaved = toggleSaveProperty(listing.id);
@@ -205,13 +210,13 @@ export const RentDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Gallery Showcase: 3 High-Fidelity Photos */}
+      {/* Gallery Showcase */}
       <section className="bg-white rounded-[28px] sm:rounded-[36px] overflow-hidden p-3 sm:p-5 shadow-xl border border-slate-100 space-y-4">
         {/* Main Stage Image */}
         <div className="relative aspect-[16/9] md:aspect-[21/10] rounded-[22px] sm:rounded-[28px] overflow-hidden shadow-inner">
           <SafeImage
-            src={listing.gallery[activePhotoIdx] || listing.image}
-            alt={`${listing.title} - Photo ${activePhotoIdx + 1}`}
+            src={currentImage}
+            alt={`${listing.title} - Photo ${Math.min(activePhotoIdx + 1, images.length)}`}
             className="w-full h-full object-cover"
           />
 
@@ -225,33 +230,40 @@ export const RentDetailPage: React.FC = () => {
             <span className="glass-panel-dark px-3 py-1.5 rounded-full text-xs font-display uppercase tracking-widest text-white/90">
               {listing.furnished}
             </span>
+            {listing.status && listing.status !== 'Available' && (
+              <span className="px-3.5 py-1.5 rounded-full text-xs font-display uppercase tracking-widest font-bold bg-rose-600 text-white shadow-md">
+                {listing.status}
+              </span>
+            )}
           </div>
 
           <div className="absolute bottom-4 right-4 glass-panel px-3 py-1 rounded-full text-xs font-display text-white">
-            Photo {activePhotoIdx + 1} of {listing.gallery.length}
+            Photo {Math.min(activePhotoIdx + 1, images.length)} of {images.length}
           </div>
         </div>
 
-        {/* 3 Thumbnails Strip */}
-        <div className="grid grid-cols-3 gap-3 sm:gap-4">
-          {listing.gallery.map((photoUrl, idx) => (
-            <button
-              key={idx}
-              onClick={() => setActivePhotoIdx(idx)}
-              className={`relative aspect-[16/10] rounded-2xl overflow-hidden border-2 transition-all cursor-pointer ${
-                activePhotoIdx === idx
-                  ? 'border-[#1B2A44] shadow-md scale-[1.02]'
-                  : 'border-transparent opacity-75 hover:opacity-100'
-              }`}
-            >
-              <SafeImage
-                src={photoUrl}
-                alt={`${listing.title} view ${idx + 1}`}
-                className="w-full h-full object-cover"
-              />
-            </button>
-          ))}
-        </div>
+        {/* Thumbnails Strip */}
+        {images.length > 1 && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            {images.map((photoUrl, idx) => (
+              <button
+                key={idx}
+                onClick={() => setActivePhotoIdx(idx)}
+                className={`relative aspect-[16/10] rounded-2xl overflow-hidden border-2 transition-all cursor-pointer ${
+                  activePhotoIdx === idx
+                    ? 'border-[#1B2A44] shadow-md scale-[1.02]'
+                    : 'border-transparent opacity-75 hover:opacity-100'
+                }`}
+              >
+                <SafeImage
+                  src={photoUrl}
+                  alt={`${listing.title} view ${idx + 1}`}
+                  className="w-full h-full object-cover"
+                />
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Main Details & Booking Grid */}
@@ -262,9 +274,16 @@ export const RentDetailPage: React.FC = () => {
           <div className="bg-white rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 shadow-xl border border-slate-100 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2 text-xs text-[#2F4B73] font-semibold mb-2">
-                  <MapPin className="w-4 h-4 shrink-0" />
-                  <span>{listing.areaSociety}</span>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 text-xs text-[#2F4B73] font-semibold">
+                    <MapPin className="w-4 h-4 shrink-0" />
+                    <span>{listing.areaSociety}</span>
+                  </div>
+                  {listing.status && listing.status !== 'Available' && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-display uppercase tracking-wider font-bold bg-rose-100 text-rose-700 border border-rose-200">
+                      {listing.status}
+                    </span>
+                  )}
                 </div>
                 <h1 className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-[#1B2A44] uppercase tracking-tight">
                   {listing.title}
@@ -501,7 +520,13 @@ export const RentDetailPage: React.FC = () => {
                   className="w-full py-3.5 px-6 rounded-full bg-[#1B2A44] hover:bg-[#2F4B73] disabled:opacity-60 text-white font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>{tourSubmitting ? 'Submitting Request...' : 'Request Viewing Appointment'}</span>
+                  <span>
+                    {tourSubmitting
+                      ? 'Submitting Request...'
+                      : isRented
+                      ? 'Ask about similar properties'
+                      : 'Request Viewing Appointment'}
+                  </span>
                 </button>
               </form>
             )}
