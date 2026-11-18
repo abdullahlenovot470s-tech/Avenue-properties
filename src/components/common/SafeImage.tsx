@@ -1,14 +1,17 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Building2 } from 'lucide-react';
 import { BRAND_CONFIG } from '../../config/brand.config';
 import { resolveBrandImagePath } from '../../data/legacyImageMap';
+import { optimizeImageUrl } from '../../lib/imageOptimization';
 
 const LOCAL_FALLBACK_IMAGE = BRAND_CONFIG.images.fallbackVilla;
+const DEFAULT_SIZES = '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw';
 
 interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   fallbackSrc?: string;
   containerClassName?: string;
   priority?: boolean;
+  sizes?: string;
 }
 
 export const SafeImage: React.FC<SafeImageProps> = ({
@@ -21,31 +24,64 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   loading,
   width = 800,
   height = 600,
+  sizes = DEFAULT_SIZES,
+  srcSet,
   ...props
 }) => {
   const normalizedFallback = resolveBrandImagePath(fallbackSrc, LOCAL_FALLBACK_IMAGE);
-  const resolvedInitial = resolveBrandImagePath(src, normalizedFallback);
+  const resolvedSrc = resolveBrandImagePath(src, normalizedFallback);
 
   const imgRef = useRef<HTMLImageElement | null>(null);
-  const [currentSrc, setCurrentSrc] = useState(resolvedInitial);
-  const [hasError, setHasError] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const prevSrcRef = useRef<string>(resolvedSrc);
   const retryCountRef = useRef(0);
 
+  const [currentSrc, setCurrentSrc] = useState(resolvedSrc);
+  const [hasError, setHasError] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  const checkImageComplete = useCallback((el: HTMLImageElement | null = imgRef.current) => {
+    if (el && el.complete && el.naturalWidth > 0) {
+      setIsLoaded((prev) => (prev ? prev : true));
+    }
+  }, []);
+
+  const setImgNode = useCallback(
+    (node: HTMLImageElement | null) => {
+      imgRef.current = node;
+      checkImageComplete(node);
+    },
+    [checkImageComplete]
+  );
+
+  // Only reset when the resolved src actually changes
   useEffect(() => {
+    if (prevSrcRef.current === resolvedSrc) return;
+    prevSrcRef.current = resolvedSrc;
     retryCountRef.current = 0;
-    const nextSrc = resolveBrandImagePath(src, normalizedFallback);
-    setCurrentSrc(nextSrc);
+    setCurrentSrc(resolvedSrc);
     setHasError(false);
     setIsLoaded(false);
-  }, [src, normalizedFallback]);
+    checkImageComplete();
+  }, [resolvedSrc, checkImageComplete]);
 
-  useLayoutEffect(() => {
-    const el = imgRef.current;
-    if (el && el.complete && el.naturalWidth > 0) {
-      setIsLoaded(true);
+  // After every render where currentSrc is set, detect already-cached / decoded images
+  useEffect(() => {
+    if (currentSrc && !hasError) {
+      checkImageComplete();
     }
-  }, [currentSrc]);
+  });
+
+  // Safety net: clear skeleton after 4s if browser marks image complete; otherwise rely on onError
+  useEffect(() => {
+    if (isLoaded || hasError || !currentSrc) return;
+    const timer = window.setTimeout(() => {
+      const el = imgRef.current;
+      if (el && el.complete) {
+        setIsLoaded(true);
+      }
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [currentSrc, isLoaded, hasError]);
 
   const handleError = () => {
     if (retryCountRef.current === 0 && currentSrc && currentSrc.startsWith('http')) {
@@ -58,17 +94,28 @@ export const SafeImage: React.FC<SafeImageProps> = ({
     if (normalizedFallback && currentSrc !== normalizedFallback) {
       setCurrentSrc(normalizedFallback);
       setIsLoaded(false);
+      checkImageComplete();
     } else if (currentSrc !== LOCAL_FALLBACK_IMAGE) {
       setCurrentSrc(LOCAL_FALLBACK_IMAGE);
       setIsLoaded(false);
+      checkImageComplete();
     } else {
       setHasError(true);
     }
   };
 
-  const isLocalAsset =
-    currentSrc && (currentSrc.startsWith('/brand/') || currentSrc.startsWith('/stock/'));
-  const effectiveLoading = loading ?? (priority || isLocalAsset ? 'eager' : 'lazy');
+  const effectiveLoading = loading ?? (priority ? 'eager' : 'lazy');
+  const optimized400 = optimizeImageUrl(currentSrc, 400);
+  const optimized800 = optimizeImageUrl(currentSrc, 800);
+  const optimized1200 = optimizeImageUrl(currentSrc, 1200);
+  const hasResponsiveVariants =
+    optimized400 !== currentSrc || optimized800 !== currentSrc || optimized1200 !== currentSrc;
+  const resolvedImgSrc = hasResponsiveVariants ? optimized800 : currentSrc;
+  const resolvedSrcSet =
+    srcSet ||
+    (hasResponsiveVariants
+      ? `${optimized400} 400w, ${optimized800} 800w, ${optimized1200} 1200w`
+      : undefined);
 
   return (
     <div className={`relative w-full h-full overflow-hidden bg-brand/10 ${containerClassName}`}>
@@ -78,8 +125,10 @@ export const SafeImage: React.FC<SafeImageProps> = ({
 
       {!hasError && currentSrc ? (
         <img
-          ref={imgRef}
-          src={currentSrc}
+          ref={setImgNode}
+          src={resolvedImgSrc}
+          srcSet={resolvedSrcSet}
+          sizes={resolvedSrcSet ? sizes : undefined}
           alt={alt}
           width={width}
           height={height}
@@ -89,9 +138,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
           fetchPriority={priority ? 'high' : undefined}
           onLoad={() => setIsLoaded(true)}
           onError={handleError}
-          className={`w-full h-full object-cover object-center transition-opacity duration-200 ${
-            isLoaded ? 'opacity-100' : 'opacity-0'
-          } ${className}`}
+          className={`relative z-10 w-full h-full object-cover object-center ${className}`}
           {...props}
         />
       ) : (

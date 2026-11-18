@@ -1,12 +1,18 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, MapPin, Phone, Instagram, Linkedin, Twitter } from 'lucide-react';
-import { SITE_CONFIG, getWhatsAppUrl } from '../config/siteConfig';
+import { SITE_CONFIG, getWhatsAppUrl, handleDemoContactClick } from '../config/siteConfig';
 import { BRAND_CONFIG } from '../config/brand.config';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import { useToast } from '../context/ToastContext';
+import { URGLISH_COPY } from '../data/urglishTranslations';
+import { trackEvent } from '../lib/analytics';
 
 export const Footer: React.FC = () => {
   const { isManagement } = useAuth();
+  const { t } = useLanguage();
+  const { showToast } = useToast();
 
   return (
     <footer className="relative w-full pt-4 pb-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto">
@@ -22,7 +28,7 @@ export const Footer: React.FC = () => {
               {BRAND_CONFIG.identity.logoText}
             </Link>
             <p className="font-body text-xs sm:text-sm text-brand-contrast/70 max-w-sm leading-relaxed">
-              {BRAND_CONFIG.copy.footer.missionTagline}
+              {t(BRAND_CONFIG.copy.footer.missionTagline, URGLISH_COPY.footer.missionTagline)}
             </p>
             <div className="pt-2 flex items-center gap-3">
               <a
@@ -102,18 +108,20 @@ export const Footer: React.FC = () => {
                   Contact
                 </Link>
               </li>
-              {isManagement && (
+              {isManagement && BRAND_CONFIG.features.enableAdminPanel && (
                 <>
                   <li>
                     <Link to="/manage" className="text-emerald-300 hover:text-white transition-colors">
-                      Manage Inventory
+                      Manage Data
                     </Link>
                   </li>
-                  <li>
-                    <Link to="/records" className="text-sky-300 hover:text-white transition-colors">
-                      Client Records
-                    </Link>
-                  </li>
+                  {BRAND_CONFIG.features.enableEnquiriesDashboard && (
+                    <li>
+                      <Link to="/records" className="text-sky-300 hover:text-white transition-colors">
+                        Client Records
+                      </Link>
+                    </li>
+                  )}
                 </>
               )}
             </ul>
@@ -142,6 +150,10 @@ export const Footer: React.FC = () => {
                 <Phone className="w-4 h-4 text-brand-contrast/60 shrink-0" />
                 <a
                   href={`tel:${SITE_CONFIG.phone.lahore.replace(/[^0-9+]/g, '')}`}
+                  onClick={(e) => {
+                    trackEvent('call_click', { location: 'footer' });
+                    handleDemoContactClick(e, showToast);
+                  }}
                   className="hover:text-brand-contrast transition-colors cursor-pointer"
                 >
                   {SITE_CONFIG.phone.lahore}
@@ -152,6 +164,10 @@ export const Footer: React.FC = () => {
                   href={getWhatsAppUrl(BRAND_CONFIG.contact.whatsappGreetings.generalFooter)}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(e) => {
+                    trackEvent('whatsapp_click', { location: 'footer' });
+                    handleDemoContactClick(e, showToast);
+                  }}
                   className="inline-flex items-center gap-2 text-xs font-display text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
                 >
                   <span>Chat on WhatsApp: {SITE_CONFIG.phone.whatsapp}</span>
@@ -168,14 +184,13 @@ export const Footer: React.FC = () => {
               © {BRAND_CONFIG.identity.legalName} {BRAND_CONFIG.identity.foundedYear}. All Rights Reserved.
             </span>
             <div className="flex items-center gap-4">
-              {BRAND_CONFIG.copy.footer.legalLinks.map((label, idx) => (
-                <React.Fragment key={label}>
-                  {idx > 0 && <span>·</span>}
-                  <span className="hover:text-brand-contrast transition-colors cursor-pointer">
-                    {label}
-                  </span>
-                </React.Fragment>
-              ))}
+              <Link to="/privacy" className="hover:text-brand-contrast transition-colors">
+                Privacy Policy
+              </Link>
+              <span>·</span>
+              <Link to="/terms" className="hover:text-brand-contrast transition-colors">
+                Terms of Use
+              </Link>
             </div>
           </div>
         </div>

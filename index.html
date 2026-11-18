@@ -13,7 +13,17 @@
     <link rel="preload" as="image" href="__BRAND_HERO_IMAGE__" fetchpriority="high" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link id="brand-google-fonts" href="__BRAND_GOOGLE_FONTS_URL__" rel="stylesheet" />
+    <link
+      id="brand-google-fonts"
+      rel="preload"
+      as="style"
+      href="__BRAND_GOOGLE_FONTS_URL__"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <noscript>
+      <link rel="stylesheet" href="__BRAND_GOOGLE_FONTS_URL__" />
+    </noscript>
+    <script type="application/ld+json">__BRAND_JSONLD__</script>
   </head>
   <body class="bg-surface text-brand antialiased selection:bg-accent selection:text-accent-contrast">
     <div id="root"></div>

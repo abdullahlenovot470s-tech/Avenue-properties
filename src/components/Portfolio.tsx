@@ -7,6 +7,8 @@ import { BRAND_CONFIG } from '../config/brand.config';
 import { SafeImage } from './common/SafeImage';
 import { PillButton } from './common/PillButton';
 import { ArrowLeft, ArrowRight, MapPin, Maximize2, Calendar, CheckCircle2, ArrowUpRight } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
+import { URGLISH_COPY } from '../data/urglishTranslations';
 
 interface PortfolioProps {
   onSelectProject: (project: PortfolioProject) => void;
@@ -16,6 +18,7 @@ interface PortfolioProps {
 export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject }) => {
   const navigate = useNavigate();
   const { portfolioProjects } = useCatalog();
+  const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
@@ -75,9 +78,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject }) => {
                 <SafeImage
                   src={activeProject.image}
                   alt={activeProject.title}
-                  priority={true}
                   width={800}
                   height={600}
+                  sizes="(max-width: 1024px) 100vw, 50vw"
                   className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                 />
 
@@ -201,9 +204,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject }) => {
                   <SafeImage
                     src={project.image}
                     alt={project.title}
-                    priority={true}
                     width={800}
                     height={600}
+                    sizes="(max-width: 640px) 45vw, 25vw"
                     className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-brand/85 via-black/20 to-transparent group-hover:from-brand/95 transition-colors" />
@@ -227,7 +230,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject }) => {
               <span className="font-semibold text-brand">
                 {BRAND_CONFIG.copy.portfolioSection.guaranteeTitle}
               </span>{' '}
-              {BRAND_CONFIG.copy.portfolioSection.guaranteeBody}
+              {t(BRAND_CONFIG.copy.portfolioSection.guaranteeBody, URGLISH_COPY.portfolioSection.guaranteeBody)}
             </div>
           </div>
         </div>

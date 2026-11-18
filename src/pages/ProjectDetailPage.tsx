@@ -7,6 +7,12 @@ import { PillButton } from '../components/common/PillButton';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { submitInquiry } from '../lib/inquiriesApi';
+import {
+  buildSpamCheckPayload,
+  createSpamChallenge,
+  validateSpamCheckAndContent,
+} from '../lib/spamProtection';
+import { SpamChallengeField } from '../components/common/SpamChallengeField';
 import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../services/enquiryWebhook';
 import {
   Heart,
@@ -18,7 +24,6 @@ import {
   ShieldCheck,
   CheckCircle2,
   ArrowLeft,
-  Calculator,
   Send,
   Building2,
   Share2,
@@ -26,6 +31,12 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { BRAND_CONFIG } from '../config/brand.config';
+import { handleDemoContactClick } from '../config/siteConfig';
+import { buildPropertyListingJsonLd, usePageMeta } from '../lib/seo';
+import { trackEvent } from '../lib/analytics';
+import { InstallmentCalculator } from '../components/property/InstallmentCalculator';
+import { useLanguage } from '../context/LanguageContext';
+import { URGLISH_COPY } from '../data/urglishTranslations';
 
 export const ProjectDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -33,6 +44,7 @@ export const ProjectDetailPage: React.FC = () => {
   const { isPropertySaved, toggleSaveProperty } = useAuth();
   const { propertyListings, portfolioProjects } = useCatalog();
   const { showToast } = useToast();
+  const { t, isUrglish, getPropertyExtendedStory } = useLanguage();
 
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
 
@@ -44,11 +56,8 @@ export const ProjectDetailPage: React.FC = () => {
   const [tourBooked, setTourBooked] = useState(false);
   const [tourSubmitting, setTourSubmitting] = useState(false);
   const [website, setWebsite] = useState('');
-
-  // Home Financing / Installment Calculator state
-  const [downPaymentPercent, setDownPaymentPercent] = useState(30);
-  const [financingRate, setFinancingRate] = useState(14.5); // realistic KIBOR-based Pakistani bank home financing rate
-  const [loanTermYears, setLoanTermYears] = useState(15);
+  const [spamChallenge, setSpamChallenge] = useState(() => createSpamChallenge());
+  const [challengeAnswer, setChallengeAnswer] = useState('');
 
   // Find project
   const project = useMemo(() => {
@@ -115,12 +124,46 @@ export const ProjectDetailPage: React.FC = () => {
 
   useEffect(() => {
     setActivePhotoIdx(0);
+    setSpamChallenge(createSpamChallenge());
+    setChallengeAnswer('');
+    setTourBooked(false);
     if (project) {
-      document.title = `${project.name} | Signature Projects | ${BRAND_CONFIG.identity.brandShortName}`;
-    } else {
-      document.title = `Signature Project | ${BRAND_CONFIG.identity.brandName}`;
+      trackEvent('listing_view', {
+        category: 'project',
+        id: project.id,
+        title: project.name,
+        city: project.category,
+      });
     }
   }, [project]);
+
+  usePageMeta({
+    title: project
+      ? `${project.name} · ${project.price} | ${BRAND_CONFIG.identity.brandShortName}`
+      : `Signature Project | ${BRAND_CONFIG.identity.brandName}`,
+    description: project
+      ? `${project.name} in ${project.location} (${project.sqft}) — ${project.price}. ${project.description}`
+      : `Discover signature architectural projects curated by ${BRAND_CONFIG.identity.brandName}.`,
+    path: project ? `/#/projects/${project.id}` : '/#/projects',
+    image: project?.images[0],
+    type: project ? 'product' : 'website',
+    noindex: !project,
+    structuredData: project
+      ? buildPropertyListingJsonLd({
+          name: project.name,
+          description: project.description,
+          path: `/#/projects/${project.id}`,
+          images: project.images,
+          priceNumeric: project.numericPrice,
+          availability: project.status === 'Sold' ? 'SoldOut' : 'InStock',
+          city: project.category,
+          address: project.location,
+          beds: project.beds || undefined,
+          baths: project.baths || undefined,
+          floorSizeText: project.sqft,
+        })
+      : undefined,
+  });
 
   if (!project) {
     return (
@@ -166,6 +209,23 @@ export const ProjectDetailPage: React.FC = () => {
       showToast('Please provide your name, email, and preferred date.', 'error');
       return;
     }
+
+    const spamCheck = buildSpamCheckPayload(spamChallenge, challengeAnswer, website);
+    const localSpam = validateSpamCheckAndContent({
+      name: tourName.trim(),
+      email: tourEmail.trim(),
+      office: project.location,
+      subject: `Private Site Visit: ${project.name}`,
+      message: tourNotes.trim(),
+      propertyTitle: project.name,
+      spamCheck,
+      requireChallenge: true,
+    });
+    if (!localSpam.valid) {
+      showToast(localSpam.error || 'Please complete the verification check.', 'error');
+      return;
+    }
+
     setTourSubmitting(true);
     const res = await submitInquiry({
       name: tourName.trim(),
@@ -175,6 +235,7 @@ export const ProjectDetailPage: React.FC = () => {
       source: 'Project Detail Viewing Form',
       propertyTitle: project.name,
       preferredDate: tourDate,
+      spamCheck,
     });
     setTourSubmitting(false);
 
@@ -195,29 +256,13 @@ export const ProjectDetailPage: React.FC = () => {
       budget: project.price,
       message: siteVisitMessage,
       source: 'Site Visit',
-      website,
+      website: '',
     });
 
     setTourBooked(true);
+    setSpamChallenge(createSpamChallenge());
+    setChallengeAnswer('');
     showToast('Viewing scheduled. Our director will confirm within 2 hours.', 'success');
-  };
-
-  // Financing calculation in PKR
-  const downPaymentAmount = (project.numericPrice * downPaymentPercent) / 100;
-  const loanPrincipal = project.numericPrice - downPaymentAmount;
-  const monthlyRate = financingRate / 100 / 12;
-  const totalMonths = loanTermYears * 12;
-  const monthlyPayment =
-    monthlyRate > 0
-      ? (loanPrincipal * monthlyRate * Math.pow(1 + monthlyRate, totalMonths)) /
-        (Math.pow(1 + monthlyRate, totalMonths) - 1)
-      : loanPrincipal / totalMonths;
-
-  const formatPKR = (amount: number) => {
-    if (amount >= 10000000) {
-      return `${BRAND_CONFIG.locale.currencyCode} ${(amount / 10000000).toFixed(2)} Crore`;
-    }
-    return `${BRAND_CONFIG.locale.currencyCode} ${(amount / 100000).toFixed(1)} Lakh`;
   };
 
   const isSold = project.status === 'Sold';
@@ -257,6 +302,10 @@ export const ProjectDetailPage: React.FC = () => {
             )}`}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => {
+              trackEvent('whatsapp_click', { location: 'project_detail', id: project.id });
+              handleDemoContactClick(e, showToast);
+            }}
             className="h-10 px-4 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2 text-xs font-display uppercase tracking-wider font-semibold transition-colors shadow-sm"
           >
             <MessageCircle className="w-4 h-4" />
@@ -271,17 +320,19 @@ export const ProjectDetailPage: React.FC = () => {
             <Share2 className="w-4 h-4" />
           </button>
 
-          <button
-            onClick={handleToggleHeart}
-            className={`w-10 h-10 rounded-full border transition-all flex items-center justify-center shadow-sm cursor-pointer ${
-              saved
-                ? 'bg-rose-50 border-rose-200 text-rose-500 fill-rose-500 scale-105'
-                : 'bg-white border-slate-200 text-slate-700 hover:text-rose-500'
-            }`}
-            title={saved ? 'Remove from shortlist' : 'Save to shortlist'}
-          >
-            <Heart className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
-          </button>
+          {BRAND_CONFIG.features.enableSavedProperties && (
+            <button
+              onClick={handleToggleHeart}
+              className={`w-10 h-10 rounded-full border transition-all flex items-center justify-center shadow-sm cursor-pointer ${
+                saved
+                  ? 'bg-rose-50 border-rose-200 text-rose-500 fill-rose-500 scale-105'
+                  : 'bg-white border-slate-200 text-slate-700 hover:text-rose-500'
+              }`}
+              title={saved ? 'Remove from shortlist' : 'Save to shortlist'}
+            >
+              <Heart className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -291,6 +342,7 @@ export const ProjectDetailPage: React.FC = () => {
           <SafeImage
             src={project.images[activePhotoIdx] || project.images[0]}
             alt={project.name}
+            sizes="100vw"
             className="w-full h-full object-cover"
           />
 
@@ -329,7 +381,7 @@ export const ProjectDetailPage: React.FC = () => {
                     : 'border-transparent opacity-60 hover:opacity-100'
                 }`}
               >
-                <SafeImage src={img} alt="" className="w-full h-full object-cover" />
+                <SafeImage src={img} alt="" sizes="112px" className="w-full h-full object-cover" />
               </button>
             ))}
           </div>
@@ -412,7 +464,7 @@ export const ProjectDetailPage: React.FC = () => {
                 Property Monograph & Architectural Details
               </h3>
               <p className="font-body text-xs sm:text-sm text-slate-700 leading-relaxed font-light">
-                {project.extendedStory || project.description}
+                {getPropertyExtendedStory(project.id, project.extendedStory || project.description)}
               </p>
             </div>
 
@@ -433,70 +485,7 @@ export const ProjectDetailPage: React.FC = () => {
           </div>
 
           {/* Capital & Home Financing Calculator */}
-          <div className="bg-brand rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 text-brand-contrast shadow-xl space-y-6">
-            <div className="flex items-center justify-between border-b border-brand-contrast/10 pb-4">
-              <div className="flex items-center gap-2.5">
-                <Calculator className="w-5 h-5 text-amber-300" />
-                <h3 className="font-display font-bold text-lg sm:text-xl uppercase tracking-tight text-brand-contrast">
-                  HOME FINANCING & INSTALLMENT CALCULATOR
-                </h3>
-              </div>
-              <span className="text-[10px] font-display uppercase tracking-widest text-brand-contrast/60">
-                {BRAND_CONFIG.locale.nationalityAdjective} Bank / Developer Model
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              <div>
-                <label className="block text-[10px] uppercase font-display tracking-wider text-brand-contrast/70 mb-1">
-                  Down Payment ({downPaymentPercent}% Pay Order)
-                </label>
-                <div className="font-display font-bold text-lg text-emerald-300">
-                  {formatPKR(downPaymentAmount)}
-                </div>
-                <input
-                  type="range"
-                  min="20"
-                  max="60"
-                  step="5"
-                  value={downPaymentPercent}
-                  onChange={(e) => setDownPaymentPercent(Number(e.target.value))}
-                  className="w-full mt-2 accent-white cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] uppercase font-display tracking-wider text-brand-contrast/70 mb-1">
-                  Financing Rate ({financingRate}%)
-                </label>
-                <div className="font-display font-bold text-lg text-brand-contrast">
-                  {financingRate}% p.a.
-                </div>
-                <input
-                  type="range"
-                  min="10"
-                  max="22"
-                  step="0.5"
-                  value={financingRate}
-                  onChange={(e) => setFinancingRate(Number(e.target.value))}
-                  className="w-full mt-2 accent-white cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] uppercase font-display tracking-wider text-brand-contrast/70 mb-1">
-                  Estimated Monthly Installment
-                </label>
-                <div className="font-display font-bold text-xl sm:text-2xl text-amber-200">
-                  {formatPKR(monthlyPayment)}
-                  <span className="text-xs text-brand-contrast/60 font-body font-normal"> / mo</span>
-                </div>
-                <span className="text-[10px] text-brand-contrast/50 block mt-1">
-                  Excludes stamp duty, CVT & society transfer fee
-                </span>
-              </div>
-            </div>
-          </div>
+          <InstallmentCalculator defaultPrice={project.numericPrice} />
         </div>
 
         {/* Right Column: Private Viewing Booking Card */}
@@ -510,7 +499,10 @@ export const ProjectDetailPage: React.FC = () => {
                 SCHEDULE PRIVATE SITE VISIT
               </h3>
               <p className="text-xs text-slate-500 font-body mt-1">
-                Visits are arranged directly by {BRAND_CONFIG.identity.brandShortName} directors with confirmed society appointments.
+                {t(
+                  `Visits are arranged directly by ${BRAND_CONFIG.identity.brandShortName} directors with confirmed society appointments.`,
+                  URGLISH_COPY.detailPages.projectViewingSubtext
+                )}
               </p>
             </div>
 
@@ -521,18 +513,29 @@ export const ProjectDetailPage: React.FC = () => {
                   Viewing Confirmed
                 </h4>
                 <p className="text-xs text-emerald-800 font-body">
-                  {BRAND_CONFIG.locale.greeting}, {tourName}. An {BRAND_CONFIG.identity.brandShortName} director will coordinate your private visit to the residence for {tourDate}.
+                  {BRAND_CONFIG.locale.greeting}, {tourName}.{' '}
+                  {isUrglish ? (
+                    <>
+                      {BRAND_CONFIG.identity.brandShortName} director {tourDate} ko {URGLISH_COPY.detailPages.projectConfirmationSuffix}
+                    </>
+                  ) : (
+                    <>
+                      An {BRAND_CONFIG.identity.brandShortName} director will coordinate your private visit to the residence for {tourDate}.
+                    </>
+                  )}
                 </p>
               </div>
             ) : (
               <form onSubmit={handleTourSubmit} className="space-y-3.5">
                 <input
                   type="text"
-                  name="website"
+                  name="contact_hp_ref"
                   value={website}
                   onChange={(e) => setWebsite(e.target.value)}
                   tabIndex={-1}
-                  autoComplete="off"
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-form-type="other"
                   aria-hidden="true"
                   className="absolute -left-[9999px] w-px h-px overflow-hidden opacity-0 pointer-events-none"
                 />
@@ -590,7 +593,18 @@ export const ProjectDetailPage: React.FC = () => {
                   />
                 </div>
 
-                <div className="pt-2">
+                <SpamChallengeField
+                  challenge={spamChallenge}
+                  answer={challengeAnswer}
+                  onAnswerChange={setChallengeAnswer}
+                  onRefresh={() => {
+                    setSpamChallenge(createSpamChallenge());
+                    setChallengeAnswer('');
+                  }}
+                  variant="light"
+                />
+
+                <div className="pt-2 space-y-2">
                   <button
                     type="submit"
                     disabled={tourSubmitting}
@@ -605,13 +619,29 @@ export const ProjectDetailPage: React.FC = () => {
                     </span>
                     <Send className="w-3.5 h-3.5" />
                   </button>
+                  <p className="text-[11px] text-slate-500 text-center font-body">
+                    By submitting, you agree to our{' '}
+                    <Link to="/privacy" className="underline underline-offset-2 hover:text-brand">
+                      Privacy Policy
+                    </Link>{' '}
+                    &amp;{' '}
+                    <Link to="/terms" className="underline underline-offset-2 hover:text-brand">
+                      Terms
+                    </Link>
+                    .
+                  </p>
                 </div>
               </form>
             )}
 
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-2.5 text-[11px] text-slate-600 font-body">
               <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-              <span>Full architectural blueprints, registry and fard records, and society NOC approvals provided upon verified consultation.</span>
+              <span>
+                {t(
+                  'Full architectural blueprints, registry and fard records, and society NOC approvals provided upon verified consultation.',
+                  URGLISH_COPY.detailPages.projectVerificationNote
+                )}
+              </span>
             </div>
           </div>
         </div>

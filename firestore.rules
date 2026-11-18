@@ -36,6 +36,22 @@ service cloud.firestore {
         request.auth.token.email == 'abdullah.lenovot470s@gmail.com';
     }
 
+    function isValidImageString(val) {
+      return val is string && val.size() > 0 && val.size() <= 900000;
+    }
+
+    function isValidStringList(listVal, maxItems) {
+      return listVal is list &&
+        listVal.size() <= maxItems &&
+        (listVal.size() == 0 || listVal[0] is string);
+    }
+
+    function isValidMapList(listVal, maxItems) {
+      return listVal is list &&
+        listVal.size() <= maxItems &&
+        (listVal.size() == 0 || listVal[0] is map);
+    }
+
     function isValidUser(data) {
       return data.keys().hasAll(['id', 'email', 'name']) &&
         data.keys().hasOnly([
@@ -60,11 +76,398 @@ service cloud.firestore {
         (!('provider' in data) || (data.provider is string && data.provider in ['email', 'google'])) &&
         (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64)) &&
         (!('lastLoginAt' in data) || (data.lastLoginAt is string && data.lastLoginAt.size() <= 64)) &&
-        (!('savedPropertyIds' in data) || (
-          data.savedPropertyIds is list &&
-          data.savedPropertyIds.size() <= 100 &&
-          (data.savedPropertyIds.size() == 0 || data.savedPropertyIds[0] is string)
-        ));
+        (!('savedPropertyIds' in data) || isValidStringList(data.savedPropertyIds, 100));
+    }
+
+    function isValidInquiry(data, inquiryId) {
+      return data.keys().hasAll([
+          'id',
+          'name',
+          'email',
+          'phone',
+          'office',
+          'subject',
+          'message',
+          'source',
+          'status',
+          'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id',
+          'name',
+          'email',
+          'phone',
+          'office',
+          'subject',
+          'message',
+          'source',
+          'propertyTitle',
+          'preferredDate',
+          'timeframe',
+          'status',
+          'createdAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == inquiryId &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 120 &&
+        !data.name.matches('.*(https?://|www\\.|<|>).*') &&
+        data.email is string && data.email.size() <= 254 &&
+        data.phone is string && data.phone.size() <= 32 &&
+        (data.email.size() > 0 || data.phone.size() > 0) &&
+        data.office is string && data.office.size() <= 100 &&
+        !data.office.matches('.*(https?://|www\\.|<|>).*') &&
+        data.subject is string && data.subject.size() <= 200 &&
+        !data.subject.matches('.*(https?://|www\\.|<|>).*') &&
+        data.message is string && data.message.size() <= 5000 &&
+        data.source is string && data.source.size() > 0 && data.source.size() <= 100 &&
+        data.status is string && data.status in ['new', 'contacted', 'resolved'] &&
+        data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 64 &&
+        (!('propertyTitle' in data) || (data.propertyTitle is string && data.propertyTitle.size() <= 200 && !data.propertyTitle.matches('.*(https?://|www\\.|<|>).*'))) &&
+        (!('preferredDate' in data) || (data.preferredDate is string && data.preferredDate.size() <= 64)) &&
+        (!('timeframe' in data) || (data.timeframe is string && data.timeframe.size() <= 100));
+    }
+
+    function isValidCatalogProject(data, projectId) {
+      return data.keys().hasAll([
+          'id',
+          'title',
+          'location',
+          'size',
+          'beds',
+          'baths',
+          'projectDelivered',
+          'image',
+          'summary',
+          'architect',
+          'valuation',
+          'category',
+          'gallery'
+        ]) &&
+        data.keys().hasOnly([
+          'id',
+          'title',
+          'location',
+          'size',
+          'beds',
+          'baths',
+          'projectDelivered',
+          'image',
+          'summary',
+          'architect',
+          'valuation',
+          'numericValuation',
+          'category',
+          'gallery',
+          'status',
+          '_sortOrder'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == projectId &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+        data.location is string && data.location.size() > 0 && data.location.size() <= 200 &&
+        data.size is string && data.size.size() <= 80 &&
+        data.beds is number && data.beds >= 0 &&
+        data.baths is number && data.baths >= 0 &&
+        data.projectDelivered is string && data.projectDelivered.size() <= 32 &&
+        isValidImageString(data.image) &&
+        data.summary is string && data.summary.size() <= 5000 &&
+        data.architect is string && data.architect.size() <= 160 &&
+        data.valuation is string && data.valuation.size() > 0 && data.valuation.size() <= 80 &&
+        data.category is string && data.category.size() > 0 && data.category.size() <= 80 &&
+        isValidStringList(data.gallery, 30) &&
+        (!('numericValuation' in data) || data.numericValuation is number) &&
+        (!('status' in data) || (data.status is string && data.status in ['Available', 'Under Offer', 'Sold'])) &&
+        (!('_sortOrder' in data) || data._sortOrder is number);
+    }
+
+    function isValidCatalogListing(data, listingId) {
+      return data.keys().hasAll([
+          'id',
+          'name',
+          'location',
+          'price',
+          'numericPrice',
+          'beds',
+          'baths',
+          'sqft',
+          'category',
+          'description',
+          'layoutVariant',
+          'exteriorImage',
+          'interiorImages',
+          'architecturalStyle',
+          'yearBuilt',
+          'amenities'
+        ]) &&
+        data.keys().hasOnly([
+          'id',
+          'name',
+          'location',
+          'price',
+          'numericPrice',
+          'beds',
+          'baths',
+          'sqft',
+          'category',
+          'description',
+          'extendedStory',
+          'layoutVariant',
+          'exteriorImage',
+          'interiorImages',
+          'architecturalStyle',
+          'yearBuilt',
+          'amenities',
+          'architect',
+          'lotSize',
+          'featured',
+          'status',
+          '_sortOrder'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == listingId &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+        data.location is string && data.location.size() > 0 && data.location.size() <= 200 &&
+        data.price is string && data.price.size() > 0 && data.price.size() <= 80 &&
+        data.numericPrice is number &&
+        data.beds is number && data.beds >= 0 &&
+        data.baths is number && data.baths >= 0 &&
+        data.sqft is string && data.sqft.size() <= 80 &&
+        data.category is string && data.category.size() > 0 && data.category.size() <= 80 &&
+        data.description is string && data.description.size() <= 5000 &&
+        (!('extendedStory' in data) || (data.extendedStory is string && data.extendedStory.size() <= 8000)) &&
+        data.layoutVariant is string && data.layoutVariant in ['exterior-left', 'exterior-right'] &&
+        isValidImageString(data.exteriorImage) &&
+        isValidStringList(data.interiorImages, 30) &&
+        data.architecturalStyle is string && data.architecturalStyle.size() <= 160 &&
+        data.yearBuilt is number &&
+        isValidStringList(data.amenities, 30) &&
+        (!('architect' in data) || (data.architect is string && data.architect.size() <= 160)) &&
+        (!('lotSize' in data) || (data.lotSize is string && data.lotSize.size() <= 80)) &&
+        (!('featured' in data) || data.featured is bool) &&
+        (!('status' in data) || (data.status is string && data.status in ['Available', 'Under Offer', 'Sold'])) &&
+        (!('_sortOrder' in data) || data._sortOrder is number);
+    }
+
+    function isValidCatalogBuy(data, buyId) {
+      return data.keys().hasAll([
+          'id',
+          'title',
+          'city',
+          'location',
+          'type',
+          'price',
+          'numericPrice',
+          'priceRange',
+          'area',
+          'areaCategory',
+          'beds',
+          'baths',
+          'image',
+          'gallery',
+          'description',
+          'features',
+          'possession',
+          'nocStatus'
+        ]) &&
+        data.keys().hasOnly([
+          'id',
+          'title',
+          'city',
+          'location',
+          'type',
+          'price',
+          'numericPrice',
+          'priceRange',
+          'area',
+          'areaCategory',
+          'beds',
+          'baths',
+          'image',
+          'gallery',
+          'description',
+          'features',
+          'possession',
+          'nocStatus',
+          'status',
+          '_sortOrder'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == buyId &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+        data.city is string && data.city.size() > 0 && data.city.size() <= 80 &&
+        data.location is string && data.location.size() > 0 && data.location.size() <= 200 &&
+        data.type is string && data.type in ['House', 'Apartment', 'Plot'] &&
+        data.price is string && data.price.size() > 0 && data.price.size() <= 80 &&
+        data.numericPrice is number &&
+        data.priceRange is string && data.priceRange.size() <= 40 &&
+        data.area is string && data.area.size() <= 80 &&
+        data.areaCategory is string && data.areaCategory.size() <= 40 &&
+        data.beds is number && data.beds >= 0 &&
+        data.baths is number && data.baths >= 0 &&
+        isValidImageString(data.image) &&
+        isValidStringList(data.gallery, 30) &&
+        data.description is string && data.description.size() <= 5000 &&
+        isValidStringList(data.features, 30) &&
+        data.possession is string && data.possession.size() <= 120 &&
+        data.nocStatus is string && data.nocStatus.size() <= 120 &&
+        (!('status' in data) || (data.status is string && data.status in ['Available', 'Under Offer', 'Sold'])) &&
+        (!('_sortOrder' in data) || data._sortOrder is number);
+    }
+
+    function isValidCatalogRent(data, rentId) {
+      return data.keys().hasAll([
+          'id',
+          'title',
+          'city',
+          'areaSociety',
+          'type',
+          'monthlyRent',
+          'beds',
+          'baths',
+          'sizeOrFloor',
+          'furnished',
+          'image',
+          'gallery',
+          'availableFrom',
+          'securityDeposit',
+          'advanceRent',
+          'minContractPeriod',
+          'amenities',
+          'description'
+        ]) &&
+        data.keys().hasOnly([
+          'id',
+          'title',
+          'city',
+          'areaSociety',
+          'type',
+          'monthlyRent',
+          'beds',
+          'baths',
+          'sizeOrFloor',
+          'furnished',
+          'image',
+          'gallery',
+          'availableFrom',
+          'securityDeposit',
+          'advanceRent',
+          'minContractPeriod',
+          'amenities',
+          'description',
+          'status',
+          '_sortOrder'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == rentId &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+        data.city is string && data.city.size() > 0 && data.city.size() <= 80 &&
+        data.areaSociety is string && data.areaSociety.size() > 0 && data.areaSociety.size() <= 200 &&
+        data.type is string && data.type in ['Apartment', 'House', 'Upper Portion', 'Lower Portion'] &&
+        data.monthlyRent is number && data.monthlyRent > 0 &&
+        data.beds is number && data.beds >= 0 &&
+        data.baths is number && data.baths >= 0 &&
+        data.sizeOrFloor is string && data.sizeOrFloor.size() <= 80 &&
+        data.furnished is string && data.furnished in ['Furnished', 'Unfurnished'] &&
+        isValidImageString(data.image) &&
+        isValidStringList(data.gallery, 30) &&
+        data.availableFrom is string && data.availableFrom.size() <= 80 &&
+        data.securityDeposit is string && data.securityDeposit.size() <= 80 &&
+        data.advanceRent is string && data.advanceRent.size() <= 80 &&
+        data.minContractPeriod is string && data.minContractPeriod.size() <= 80 &&
+        isValidStringList(data.amenities, 30) &&
+        data.description is string && data.description.size() <= 5000 &&
+        (!('status' in data) || (data.status is string && data.status in ['Available', 'Rented'])) &&
+        (!('_sortOrder' in data) || data._sortOrder is number);
+    }
+
+    function isValidCatalogFaq(data, faqId) {
+      return data.keys().hasAll(['id', 'question', 'answer']) &&
+        data.keys().hasOnly(['id', 'question', 'answer', 'category', '_sortOrder']) &&
+        isValidId(data.id) &&
+        data.id == faqId &&
+        data.question is string && data.question.size() > 0 && data.question.size() <= 500 &&
+        data.answer is string && data.answer.size() > 0 && data.answer.size() <= 5000 &&
+        (!('category' in data) || (data.category is string && data.category.size() <= 120)) &&
+        (!('_sortOrder' in data) || data._sortOrder is number);
+    }
+
+    function isValidCatalogReview(data, reviewId) {
+      return data.keys().hasAll([
+          'id',
+          'quote',
+          'author',
+          'role',
+          'location',
+          'propertyContext',
+          'rating',
+          'date'
+        ]) &&
+        data.keys().hasOnly([
+          'id',
+          'quote',
+          'author',
+          'role',
+          'location',
+          'propertyContext',
+          'rating',
+          'date',
+          '_sortOrder'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == reviewId &&
+        data.quote is string && data.quote.size() > 0 && data.quote.size() <= 3000 &&
+        data.author is string && data.author.size() > 0 && data.author.size() <= 120 &&
+        data.role is string && data.role.size() <= 120 &&
+        data.location is string && data.location.size() <= 120 &&
+        data.propertyContext is string && data.propertyContext.size() <= 160 &&
+        data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+        data.date is string && data.date.size() <= 64 &&
+        (!('_sortOrder' in data) || data._sortOrder is number);
+    }
+
+    function isValidCatalogMeta(data) {
+      return data.keys().hasAll(['seeded', 'seededAt']) &&
+        data.keys().hasOnly(['seeded', 'seededAt', 'faqsSeeded', 'reviewsSeeded']) &&
+        data.seeded is bool &&
+        data.seededAt is string && data.seededAt.size() <= 64 &&
+        (!('faqsSeeded' in data) || data.faqsSeeded is bool) &&
+        (!('reviewsSeeded' in data) || data.reviewsSeeded is bool);
+    }
+
+    function isValidCatalogSnapshot(data, snapshotId) {
+      return snapshotId == 'public' &&
+        data.keys().hasAll([
+          'id',
+          'version',
+          'updatedAt',
+          'projects',
+          'listings',
+          'buy',
+          'rent',
+          'faqs',
+          'reviews'
+        ]) &&
+        data.keys().hasOnly([
+          'id',
+          'version',
+          'updatedAt',
+          'projects',
+          'listings',
+          'buy',
+          'rent',
+          'faqs',
+          'reviews'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == snapshotId &&
+        data.version is number &&
+        data.updatedAt is string && data.updatedAt.size() > 0 && data.updatedAt.size() <= 64 &&
+        isValidMapList(data.projects, 250) &&
+        isValidMapList(data.listings, 250) &&
+        isValidMapList(data.buy, 250) &&
+        isValidMapList(data.rent, 250) &&
+        isValidMapList(data.faqs, 250) &&
+        isValidMapList(data.reviews, 250);
     }
 
     match /users/{userId} {
@@ -94,27 +497,244 @@ service cloud.firestore {
       allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
     }
 
-    // Server-only collections managed exclusively by Express via Firebase Admin SDK
+    // Server-only legacy authentication registry accessed via Firebase Admin SDK
     match /auth_users/{emailHash} {
       allow read, write: if false;
     }
+
+    // Inbound enquiries: public visitors can submit validated new enquiries; only management can read/triage/delete
     match /inquiries/{inquiryId} {
-      allow read, write: if false;
+      allow get: if isValidId(inquiryId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(inquiryId) &&
+        isValidInquiry(incoming(), inquiryId) &&
+        incoming().status == 'new';
+      allow update: if isValidId(inquiryId) &&
+        isAdmin() &&
+        isValidInquiry(incoming(), inquiryId) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      allow delete: if isValidId(inquiryId) && isAdmin();
     }
+
+    // Publicly browsable property catalog collections, writable only by verified management
     match /catalog_projects/{projectId} {
-      allow read, write: if false;
+      allow get: if isValidId(projectId);
+      allow list: if true;
+      allow create: if isValidId(projectId) &&
+        isAdmin() &&
+        isValidCatalogProject(incoming(), projectId);
+      allow update: if isValidId(projectId) &&
+        isAdmin() &&
+        isValidCatalogProject(incoming(), projectId) &&
+        incoming().id == existing().id &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title',
+          'location',
+          'size',
+          'beds',
+          'baths',
+          'projectDelivered',
+          'image',
+          'summary',
+          'architect',
+          'valuation',
+          'numericValuation',
+          'category',
+          'gallery',
+          'status',
+          '_sortOrder'
+        ]);
+      allow delete: if isValidId(projectId) && isAdmin();
     }
+
     match /catalog_listings/{listingId} {
-      allow read, write: if false;
+      allow get: if isValidId(listingId);
+      allow list: if true;
+      allow create: if isValidId(listingId) &&
+        isAdmin() &&
+        isValidCatalogListing(incoming(), listingId);
+      allow update: if isValidId(listingId) &&
+        isAdmin() &&
+        isValidCatalogListing(incoming(), listingId) &&
+        incoming().id == existing().id &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'name',
+          'location',
+          'price',
+          'numericPrice',
+          'beds',
+          'baths',
+          'sqft',
+          'category',
+          'description',
+          'extendedStory',
+          'layoutVariant',
+          'exteriorImage',
+          'interiorImages',
+          'architecturalStyle',
+          'yearBuilt',
+          'amenities',
+          'architect',
+          'lotSize',
+          'featured',
+          'status',
+          '_sortOrder'
+        ]);
+      allow delete: if isValidId(listingId) && isAdmin();
     }
+
     match /catalog_buy/{buyId} {
-      allow read, write: if false;
+      allow get: if isValidId(buyId);
+      allow list: if true;
+      allow create: if isValidId(buyId) &&
+        isAdmin() &&
+        isValidCatalogBuy(incoming(), buyId);
+      allow update: if isValidId(buyId) &&
+        isAdmin() &&
+        isValidCatalogBuy(incoming(), buyId) &&
+        incoming().id == existing().id &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title',
+          'city',
+          'location',
+          'type',
+          'price',
+          'numericPrice',
+          'priceRange',
+          'area',
+          'areaCategory',
+          'beds',
+          'baths',
+          'image',
+          'gallery',
+          'description',
+          'features',
+          'possession',
+          'nocStatus',
+          'status',
+          '_sortOrder'
+        ]);
+      allow delete: if isValidId(buyId) && isAdmin();
     }
+
     match /catalog_rent/{rentId} {
-      allow read, write: if false;
+      allow get: if isValidId(rentId);
+      allow list: if true;
+      allow create: if isValidId(rentId) &&
+        isAdmin() &&
+        isValidCatalogRent(incoming(), rentId);
+      allow update: if isValidId(rentId) &&
+        isAdmin() &&
+        isValidCatalogRent(incoming(), rentId) &&
+        incoming().id == existing().id &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title',
+          'city',
+          'areaSociety',
+          'type',
+          'monthlyRent',
+          'beds',
+          'baths',
+          'sizeOrFloor',
+          'furnished',
+          'image',
+          'gallery',
+          'availableFrom',
+          'securityDeposit',
+          'advanceRent',
+          'minContractPeriod',
+          'amenities',
+          'description',
+          'status',
+          '_sortOrder'
+        ]);
+      allow delete: if isValidId(rentId) && isAdmin();
     }
+
+    match /catalog_faqs/{faqId} {
+      allow get: if isValidId(faqId);
+      allow list: if true;
+      allow create: if isValidId(faqId) &&
+        isAdmin() &&
+        isValidCatalogFaq(incoming(), faqId);
+      allow update: if isValidId(faqId) &&
+        isAdmin() &&
+        isValidCatalogFaq(incoming(), faqId) &&
+        incoming().id == existing().id &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'question',
+          'answer',
+          'category',
+          '_sortOrder'
+        ]);
+      allow delete: if isValidId(faqId) && isAdmin();
+    }
+
+    match /catalog_reviews/{reviewId} {
+      allow get: if isValidId(reviewId);
+      allow list: if true;
+      allow create: if isValidId(reviewId) &&
+        isAdmin() &&
+        isValidCatalogReview(incoming(), reviewId);
+      allow update: if isValidId(reviewId) &&
+        isAdmin() &&
+        isValidCatalogReview(incoming(), reviewId) &&
+        incoming().id == existing().id &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'quote',
+          'author',
+          'role',
+          'location',
+          'propertyContext',
+          'rating',
+          'date',
+          '_sortOrder'
+        ]);
+      allow delete: if isValidId(reviewId) && isAdmin();
+    }
+
     match /catalog_meta/{metaId} {
-      allow read, write: if false;
+      allow get: if isValidId(metaId);
+      allow list: if true;
+      allow create: if isValidId(metaId) &&
+        isAdmin() &&
+        isValidCatalogMeta(incoming());
+      allow update: if isValidId(metaId) &&
+        isAdmin() &&
+        isValidCatalogMeta(incoming()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'seeded',
+          'seededAt',
+          'faqsSeeded',
+          'reviewsSeeded'
+        ]);
+      allow delete: if isValidId(metaId) && isAdmin();
+    }
+
+    // Consolidated 1-read public catalog snapshot (visitors only get 'public', no list enumeration)
+    match /catalog_snapshot/{snapshotId} {
+      allow get: if isValidId(snapshotId);
+      allow list: if false;
+      allow create: if isValidId(snapshotId) &&
+        isAdmin() &&
+        isValidCatalogSnapshot(incoming(), snapshotId);
+      allow update: if isValidId(snapshotId) &&
+        isAdmin() &&
+        isValidCatalogSnapshot(incoming(), snapshotId) &&
+        incoming().id == existing().id &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'version',
+          'updatedAt',
+          'projects',
+          'listings',
+          'buy',
+          'rent',
+          'faqs',
+          'reviews'
+        ]);
+      allow delete: if isValidId(snapshotId) && isAdmin();
     }
   }
 }

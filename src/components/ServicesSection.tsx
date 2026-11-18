@@ -2,18 +2,22 @@ import React, { useState, useRef } from 'react';
 import { ArrowUpRight } from 'lucide-react';
 import { BRAND_CONFIG } from '../config/brand.config';
 import { SafeImage } from './common/SafeImage';
+import { useLanguage } from '../context/LanguageContext';
+import { URGLISH_COPY } from '../data/urglishTranslations';
 
 interface ServicesSectionProps {
   onOpenConsultation: (serviceTitle?: string) => void;
 }
 
 export const ServicesSection: React.FC<ServicesSectionProps> = ({ onOpenConsultation }) => {
+  const { t, getServiceCardDescription } = useLanguage();
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [activeSlide, setActiveSlide] = useState(0);
   const carouselRef = useRef<HTMLDivElement>(null);
 
   const cards = BRAND_CONFIG.copy.servicesSection.cards.map((card) => ({
     ...card,
+    description: getServiceCardDescription(card.id, card.description),
     image: BRAND_CONFIG.images[card.imageKey],
   }));
 
@@ -48,7 +52,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onOpenConsulta
 
           <div className="lg:col-span-6">
             <p className="font-body text-xs sm:text-base leading-relaxed text-accent-contrast/85 font-light max-w-xl">
-              {BRAND_CONFIG.copy.servicesSection.subtitle}
+              {t(BRAND_CONFIG.copy.servicesSection.subtitle, URGLISH_COPY.servicesSection.subtitle)}
             </p>
           </div>
         </div>
@@ -69,7 +73,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onOpenConsulta
                 <SafeImage
                   src={card.image}
                   alt={card.title}
-                  priority={true}
+                  sizes="(max-width: 1024px) 84vw, 33vw"
                   className="w-full h-full object-cover object-center select-none"
                 />
               </div>
@@ -141,7 +145,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onOpenConsulta
                   <SafeImage
                     src={card.image}
                     alt={card.title}
-                    priority={true}
+                    sizes="(max-width: 1024px) 84vw, 33vw"
                     className="w-full h-full object-cover object-center select-none transition-transform duration-500 ease-out group-hover:scale-105"
                   />
                 </div>

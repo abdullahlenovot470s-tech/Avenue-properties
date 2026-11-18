@@ -73,10 +73,10 @@
     },
     "Inquiry": {
       "title": "Client Inquiry",
-      "description": "Submitted property or consultation inquiry managed server-side",
+      "description": "Submitted property or consultation inquiry",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "maxLength": 128 },
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "name": { "type": "string", "maxLength": 120 },
         "email": { "type": "string", "maxLength": 254 },
         "phone": { "type": "string", "maxLength": 32 },
@@ -84,26 +84,188 @@
         "subject": { "type": "string", "maxLength": 200 },
         "message": { "type": "string", "maxLength": 5000 },
         "source": { "type": "string", "maxLength": 100 },
+        "propertyTitle": { "type": "string", "maxLength": 200 },
+        "preferredDate": { "type": "string", "maxLength": 64 },
+        "timeframe": { "type": "string", "maxLength": 100 },
         "status": { "type": "string", "enum": ["new", "contacted", "resolved"] },
         "createdAt": { "type": "string", "maxLength": 64 }
       },
-      "required": ["id", "name", "status", "createdAt"]
+      "required": ["id", "name", "email", "phone", "office", "subject", "message", "source", "status", "createdAt"]
     },
-    "CatalogItem": {
-      "title": "Catalog Item",
-      "description": "Property, project, or rental listing managed server-side",
+    "CatalogProject": {
+      "title": "Portfolio Project",
+      "description": "Portfolio project listing readable publicly and managed by admin",
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 128 },
-        "title": { "type": "string", "maxLength": 200 }
+        "title": { "type": "string", "maxLength": 200 },
+        "location": { "type": "string", "maxLength": 200 },
+        "size": { "type": "string", "maxLength": 80 },
+        "beds": { "type": "number" },
+        "baths": { "type": "number" },
+        "projectDelivered": { "type": "string", "maxLength": 32 },
+        "image": { "type": "string", "maxLength": 900000 },
+        "summary": { "type": "string", "maxLength": 5000 },
+        "architect": { "type": "string", "maxLength": 160 },
+        "valuation": { "type": "string", "maxLength": 80 },
+        "numericValuation": { "type": "number" },
+        "category": { "type": "string", "maxLength": 80 },
+        "gallery": { "type": "array" },
+        "status": { "type": "string", "enum": ["Available", "Under Offer", "Sold"] },
+        "_sortOrder": { "type": "number" }
       },
-      "required": ["id"]
+      "required": ["id", "title", "location", "size", "beds", "baths", "projectDelivered", "image", "summary", "architect", "valuation", "category", "gallery"]
+    },
+    "CatalogListing": {
+      "title": "Signature Property Listing",
+      "description": "Signature project listing readable publicly and managed by admin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 200 },
+        "location": { "type": "string", "maxLength": 200 },
+        "price": { "type": "string", "maxLength": 80 },
+        "numericPrice": { "type": "number" },
+        "beds": { "type": "number" },
+        "baths": { "type": "number" },
+        "sqft": { "type": "string", "maxLength": 80 },
+        "category": { "type": "string", "maxLength": 80 },
+        "description": { "type": "string", "maxLength": 5000 },
+        "extendedStory": { "type": "string", "maxLength": 8000 },
+        "layoutVariant": { "type": "string", "enum": ["exterior-left", "exterior-right"] },
+        "exteriorImage": { "type": "string", "maxLength": 900000 },
+        "interiorImages": { "type": "array" },
+        "architecturalStyle": { "type": "string", "maxLength": 160 },
+        "yearBuilt": { "type": "number" },
+        "amenities": { "type": "array" },
+        "architect": { "type": "string", "maxLength": 160 },
+        "lotSize": { "type": "string", "maxLength": 80 },
+        "featured": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["Available", "Under Offer", "Sold"] },
+        "_sortOrder": { "type": "number" }
+      },
+      "required": ["id", "name", "location", "price", "numericPrice", "beds", "baths", "sqft", "category", "description", "layoutVariant", "exteriorImage", "interiorImages", "architecturalStyle", "yearBuilt", "amenities"]
+    },
+    "CatalogBuy": {
+      "title": "Buy Property Listing",
+      "description": "For-sale property listing readable publicly and managed by admin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "city": { "type": "string", "maxLength": 80 },
+        "location": { "type": "string", "maxLength": 200 },
+        "type": { "type": "string", "enum": ["House", "Apartment", "Plot"] },
+        "price": { "type": "string", "maxLength": 80 },
+        "numericPrice": { "type": "number" },
+        "priceRange": { "type": "string", "maxLength": 40 },
+        "area": { "type": "string", "maxLength": 80 },
+        "areaCategory": { "type": "string", "maxLength": 40 },
+        "beds": { "type": "number" },
+        "baths": { "type": "number" },
+        "image": { "type": "string", "maxLength": 900000 },
+        "gallery": { "type": "array" },
+        "description": { "type": "string", "maxLength": 5000 },
+        "features": { "type": "array" },
+        "possession": { "type": "string", "maxLength": 120 },
+        "nocStatus": { "type": "string", "maxLength": 120 },
+        "status": { "type": "string", "enum": ["Available", "Under Offer", "Sold"] },
+        "_sortOrder": { "type": "number" }
+      },
+      "required": ["id", "title", "city", "location", "type", "price", "numericPrice", "priceRange", "area", "areaCategory", "beds", "baths", "image", "gallery", "description", "features", "possession", "nocStatus"]
+    },
+    "CatalogRent": {
+      "title": "Rental Property Listing",
+      "description": "Rental listing readable publicly and managed by admin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "city": { "type": "string", "maxLength": 80 },
+        "areaSociety": { "type": "string", "maxLength": 200 },
+        "type": { "type": "string", "enum": ["Apartment", "House", "Upper Portion", "Lower Portion"] },
+        "monthlyRent": { "type": "number" },
+        "beds": { "type": "number" },
+        "baths": { "type": "number" },
+        "sizeOrFloor": { "type": "string", "maxLength": 80 },
+        "furnished": { "type": "string", "enum": ["Furnished", "Unfurnished"] },
+        "image": { "type": "string", "maxLength": 900000 },
+        "gallery": { "type": "array" },
+        "availableFrom": { "type": "string", "maxLength": 80 },
+        "securityDeposit": { "type": "string", "maxLength": 80 },
+        "advanceRent": { "type": "string", "maxLength": 80 },
+        "minContractPeriod": { "type": "string", "maxLength": 80 },
+        "amenities": { "type": "array" },
+        "description": { "type": "string", "maxLength": 5000 },
+        "status": { "type": "string", "enum": ["Available", "Rented"] },
+        "_sortOrder": { "type": "number" }
+      },
+      "required": ["id", "title", "city", "areaSociety", "type", "monthlyRent", "beds", "baths", "sizeOrFloor", "furnished", "image", "gallery", "availableFrom", "securityDeposit", "advanceRent", "minContractPeriod", "amenities", "description"]
+    },
+    "CatalogFaq": {
+      "title": "Contact FAQ Item",
+      "description": "Frequently asked question readable publicly and managed by admin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "question": { "type": "string", "maxLength": 500 },
+        "answer": { "type": "string", "maxLength": 5000 },
+        "category": { "type": "string", "maxLength": 120 },
+        "_sortOrder": { "type": "number" }
+      },
+      "required": ["id", "question", "answer"]
+    },
+    "CatalogReview": {
+      "title": "Homepage Client Review",
+      "description": "Verified client review displayed on homepage, readable publicly and managed by admin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "quote": { "type": "string", "maxLength": 3000 },
+        "author": { "type": "string", "maxLength": 120 },
+        "role": { "type": "string", "maxLength": 120 },
+        "location": { "type": "string", "maxLength": 120 },
+        "propertyContext": { "type": "string", "maxLength": 160 },
+        "rating": { "type": "number" },
+        "date": { "type": "string", "maxLength": 64 },
+        "_sortOrder": { "type": "number" }
+      },
+      "required": ["id", "quote", "author", "role", "location", "propertyContext", "rating", "date"]
+    },
+    "CatalogMeta": {
+      "title": "Catalog Metadata",
+      "description": "Catalog initialization state",
+      "type": "object",
+      "properties": {
+        "seeded": { "type": "boolean" },
+        "seededAt": { "type": "string", "maxLength": 64 },
+        "faqsSeeded": { "type": "boolean" },
+        "reviewsSeeded": { "type": "boolean" }
+      },
+      "required": ["seeded", "seededAt"]
+    },
+    "CatalogSnapshot": {
+      "title": "Public Catalog Snapshot",
+      "description": "Consolidated single-document read-optimized snapshot of all public catalog sections (1 Firestore read per visitor)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "version": { "type": "number" },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "projects": { "type": "array" },
+        "listings": { "type": "array" },
+        "buy": { "type": "array" },
+        "rent": { "type": "array" },
+        "faqs": { "type": "array" },
+        "reviews": { "type": "array" }
+      },
+      "required": ["id", "version", "updatedAt", "projects", "listings", "buy", "rent", "faqs", "reviews"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "User",
-      "description": "Stores user profiles and shortlists, secured to the owner"
+      "description": "Stores user profiles and shortlists, secured to the owner and management"
     },
     "/auth_users/{emailHash}": {
       "schema": "BackendAuthUser",
@@ -111,27 +273,39 @@
     },
     "/inquiries/{inquiryId}": {
       "schema": "Inquiry",
-      "description": "Server-only inbound enquiry records accessed via Firebase Admin SDK"
+      "description": "Visitor inquiry submissions (create-only for visitors, read/update/delete restricted to management)"
     },
     "/catalog_projects/{projectId}": {
-      "schema": "CatalogItem",
-      "description": "Server-only portfolio projects catalog accessed via Firebase Admin SDK"
+      "schema": "CatalogProject",
+      "description": "Portfolio projects catalog (publicly readable, admin-managed)"
     },
     "/catalog_listings/{listingId}": {
-      "schema": "CatalogItem",
-      "description": "Server-only signature property listings accessed via Firebase Admin SDK"
+      "schema": "CatalogListing",
+      "description": "Signature property listings (publicly readable, admin-managed)"
     },
     "/catalog_buy/{buyId}": {
-      "schema": "CatalogItem",
-      "description": "Server-only properties for sale accessed via Firebase Admin SDK"
+      "schema": "CatalogBuy",
+      "description": "Properties for sale catalog (publicly readable, admin-managed)"
     },
     "/catalog_rent/{rentId}": {
-      "schema": "CatalogItem",
-      "description": "Server-only rental listings accessed via Firebase Admin SDK"
+      "schema": "CatalogRent",
+      "description": "Rental listings catalog (publicly readable, admin-managed)"
+    },
+    "/catalog_faqs/{faqId}": {
+      "schema": "CatalogFaq",
+      "description": "Contact page FAQs (publicly readable, admin-managed)"
+    },
+    "/catalog_reviews/{reviewId}": {
+      "schema": "CatalogReview",
+      "description": "Homepage client reviews (publicly readable, admin-managed)"
     },
     "/catalog_meta/{metaId}": {
-      "schema": "CatalogItem",
-      "description": "Server-only catalog seeding state accessed via Firebase Admin SDK"
+      "schema": "CatalogMeta",
+      "description": "Catalog seeding state metadata (publicly readable, admin-managed)"
+    },
+    "/catalog_snapshot/{snapshotId}": {
+      "schema": "CatalogSnapshot",
+      "description": "Consolidated 1-read public catalog snapshot (get-only for public visitors, admin-managed)"
     }
   }
 }

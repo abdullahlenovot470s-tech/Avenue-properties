@@ -27,8 +27,11 @@ import {
   Users,
 } from 'lucide-react';
 import { BRAND_CONFIG } from '../config/brand.config';
+import { usePageSeo } from '../lib/seo';
+import { useRevealFallback } from '../lib/useAnimationFallback';
 
 export const ProfilePage: React.FC = () => {
+  const { forceVisible, markCompleted } = useRevealFallback(1000);
   const {
     currentUser,
     isAuthenticated,
@@ -46,9 +49,12 @@ export const ProfilePage: React.FC = () => {
   const [phoneInput, setPhoneInput] = useState(currentUser?.phone || '');
   const [phoneError, setPhoneError] = useState('');
 
-  React.useEffect(() => {
-    document.title = `Client Profile & Shortlist | ${BRAND_CONFIG.identity.brandName}`;
-  }, []);
+  usePageSeo({
+    title: `Client Profile & Shortlist | ${BRAND_CONFIG.identity.brandName}`,
+    description: `Manage your saved property shortlist and contact preferences on ${BRAND_CONFIG.identity.brandName}.`,
+    path: '/#/profile',
+    noindex: true,
+  });
 
   React.useEffect(() => {
     if (currentUser?.phone) {
@@ -177,6 +183,8 @@ export const ProfilePage: React.FC = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
+        onAnimationComplete={markCompleted}
+        style={forceVisible ? { opacity: 1, transform: 'none' } : undefined}
         className="relative bg-white rounded-[28px] sm:rounded-[36px] overflow-hidden p-6 sm:p-10 md:p-12 shadow-xl border border-slate-100 mb-10"
       >
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-8 border-b border-slate-100">
@@ -232,20 +240,25 @@ export const ProfilePage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-3">
             {isManagement && (
               <>
-                <Link
-                  to="/manage"
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-brand hover:bg-accent text-brand-contrast font-display text-xs uppercase tracking-wider font-semibold transition-all"
-                >
-                  <SlidersHorizontal className="w-3.5 h-3.5" />
-                  <span>Manage Inventory</span>
-                </Link>
-                <Link
-                  to="/records"
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 text-brand font-display text-xs uppercase tracking-wider font-semibold transition-all"
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  <span>Client Records</span>
-                </Link>
+                {BRAND_CONFIG.features.enableAdminPanel && (
+                  <Link
+                    to="/manage"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-brand hover:bg-accent text-brand-contrast font-display text-xs uppercase tracking-wider font-semibold transition-all"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                    <span>Manage Data</span>
+                  </Link>
+                )}
+                {BRAND_CONFIG.features.enableAdminPanel &&
+                  BRAND_CONFIG.features.enableEnquiriesDashboard && (
+                    <Link
+                      to="/records"
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 text-brand font-display text-xs uppercase tracking-wider font-semibold transition-all"
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Client Records</span>
+                    </Link>
+                  )}
               </>
             )}
             <button
@@ -367,6 +380,7 @@ export const ProfilePage: React.FC = () => {
       </motion.div>
 
       {/* Saved Residences Section */}
+      {BRAND_CONFIG.features.enableSavedProperties && (
       <section id="saved" className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -395,6 +409,8 @@ export const ProfilePage: React.FC = () => {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
+                onAnimationComplete={markCompleted}
+                style={forceVisible ? { opacity: 1, transform: 'none' } : undefined}
                 className="bg-white rounded-3xl overflow-hidden shadow-lg border border-slate-100 flex flex-col justify-between group hover:shadow-xl transition-all duration-300"
               >
                 {/* Photo with category badge & Unsave Heart */}
@@ -494,6 +510,7 @@ export const ProfilePage: React.FC = () => {
           </div>
         )}
       </section>
+      )}
     </div>
   );
 };

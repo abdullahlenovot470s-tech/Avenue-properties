@@ -1,16 +1,29 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { HERO_ASSETS } from '../data/realEstateData';
 import { SafeImage } from './common/SafeImage';
 import { CheckCircle2, Send, PhoneCall } from 'lucide-react';
-import { SITE_CONFIG, isValidContactPhone } from '../config/siteConfig';
+import { SITE_CONFIG, handleDemoContactClick, isValidContactPhone } from '../config/siteConfig';
 import { BRAND_CONFIG } from '../config/brand.config';
 import { useToast } from '../context/ToastContext';
 import { submitInquiry } from '../lib/inquiriesApi';
+import { trackEvent } from '../lib/analytics';
+import {
+  buildSpamCheckPayload,
+  createSpamChallenge,
+  validateSpamCheckAndContent,
+} from '../lib/spamProtection';
+import { SpamChallengeField } from './common/SpamChallengeField';
 import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../services/enquiryWebhook';
+import { useLanguage } from '../context/LanguageContext';
+import { URGLISH_COPY } from '../data/urglishTranslations';
+import { useRevealFallback } from '../lib/useAnimationFallback';
 
 export const ContactCta: React.FC = () => {
   const { showToast } = useToast();
+  const { t, isUrglish } = useLanguage();
+  const { forceVisible, markCompleted } = useRevealFallback(1200);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -21,6 +34,8 @@ export const ContactCta: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [website, setWebsite] = useState('');
+  const [spamChallenge, setSpamChallenge] = useState(() => createSpamChallenge());
+  const [challengeAnswer, setChallengeAnswer] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +62,22 @@ export const ContactCta: React.FC = () => {
       return;
     }
 
+    const spamCheck = buildSpamCheckPayload(spamChallenge, challengeAnswer, website);
+    const localSpam = validateSpamCheckAndContent({
+      name: formData.name.trim(),
+      email: formData.email.trim(),
+      phone: formData.phone.trim(),
+      office: 'General Advisory',
+      subject: 'Homepage Quick Question',
+      message: 'Submitted via homepage quick contact form.',
+      spamCheck,
+      requireChallenge: true,
+    });
+    if (!localSpam.valid) {
+      setError(localSpam.error || 'Please complete the human verification check.');
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await submitInquiry({
@@ -57,6 +88,7 @@ export const ContactCta: React.FC = () => {
         subject: 'Homepage Quick Question',
         message: 'Submitted via homepage quick contact form.',
         source: 'Home Quick Contact',
+        spamCheck,
       });
 
       if (res.success || (res.unreachable && isEnquiryWebhookConfigured())) {
@@ -72,6 +104,8 @@ export const ContactCta: React.FC = () => {
           website: '',
         });
         setSubmitted(true);
+        setSpamChallenge(createSpamChallenge());
+        setChallengeAnswer('');
         showToast('Inquiry submitted! Our partner will connect shortly.', 'success');
       } else {
         setError(res.error || 'Could not submit inquiry. Please try again.');
@@ -94,7 +128,7 @@ export const ContactCta: React.FC = () => {
             src={HERO_ASSETS.ctaBackground}
             fallbackSrc={HERO_ASSETS.heroImage}
             alt="Luxury mountain residence at dusk"
-            priority={true}
+            sizes="100vw"
             className="w-full h-full object-cover scale-105"
           />
           <div className="absolute inset-0 bg-brand-dark/85 backdrop-blur-[2px]" />
@@ -104,9 +138,12 @@ export const ContactCta: React.FC = () => {
         <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
+            animate={forceVisible ? { opacity: 1, y: 0 } : undefined}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.1 }}
             transition={{ duration: 0.35, ease: 'easeOut' }}
+            onAnimationComplete={markCompleted}
+            style={forceVisible ? { opacity: 1, transform: 'none' } : undefined}
             className="lg:col-span-6 w-full max-w-lg"
           >
             <div className="glass-panel rounded-3xl p-6 sm:p-8 md:p-10 text-white shadow-2xl border border-white/20">
@@ -127,12 +164,23 @@ export const ContactCta: React.FC = () => {
                   </h4>
                   <p className="text-xs text-white/80 leading-relaxed font-body">
                     {BRAND_CONFIG.copy.contactCta.greeting},{' '}
-                    <span className="font-semibold text-white">{formData.name}</span>. A{' '}
-                    {BRAND_CONFIG.identity.brandShortName} managing partner will contact you directly within 2 business hours.
+                    <span className="font-semibold text-white">{formData.name}</span>.{' '}
+                    {isUrglish ? (
+                      <>
+                        {BRAND_CONFIG.identity.brandShortName} ka managing partner {URGLISH_COPY.contactCta.confirmationSuffix}
+                      </>
+                    ) : (
+                      <>
+                        A {BRAND_CONFIG.identity.brandShortName} managing partner will contact you directly within 2 business hours.
+                      </>
+                    )}
                   </p>
                   <button
                     onClick={() => {
                       setSubmitted(false);
+                      setError('');
+                      setSpamChallenge(createSpamChallenge());
+                      setChallengeAnswer('');
                       setFormData({ name: '', email: '', phone: '' });
                     }}
                     className="text-xs font-display uppercase tracking-wider text-white/80 hover:text-white underline underline-offset-4 pt-2 cursor-pointer"
@@ -199,7 +247,22 @@ export const ContactCta: React.FC = () => {
                     />
                   </div>
 
-                  <div className="pt-2">
+                  <SpamChallengeField
+                    challenge={spamChallenge}
+                    answer={challengeAnswer}
+                    onAnswerChange={(val) => {
+                      setError('');
+                      setChallengeAnswer(val);
+                    }}
+                    onRefresh={() => {
+                      setError('');
+                      setSpamChallenge(createSpamChallenge());
+                      setChallengeAnswer('');
+                    }}
+                    variant="dark"
+                  />
+
+                  <div className="pt-2 space-y-2.5">
                     <button
                       type="submit"
                       disabled={loading}
@@ -214,6 +277,17 @@ export const ContactCta: React.FC = () => {
                         </>
                       )}
                     </button>
+                    <p className="text-[11px] text-white/60 text-center font-body">
+                      By submitting, you agree to our{' '}
+                      <Link to="/privacy" className="underline underline-offset-2 hover:text-white">
+                        Privacy Policy
+                      </Link>{' '}
+                      &amp;{' '}
+                      <Link to="/terms" className="underline underline-offset-2 hover:text-white">
+                        Terms
+                      </Link>
+                      .
+                    </p>
                   </div>
                 </form>
               )}
@@ -223,9 +297,12 @@ export const ContactCta: React.FC = () => {
           {/* Right Column */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
+            animate={forceVisible ? { opacity: 1, y: 0 } : undefined}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.1 }}
             transition={{ duration: 0.35, ease: 'easeOut' }}
+            onAnimationComplete={markCompleted}
+            style={forceVisible ? { opacity: 1, transform: 'none' } : undefined}
             className="lg:col-span-6 flex flex-col justify-center items-start lg:items-end text-left lg:text-right"
           >
             <span className="text-xs sm:text-sm font-display uppercase tracking-widest text-white/60 mb-2">
@@ -242,11 +319,15 @@ export const ContactCta: React.FC = () => {
             </h2>
 
             <p className="mt-6 font-body text-xs sm:text-sm text-white/70 max-w-md leading-relaxed">
-              {BRAND_CONFIG.copy.contactCta.intro}
+              {t(BRAND_CONFIG.copy.contactCta.intro, URGLISH_COPY.contactCta.intro)}
             </p>
 
             <a
               href={`tel:${SITE_CONFIG.phone.lahore.replace(/[^0-9+]/g, '')}`}
+              onClick={(e) => {
+                trackEvent('call_click', { location: 'home_contact_cta' });
+                handleDemoContactClick(e, showToast);
+              }}
               className="mt-6 flex items-center gap-3 glass-card-subtle hover:bg-white/20 transition-all px-4 py-2.5 rounded-full text-xs text-white/90 cursor-pointer"
             >
               <PhoneCall className="w-3.5 h-3.5 text-emerald-400" />

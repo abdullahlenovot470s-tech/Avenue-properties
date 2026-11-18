@@ -19,16 +19,32 @@ import {
   Layers,
   Users,
   AlertCircle,
+  RefreshCw,
+  HelpCircle,
+  Quote,
+  Star,
+  Cloud,
+  Loader2,
+  ArrowLeft,
+  ArrowRight,
 } from 'lucide-react';
 import { useCatalog, CityOption } from '../context/CatalogContext';
+import { useAuth } from '../context/AuthContext';
+import { auth } from '../lib/firebase';
 import { useToast } from '../context/ToastContext';
 import { SafeImage } from '../components/common/SafeImage';
 import { formatRent } from '../data/rentalsData';
 import type { ProjectStatus, BuyStatus, RentStatus, PropertyStatus } from '../types';
 import { BRAND_CONFIG } from '../config/brand.config';
+import { usePageSeo } from '../lib/seo';
+import {
+  getMediaStorageCapabilities,
+  uploadPropertyPhoto,
+  type MediaStorageCapabilities,
+} from '../lib/mediaStorage';
 
-type FilterView = 'all' | 'projects' | 'buy' | 'rent';
-type SectionKey = 'projects' | 'buy' | 'rent';
+type FilterView = 'all' | 'projects' | 'buy' | 'rent' | 'faqs' | 'reviews';
+type SectionKey = 'projects' | 'buy' | 'rent' | 'faqs' | 'reviews';
 
 const CITIES: CityOption[] = [...BRAND_CONFIG.locale.mainCities];
 
@@ -36,8 +52,8 @@ const PROJECT_STATUSES: ProjectStatus[] = ['Available', 'Under Offer', 'Sold'];
 const BUY_STATUSES: BuyStatus[] = ['Available', 'Under Offer', 'Sold'];
 const RENT_STATUSES: RentStatus[] = ['Available', 'Rented'];
 
-const MAX_PHOTOS = 4;
-const MAX_PAYLOAD_BYTES = 800 * 1024; // 800 KB limit matching server.ts
+const MAX_PHOTOS = 30;
+const MAX_PAYLOAD_BYTES = 800 * 1024; // Firestore single-doc safety limit for text + URLs
 
 const SAMPLE_PHOTOS = [
   { label: 'Modern Residence', url: BRAND_CONFIG.images.fallbackVilla },
@@ -67,8 +83,9 @@ function getStatusBadgeClasses(status?: PropertyStatus): string {
 function isValidImageInput(url: string): boolean {
   const trimmed = url.trim();
   if (!trimmed) return false;
-  if (trimmed.startsWith('data:image/jpeg;base64,')) {
-    return trimmed.length > 'data:image/jpeg;base64,'.length;
+  if (/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(trimmed)) {
+    const idx = trimmed.indexOf(',');
+    return idx !== -1 && trimmed.length > idx + 1;
   }
   if (trimmed.startsWith('/')) {
     return trimmed.length > 1;
@@ -76,35 +93,9 @@ function isValidImageInput(url: string): boolean {
   return /^https?:\/\/\S+$/i.test(trimmed);
 }
 
-async function compressImageFile(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const maxWidth = 1000;
-        const scale = img.width > maxWidth ? maxWidth / img.width : 1;
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(String(reader.result));
-          return;
-        }
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.7));
-      };
-      img.onerror = () => reject(new Error('Could not read image'));
-      img.src = String(reader.result);
-    };
-    reader.onerror = () => reject(new Error('Failed to load file'));
-    reader.readAsDataURL(file);
-  });
-}
-
 interface GalleryManagerProps {
   photos: string[];
+  folder: string;
   onChange: (next: string[]) => void;
   estimateBasePayload: Record<string, unknown>;
   onError?: (msg: string | null) => void;
@@ -113,6 +104,7 @@ interface GalleryManagerProps {
 
 const GalleryManager: React.FC<GalleryManagerProps> = ({
   photos,
+  folder,
   onChange,
   estimateBasePayload,
   onError,
@@ -120,9 +112,26 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
 }) => {
   const [urlInput, setUrlInput] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(
+    null
+  );
+  const [mediaCaps, setMediaCaps] = useState<MediaStorageCapabilities | null>(null);
+  const { managementToken } = useAuth();
   const { showToast } = useToast();
 
+  useEffect(() => {
+    let active = true;
+    void getMediaStorageCapabilities().then((caps) => {
+      if (active) setMediaCaps(caps);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const displayedError = error || localError;
+  const providerLabel =
+    mediaCaps?.preferredProvider === 'cloudinary' ? 'Cloudinary CDN' : 'Firebase Storage';
 
   const tryApplyGallery = (nextGallery: string[], successMsg?: string) => {
     const estimatedBytes = estimateUtf8Bytes({
@@ -131,12 +140,12 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
       gallery: nextGallery,
     });
     if (estimatedBytes > MAX_PAYLOAD_BYTES) {
-      const msg = `Listing exceeds the 800 KB size limit (currently ~${Math.ceil(
+      const msg = `Listing exceeds Firestore document limit (~${Math.ceil(
         estimatedBytes / 1024
-      )} KB). Remove a photo or use smaller compressed images.`;
+      )} KB). Re-upload large inline photos via Upload Photo so they store as cloud URLs.`;
       setLocalError(msg);
       onError?.(msg);
-      showToast('Photo size limit (800 KB) exceeded.', 'error');
+      showToast('Document size limit exceeded.', 'error');
       return false;
     }
     setLocalError(null);
@@ -177,47 +186,46 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
     }
 
     const toProcess = files.slice(0, remaining);
-    let working = [...photos];
+    const working = [...photos];
     let addedCount = 0;
+    let usedProvider = providerLabel;
 
-    for (const file of toProcess) {
-      try {
-        const compressed = await compressImageFile(file);
-        const candidate = [...working, compressed];
-        const estimatedBytes = estimateUtf8Bytes({
-          ...estimateBasePayload,
-          image: candidate[0] || '',
-          gallery: candidate,
+    setLocalError(null);
+    onError?.(null);
+    setUploadProgress({ current: 0, total: toProcess.length });
+
+    try {
+      for (let i = 0; i < toProcess.length; i += 1) {
+        const file = toProcess[i];
+        setUploadProgress({ current: i + 1, total: toProcess.length });
+        const result = await uploadPropertyPhoto(file, {
+          folder,
+          managementToken,
         });
-        if (estimatedBytes > MAX_PAYLOAD_BYTES) {
-          const msg = `Adding "${file.name}" exceeds the 800 KB size limit (~${Math.ceil(
-            estimatedBytes / 1024
-          )} KB). Use fewer or smaller photos.`;
-          setLocalError(msg);
-          onError?.(msg);
-          showToast('Listing payload exceeds 800 KB limit.', 'error');
-          if (addedCount > 0) {
-            onChange(working);
-          }
-          return;
-        }
-        working = candidate;
+        usedProvider = result.provider === 'cloudinary' ? 'Cloudinary CDN' : 'Firebase Storage';
+        working.push(result.url);
         addedCount += 1;
-      } catch {
-        setLocalError('Could not read one of the selected image files.');
-        showToast('Could not read selected image file.', 'error');
-        return;
+        onChange([...working]);
       }
-    }
 
-    if (addedCount > 0) {
-      setLocalError(null);
-      onError?.(null);
-      onChange(working);
-      showToast(
-        addedCount === 1 ? 'Photo compressed and added.' : `${addedCount} photos compressed and added.`,
-        'success'
-      );
+      if (addedCount > 0) {
+        showToast(
+          addedCount === 1
+            ? `Photo uploaded to ${usedProvider}.`
+            : `${addedCount} photos uploaded to ${usedProvider}.`,
+          'success'
+        );
+      }
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Could not upload photo to cloud storage.';
+      setLocalError(msg);
+      onError?.(msg);
+      showToast(msg, 'error');
+    } finally {
+      setUploadProgress(null);
     }
   };
 
@@ -232,6 +240,16 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
     if (index <= 0 || index >= photos.length) return;
     const selected = photos[index];
     const next = [selected, ...photos.filter((_, idx) => idx !== index)];
+    setLocalError(null);
+    onError?.(null);
+    onChange(next);
+  };
+
+  const handleMove = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= photos.length) return;
+    const next = [...photos];
+    [next[index], next[target]] = [next[target], next[index]];
     setLocalError(null);
     onError?.(null);
     onChange(next);
@@ -256,14 +274,20 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
         <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold">
           Property Photos (Up to {MAX_PHOTOS})
         </label>
-        <span className="text-[11px] font-display font-semibold text-accent">
-          {photos.length} of {MAX_PHOTOS} photos
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-display uppercase tracking-wider font-semibold">
+            <Cloud className="w-3 h-3 text-accent" />
+            <span>{providerLabel}</span>
+          </span>
+          <span className="text-[11px] font-display font-semibold text-accent">
+            {photos.length} of {MAX_PHOTOS}
+          </span>
+        </div>
       </div>
 
       {/* Thumbnails Grid */}
       {photos.length > 0 ? (
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-80 overflow-y-auto pr-1">
           {photos.map((photoUrl, idx) => (
             <div
               key={`${idx}-${photoUrl.slice(0, 32)}`}
@@ -298,11 +322,37 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
                   <button
                     type="button"
                     onClick={() => handleSetMain(idx)}
-                    className="w-full py-0.5 px-2 rounded-full bg-slate-100 hover:bg-brand text-brand hover:text-brand-contrast text-[10px] font-display uppercase tracking-wider font-semibold transition-colors cursor-pointer"
+                    className="flex-1 py-0.5 px-1.5 rounded-full bg-slate-100 hover:bg-brand text-brand hover:text-brand-contrast text-[10px] font-display uppercase tracking-wider font-semibold transition-colors cursor-pointer truncate"
+                    title="Set as main cover photo"
                   >
-                    Set as main photo
+                    Set Main
                   </button>
                 )}
+
+                <div className="flex items-center gap-0.5 shrink-0">
+                  {idx > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleMove(idx, -1)}
+                      className="w-5 h-5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer"
+                      aria-label="Move photo left"
+                      title="Move earlier"
+                    >
+                      <ArrowLeft className="w-3 h-3" />
+                    </button>
+                  )}
+                  {idx < photos.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleMove(idx, 1)}
+                      className="w-5 h-5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer"
+                      aria-label="Move photo right"
+                      title="Move later"
+                    >
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -311,7 +361,17 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
         <div className="h-20 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center text-slate-400 gap-1 px-3 text-center">
           <ImageIcon className="w-5 h-5" />
           <span className="text-[11px] font-body">
-            Optional: upload or paste URLs (defaults to a standard property photo if left empty)
+            Upload photos to {providerLabel} or paste HTTPS URLs (defaults to a standard photo if empty)
+          </span>
+        </div>
+      )}
+
+      {/* Upload Progress Banner */}
+      {uploadProgress && (
+        <div className="flex items-center gap-2 rounded-xl bg-slate-900 text-white px-3 py-2 text-[11px] font-display uppercase tracking-wider font-semibold">
+          <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+          <span>
+            Uploading {uploadProgress.current} of {uploadProgress.total} to {providerLabel}...
           </span>
         </div>
       )}
@@ -346,13 +406,24 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
-            <label className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-[10px] font-display uppercase tracking-wider font-semibold text-brand cursor-pointer transition-colors">
-              <Upload className="w-3 h-3" />
-              <span>Upload Photo</span>
+            <label
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-display uppercase tracking-wider font-semibold transition-colors ${
+                uploadProgress
+                  ? 'bg-slate-200 text-slate-400 cursor-wait'
+                  : 'bg-brand text-brand-contrast hover:bg-accent cursor-pointer'
+              }`}
+            >
+              {uploadProgress ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Upload className="w-3 h-3" />
+              )}
+              <span>{uploadProgress ? 'Uploading...' : 'Upload Photos'}</span>
               <input
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 multiple
+                disabled={Boolean(uploadProgress)}
                 className="hidden"
                 onChange={handleFileUpload}
               />
@@ -376,7 +447,7 @@ const GalleryManager: React.FC<GalleryManagerProps> = ({
           </div>
 
           <p className="text-[10px] text-slate-500 font-body leading-snug">
-            Pasted image URLs load fastest for longer catalogs; uploaded photos are compressed (max 800 KB per listing).
+            Uploaded photos are optimized to WebP and stored on {providerLabel} as lightweight CDN URLs (up to {MAX_PHOTOS} photos per listing).
           </p>
         </div>
       )}
@@ -626,11 +697,29 @@ const createDefaultRentForm = () => ({
   gallery: [] as string[],
 });
 
+const createDefaultFaqForm = () => ({
+  category: '',
+  question: '',
+  answer: '',
+});
+
+const createDefaultReviewForm = () => ({
+  author: '',
+  role: 'Residential Buyer',
+  location: BRAND_CONFIG.locale.defaultCity as string,
+  propertyContext: '',
+  rating: '5',
+  date: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+  quote: '',
+});
+
 export const ManageCatalogPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialParam = (searchParams.get('tab') as FilterView) || 'all';
   const [activeView, setActiveView] = useState<FilterView>(
-    ['all', 'projects', 'buy', 'rent'].includes(initialParam) ? initialParam : 'all'
+    ['all', 'projects', 'buy', 'rent', 'faqs', 'reviews'].includes(initialParam)
+      ? initialParam
+      : 'all'
   );
 
   const {
@@ -638,7 +727,15 @@ export const ManageCatalogPage: React.FC = () => {
     propertyListings,
     buyProperties,
     rentalListings,
+    faqs,
+    clientReviews,
     backendReachable,
+    storageMode,
+    quotaError,
+    snapshotSynced,
+    snapshotWriteFailed,
+    refreshCatalog,
+    publishSnapshot,
     addProject,
     updateProject,
     removeProject,
@@ -648,30 +745,47 @@ export const ManageCatalogPage: React.FC = () => {
     addRentalListing,
     updateRental,
     removeRentalListing,
+    addFaq,
+    updateFaq,
+    removeFaq,
+    addReview,
+    updateReview,
+    removeReview,
     resetCatalog,
   } = useCatalog();
+  const { isManagement } = useAuth();
   const { showToast } = useToast();
 
   // Independent search & confirmation states per section
+  const [refreshingCatalog, setRefreshingCatalog] = useState(false);
+  const [publishingSnapshot, setPublishingSnapshot] = useState(false);
   const [projSearch, setProjSearch] = useState('');
   const [buySearch, setBuySearch] = useState('');
   const [rentSearch, setRentSearch] = useState('');
+  const [faqSearch, setFaqSearch] = useState('');
+  const [reviewSearch, setReviewSearch] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmResetSection, setConfirmResetSection] = useState<'all' | SectionKey | null>(null);
 
   const [submittingProj, setSubmittingProj] = useState(false);
   const [submittingBuy, setSubmittingBuy] = useState(false);
   const [submittingRent, setSubmittingRent] = useState(false);
+  const [submittingFaq, setSubmittingFaq] = useState(false);
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   // Edit mode IDs per section
   const [editingProjId, setEditingProjId] = useState<string | null>(null);
   const [editingBuyId, setEditingBuyId] = useState<string | null>(null);
   const [editingRentId, setEditingRentId] = useState<string | null>(null);
+  const [editingFaqId, setEditingFaqId] = useState<string | null>(null);
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
 
   // Form refs for smooth scroll when clicking Edit
   const projFormRef = useRef<HTMLFormElement>(null);
   const buyFormRef = useRef<HTMLFormElement>(null);
   const rentFormRef = useRef<HTMLFormElement>(null);
+  const faqFormRef = useRef<HTMLFormElement>(null);
+  const reviewFormRef = useRef<HTMLFormElement>(null);
 
   // Inline validation & server errors per section
   const [projFieldErrors, setProjFieldErrors] = useState<{
@@ -695,18 +809,49 @@ export const ManageCatalogPage: React.FC = () => {
   }>({});
   const [rentFormError, setRentFormError] = useState<string | null>(null);
 
+  const [faqFieldErrors, setFaqFieldErrors] = useState<{
+    question?: string;
+    answer?: string;
+  }>({});
+  const [faqFormError, setFaqFormError] = useState<string | null>(null);
+
+  const [reviewFieldErrors, setReviewFieldErrors] = useState<{
+    author?: string;
+    quote?: string;
+  }>({});
+  const [reviewFormError, setReviewFormError] = useState<string | null>(null);
+
   // Form states
   const [projForm, setProjForm] = useState(createDefaultProjForm);
   const [buyForm, setBuyForm] = useState(createDefaultBuyForm);
   const [rentForm, setRentForm] = useState(createDefaultRentForm);
+  const [faqForm, setFaqForm] = useState(createDefaultFaqForm);
+  const [reviewForm, setReviewForm] = useState(createDefaultReviewForm);
 
+  usePageSeo({
+    title: `Manage Data | ${BRAND_CONFIG.identity.brandName}`,
+    description: `Management portal for ${BRAND_CONFIG.identity.brandName} catalog listings, FAQs, and client reviews.`,
+    path: '/#/manage-catalog',
+    noindex: true,
+  });
+
+  // Auto-upgrade legacy multi-collection Firestore catalogs to the 1-read public snapshot when admin visits
+  const autoPublishedRef = useRef(false);
   useEffect(() => {
-    document.title = `Manage Inventory | ${BRAND_CONFIG.identity.brandName}`;
-  }, []);
+    if (
+      !autoPublishedRef.current &&
+      snapshotSynced === false &&
+      isManagement &&
+      auth?.currentUser?.emailVerified
+    ) {
+      autoPublishedRef.current = true;
+      void publishSnapshot();
+    }
+  }, [snapshotSynced, isManagement, publishSnapshot]);
 
   useEffect(() => {
     const paramTab = searchParams.get('tab') as FilterView;
-    if (paramTab && ['all', 'projects', 'buy', 'rent'].includes(paramTab)) {
+    if (paramTab && ['all', 'projects', 'buy', 'rent', 'faqs', 'reviews'].includes(paramTab)) {
       setActiveView(paramTab);
     } else if (!paramTab) {
       setActiveView('all');
@@ -810,6 +955,58 @@ export const ManageCatalogPage: React.FC = () => {
         status: (item.status || 'Available') as PropertyStatus,
       }));
   }, [rentalListings, rentSearch]);
+
+  const filteredFaqs = useMemo(() => {
+    const q = faqSearch.trim().toLowerCase();
+    return faqs.filter(
+      (faq) =>
+        !q ||
+        faq.question.toLowerCase().includes(q) ||
+        faq.answer.toLowerCase().includes(q) ||
+        (faq.category || '').toLowerCase().includes(q)
+    );
+  }, [faqs, faqSearch]);
+
+  const filteredReviews = useMemo(() => {
+    const q = reviewSearch.trim().toLowerCase();
+    return clientReviews.filter(
+      (rev) =>
+        !q ||
+        rev.author.toLowerCase().includes(q) ||
+        rev.role.toLowerCase().includes(q) ||
+        rev.location.toLowerCase().includes(q) ||
+        rev.propertyContext.toLowerCase().includes(q) ||
+        rev.quote.toLowerCase().includes(q)
+    );
+  }, [clientReviews, reviewSearch]);
+
+  const base64CountsBySection = useMemo(() => {
+    const hasInlineBase64 = (value?: string) =>
+      typeof value === 'string' && value.startsWith('data:image');
+
+    const projCount =
+      portfolioProjects.filter(
+        (p) => hasInlineBase64(p.image) || (p.gallery || []).some(hasInlineBase64)
+      ).length +
+      propertyListings.filter(
+        (l) => hasInlineBase64(l.exteriorImage) || (l.interiorImages || []).some(hasInlineBase64)
+      ).length;
+
+    const buyCount = buyProperties.filter(
+      (b) => hasInlineBase64(b.image) || (b.gallery || []).some(hasInlineBase64)
+    ).length;
+
+    const rentCount = rentalListings.filter(
+      (r) => hasInlineBase64(r.image) || (r.gallery || []).some(hasInlineBase64)
+    ).length;
+
+    return {
+      projects: projCount,
+      buy: buyCount,
+      rent: rentCount,
+      total: projCount + buyCount + rentCount,
+    };
+  }, [portfolioProjects, propertyListings, buyProperties, rentalListings]);
 
   // Start / Cancel Edit Handlers
   const startEditProject = (id: string) => {
@@ -937,6 +1134,52 @@ export const ManageCatalogPage: React.FC = () => {
     setRentForm(createDefaultRentForm());
     setRentFieldErrors({});
     setRentFormError(null);
+  };
+
+  const startEditFaq = (id: string) => {
+    const item = faqs.find((f) => f.id === id);
+    if (!item) return;
+    setFaqForm({
+      category: item.category || '',
+      question: item.question,
+      answer: item.answer,
+    });
+    setEditingFaqId(id);
+    setFaqFieldErrors({});
+    setFaqFormError(null);
+    faqFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  const cancelEditFaq = () => {
+    setEditingFaqId(null);
+    setFaqForm(createDefaultFaqForm());
+    setFaqFieldErrors({});
+    setFaqFormError(null);
+  };
+
+  const startEditReview = (id: string) => {
+    const item = clientReviews.find((r) => r.id === id);
+    if (!item) return;
+    setReviewForm({
+      author: item.author,
+      role: item.role,
+      location: item.location,
+      propertyContext: item.propertyContext,
+      rating: String(item.rating || 5),
+      date: item.date || '',
+      quote: item.quote,
+    });
+    setEditingReviewId(id);
+    setReviewFieldErrors({});
+    setReviewFormError(null);
+    reviewFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  const cancelEditReview = () => {
+    setEditingReviewId(null);
+    setReviewForm(createDefaultReviewForm());
+    setReviewFieldErrors({});
+    setReviewFormError(null);
   };
 
   // Submit Handlers (Add or Save Changes)
@@ -1146,14 +1389,110 @@ export const ManageCatalogPage: React.FC = () => {
     }
   };
 
+  const handleSubmitFaq = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const fieldErrors: { question?: string; answer?: string } = {};
+    if (!faqForm.question.trim()) fieldErrors.question = 'FAQ question is required.';
+    if (!faqForm.answer.trim()) fieldErrors.answer = 'FAQ answer is required.';
+    setFaqFieldErrors(fieldErrors);
+
+    if (Object.keys(fieldErrors).length > 0) {
+      setFaqFormError('Please fill in the highlighted required fields.');
+      return;
+    }
+
+    const payload = {
+      category: faqForm.category.trim(),
+      question: faqForm.question.trim(),
+      answer: faqForm.answer.trim(),
+    };
+
+    setFaqFormError(null);
+    setSubmittingFaq(true);
+    const res = editingFaqId
+      ? await updateFaq(editingFaqId, payload)
+      : await addFaq(payload);
+    setSubmittingFaq(false);
+
+    if (res.success) {
+      showToast(
+        editingFaqId ? 'Saved changes to FAQ.' : 'Added FAQ to Contact page.',
+        'success'
+      );
+      setEditingFaqId(null);
+      setFaqForm(createDefaultFaqForm());
+      setFaqFieldErrors({});
+      setFaqFormError(null);
+    } else {
+      const errMsg = res.error || (editingFaqId ? 'Could not update FAQ.' : 'Could not add FAQ.');
+      setFaqFormError(errMsg);
+      showToast(errMsg, 'error');
+    }
+  };
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const fieldErrors: { author?: string; quote?: string } = {};
+    if (!reviewForm.author.trim()) fieldErrors.author = 'Reviewer name is required.';
+    if (!reviewForm.quote.trim()) fieldErrors.quote = 'Review quote is required.';
+    setReviewFieldErrors(fieldErrors);
+
+    if (Object.keys(fieldErrors).length > 0) {
+      setReviewFormError('Please fill in the highlighted required fields.');
+      return;
+    }
+
+    const numericRating = Math.min(5, Math.max(1, Math.round(Number(reviewForm.rating) || 5)));
+    const payload = {
+      author: reviewForm.author.trim(),
+      role: reviewForm.role.trim() || 'Verified Client',
+      location: reviewForm.location.trim() || BRAND_CONFIG.locale.defaultCity,
+      propertyContext: reviewForm.propertyContext.trim() || 'Private Consultation',
+      rating: numericRating,
+      date:
+        reviewForm.date.trim() ||
+        new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      quote: reviewForm.quote.trim(),
+    };
+
+    setReviewFormError(null);
+    setSubmittingReview(true);
+    const res = editingReviewId
+      ? await updateReview(editingReviewId, payload)
+      : await addReview(payload);
+    setSubmittingReview(false);
+
+    if (res.success) {
+      showToast(
+        editingReviewId
+          ? `Saved changes to review by ${payload.author}.`
+          : `Added review by ${payload.author} to Homepage.`,
+        'success'
+      );
+      setEditingReviewId(null);
+      setReviewForm(createDefaultReviewForm());
+      setReviewFieldErrors({});
+      setReviewFormError(null);
+    } else {
+      const errMsg =
+        res.error || (editingReviewId ? 'Could not update review.' : 'Could not add review.');
+      setReviewFormError(errMsg);
+      showToast(errMsg, 'error');
+    }
+  };
+
   const handleRemove = async (section: SectionKey, id: string, title: string) => {
     let res;
     if (section === 'projects') {
       res = await removeProject(id);
     } else if (section === 'buy') {
       res = await removeBuyProperty(id);
-    } else {
+    } else if (section === 'rent') {
       res = await removeRentalListing(id);
+    } else if (section === 'faqs') {
+      res = await removeFaq(id);
+    } else {
+      res = await removeReview(id);
     }
 
     setConfirmDeleteId(null);
@@ -1161,6 +1500,8 @@ export const ManageCatalogPage: React.FC = () => {
       if (section === 'projects' && editingProjId === id) cancelEditProject();
       if (section === 'buy' && editingBuyId === id) cancelEditBuy();
       if (section === 'rent' && editingRentId === id) cancelEditRent();
+      if (section === 'faqs' && editingFaqId === id) cancelEditFaq();
+      if (section === 'reviews' && editingReviewId === id) cancelEditReview();
       showToast(`Removed "${title}".`, 'info');
     } else {
       showToast(res.error || 'Could not remove item.', 'error');
@@ -1174,10 +1515,12 @@ export const ManageCatalogPage: React.FC = () => {
       if (section === 'all' || section === 'projects') cancelEditProject();
       if (section === 'all' || section === 'buy') cancelEditBuy();
       if (section === 'all' || section === 'rent') cancelEditRent();
+      if (section === 'all' || section === 'faqs') cancelEditFaq();
+      if (section === 'all' || section === 'reviews') cancelEditReview();
       showToast(
         section === 'all'
-          ? 'Restored default listings across Projects, Buy, and Rent.'
-          : `Restored default ${section} listings.`,
+          ? 'Restored default items across Projects, Buy, Rent, FAQs, and Reviews.'
+          : `Restored default ${section}.`,
         'success'
       );
     } else {
@@ -1188,6 +1531,10 @@ export const ManageCatalogPage: React.FC = () => {
   const showProjects = activeView === 'all' || activeView === 'projects';
   const showBuy = activeView === 'all' || activeView === 'buy';
   const showRent = activeView === 'all' || activeView === 'rent';
+  const showFaqs =
+    BRAND_CONFIG.features.enableFaqs && (activeView === 'all' || activeView === 'faqs');
+  const showReviews =
+    BRAND_CONFIG.features.enableReviews && (activeView === 'all' || activeView === 'reviews');
 
   return (
     <div className="min-h-screen pt-24 pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-6">
@@ -1203,7 +1550,7 @@ export const ManageCatalogPage: React.FC = () => {
             <ChevronRight className="w-3 h-3 text-slate-400" />
           </li>
           <li className="text-brand font-bold" aria-current="page">
-            Manage Inventory
+            Manage Data
           </li>
         </ol>
       </nav>
@@ -1216,21 +1563,38 @@ export const ManageCatalogPage: React.FC = () => {
               Centralized Property Manager
             </span>
             <h1 className="font-display font-extrabold text-2xl sm:text-4xl text-brand uppercase tracking-tight leading-none">
-              MANAGE INVENTORY
+              MANAGE DATA
             </h1>
             <p className="font-body text-xs sm:text-sm text-slate-600 max-w-2xl">
-              Add, edit, or delete listings across Projects, Buy, and Rent from one integrated workspace. All changes save immediately to the backend.
+              Add, edit, or delete listings across Projects, Buy, Rent, Contact FAQs, and Homepage Client Reviews from one integrated workspace. All changes save immediately to Firebase Firestore and sync across your site.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            <Link
-              to="/records"
-              className="px-4 py-2 rounded-full bg-brand hover:bg-accent text-brand-contrast text-xs font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 transition-colors"
+            {BRAND_CONFIG.features.enableEnquiriesDashboard && (
+              <Link
+                to="/records"
+                className="px-4 py-2 rounded-full bg-brand hover:bg-accent text-brand-contrast text-xs font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 transition-colors"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Client Records</span>
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={async () => {
+                setRefreshingCatalog(true);
+                await refreshCatalog(true);
+                setRefreshingCatalog(false);
+                showToast('Catalog synced from server/Firestore.', 'info');
+              }}
+              disabled={refreshingCatalog}
+              className="px-4 py-2 rounded-full border border-slate-200 hover:border-brand disabled:opacity-60 text-slate-700 text-xs font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+              title="Catalog is cached in browser for 30 minutes and served via a 1-read Firestore snapshot to minimize reads. Click to force refresh."
             >
-              <Users className="w-3.5 h-3.5" />
-              <span>Client Records</span>
-            </Link>
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshingCatalog ? 'animate-spin' : ''}`} />
+              <span>{refreshingCatalog ? 'Syncing...' : 'Sync Catalog'}</span>
+            </button>
             {confirmResetSection === 'all' ? (
               <div className="flex items-center gap-1.5">
                 <button
@@ -1261,10 +1625,83 @@ export const ManageCatalogPage: React.FC = () => {
           </div>
         </div>
 
-        {!backendReachable && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 font-body">
-            Backend server is currently unreachable. Showing built-in listings; adding, editing, or deleting items requires an active server connection.
+        {quotaError && (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-900 font-body flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <span>{quotaError}</span>
           </div>
+        )}
+
+        {(snapshotSynced === false || snapshotWriteFailed) && (
+          <div
+            role="alert"
+            className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3.5 text-xs text-amber-950 font-body flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+          >
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 font-display uppercase tracking-wider font-bold text-amber-900 text-[11px]">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  {snapshotWriteFailed
+                    ? 'Public Catalog Snapshot Exceeded Size Cap'
+                    : 'Public Catalog Snapshot Missing'}
+                </span>
+              </div>
+              <p className="leading-relaxed">
+                <code className="font-mono text-[11px] bg-amber-100 px-1 py-0.5 rounded">
+                  catalog_snapshot/public
+                </code>{' '}
+                {snapshotWriteFailed
+                  ? 'failed to publish because its payload exceeded the 920 KB limit. The public site is making extra database reads on visitor loads.'
+                  : 'is not published yet, so the public site is making extra database reads instead of a single snapshot read.'}
+              </p>
+              <p className="text-[11px] text-amber-900/90 font-medium">
+                Items with inline base64 images (
+                <code className="font-mono">data:image</code>): Projects:{' '}
+                <strong>{base64CountsBySection.projects}</strong> · Buy:{' '}
+                <strong>{base64CountsBySection.buy}</strong> · Rent:{' '}
+                <strong>{base64CountsBySection.rent}</strong>
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={publishingSnapshot}
+              onClick={async () => {
+                setPublishingSnapshot(true);
+                const res = await publishSnapshot();
+                setPublishingSnapshot(false);
+                if (res.published) {
+                  showToast('Public catalog snapshot published.', 'success');
+                } else {
+                  showToast(
+                    res.error || 'Could not publish snapshot (check inline base64 photo sizes).',
+                    'error'
+                  );
+                }
+              }}
+              className="px-4 py-2 rounded-full bg-amber-700 hover:bg-amber-800 disabled:opacity-60 text-white text-[11px] font-display uppercase tracking-wider font-semibold cursor-pointer shrink-0 flex items-center gap-1.5 self-start sm:self-center"
+            >
+              {publishingSnapshot ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3.5 h-3.5" />
+              )}
+              <span>{publishingSnapshot ? 'Publishing...' : 'Retry publish'}</span>
+            </button>
+          </div>
+        )}
+
+        {!backendReachable && (
+          isManagement && auth?.currentUser?.emailVerified ? (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900 font-body flex flex-wrap items-center justify-between gap-2">
+              <span>
+                Connected directly to Firebase Firestore &amp; Cloud Media ({storageMode === 'firestore' ? (snapshotSynced ? '1-read public snapshot active · cached 30 min in browser' : 'Firestore catalog cached 30 min in browser') : 'built-in defaults ready — your first edit syncs automatically'}).
+              </span>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 font-body">
+              Backend server is unreachable on this static host. Sign in with the verified management Google account to save, edit, or delete listings directly in Firebase Firestore.
+            </div>
+          )
         )}
 
         {/* Integrated Filter Pills */}
@@ -1280,7 +1717,13 @@ export const ManageCatalogPage: React.FC = () => {
           >
             <Layers className="w-4 h-4" />
             <span>
-              All Sections ({allProjects.length + buyProperties.length + rentalListings.length})
+              All Sections (
+              {allProjects.length +
+                buyProperties.length +
+                rentalListings.length +
+                (BRAND_CONFIG.features.enableFaqs ? faqs.length : 0) +
+                (BRAND_CONFIG.features.enableReviews ? clientReviews.length : 0)}
+              )
             </span>
           </button>
 
@@ -1322,6 +1765,36 @@ export const ManageCatalogPage: React.FC = () => {
             <Key className="w-4 h-4" />
             <span>Rent ({rentalListings.length})</span>
           </button>
+
+          {BRAND_CONFIG.features.enableFaqs && (
+            <button
+              type="button"
+              onClick={() => switchView('faqs')}
+              className={`px-5 py-2.5 rounded-full font-display text-xs uppercase tracking-wider font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                activeView === 'faqs'
+                  ? 'bg-brand text-brand-contrast shadow-md'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <HelpCircle className="w-4 h-4" />
+              <span>FAQs ({faqs.length})</span>
+            </button>
+          )}
+
+          {BRAND_CONFIG.features.enableReviews && (
+            <button
+              type="button"
+              onClick={() => switchView('reviews')}
+              className={`px-5 py-2.5 rounded-full font-display text-xs uppercase tracking-wider font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                activeView === 'reviews'
+                  ? 'bg-brand text-brand-contrast shadow-md'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <Quote className="w-4 h-4" />
+              <span>Reviews ({clientReviews.length})</span>
+            </button>
+          )}
         </div>
       </section>
 
@@ -1405,6 +1878,7 @@ export const ManageCatalogPage: React.FC = () => {
               )}
 
               <GalleryManager
+                folder="projects"
                 photos={projForm.gallery}
                 onChange={(next) => setProjForm((prev) => ({ ...prev, gallery: next }))}
                 estimateBasePayload={{ ...projForm, gallery: undefined }}
@@ -1739,6 +2213,7 @@ export const ManageCatalogPage: React.FC = () => {
               )}
 
               <GalleryManager
+                folder="buy"
                 photos={buyForm.gallery}
                 onChange={(next) => setBuyForm((prev) => ({ ...prev, gallery: next }))}
                 estimateBasePayload={{ ...buyForm, gallery: undefined }}
@@ -2087,6 +2562,7 @@ export const ManageCatalogPage: React.FC = () => {
               )}
 
               <GalleryManager
+                folder="rent"
                 photos={rentForm.gallery}
                 onChange={(next) => setRentForm((prev) => ({ ...prev, gallery: next }))}
                 estimateBasePayload={{ ...rentForm, gallery: undefined }}
@@ -2356,6 +2832,710 @@ export const ManageCatalogPage: React.FC = () => {
               onRequestDelete={setConfirmDeleteId}
               onConfirmDelete={(id, title) => handleRemove('rent', id, title)}
             />
+          </div>
+        </section>
+      )}
+
+      {/* SECTION 04: CONTACT PAGE FAQS ADD / EDIT / DELETE */}
+      {showFaqs && (
+        <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-8 shadow-xl border border-slate-100 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-brand text-brand-contrast flex items-center justify-center shrink-0">
+                <HelpCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-display uppercase tracking-widest text-accent font-bold block">
+                  04 · Contact Page
+                </span>
+                <h2 className="font-display font-extrabold text-xl text-brand uppercase tracking-tight">
+                  Contact FAQs Add, Edit &amp; Delete
+                </h2>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {confirmResetSection === 'faqs' ? (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleReset('faqs')}
+                    className="px-3 py-1.5 rounded-full bg-amber-600 text-white text-[11px] font-display uppercase tracking-wider font-semibold cursor-pointer"
+                  >
+                    Confirm Restore
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmResetSection(null)}
+                    className="px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-display uppercase tracking-wider font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmResetSection('faqs')}
+                  className="px-3.5 py-1.5 rounded-full border border-slate-200 hover:bg-slate-50 text-slate-600 text-[11px] font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Restore Defaults</span>
+                </button>
+              )}
+
+              <Link
+                to="/contact"
+                className="px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-brand text-[11px] font-display uppercase tracking-wider font-semibold text-brand flex items-center gap-1.5 transition-colors"
+              >
+                <span>View Contact</span>
+                <ExternalLink className="w-3 h-3" />
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <form
+              ref={faqFormRef}
+              noValidate
+              onSubmit={handleSubmitFaq}
+              className="lg:col-span-5 space-y-3.5"
+            >
+              {editingFaqId && (
+                <div className="flex items-center justify-between gap-2 rounded-xl bg-slate-100 border border-slate-200 px-3 py-2">
+                  <span className="text-[11px] font-display uppercase tracking-wider font-bold text-brand truncate">
+                    Editing FAQ
+                  </span>
+                  <button
+                    type="button"
+                    onClick={cancelEditFaq}
+                    className="text-[11px] font-display uppercase tracking-wider text-slate-600 hover:text-brand font-semibold cursor-pointer shrink-0"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1">
+                  Topic / Category (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Title & Legal, Overseas Buyers, Pricing & Taxes"
+                  value={faqForm.category}
+                  onChange={(e) => setFaqForm({ ...faqForm, category: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-accent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1">
+                  Question *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. How are property titles and society approvals verified?"
+                  value={faqForm.question}
+                  onChange={(e) => {
+                    setFaqForm({ ...faqForm, question: e.target.value });
+                    if (faqFieldErrors.question) {
+                      setFaqFieldErrors((prev) => ({ ...prev, question: undefined }));
+                    }
+                  }}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:bg-white focus:outline-none ${
+                    faqFieldErrors.question
+                      ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500'
+                      : 'border-slate-200 bg-slate-50 focus:border-accent'
+                  }`}
+                />
+                {faqFieldErrors.question && (
+                  <p className="mt-1 text-[11px] text-rose-600 font-body">
+                    {faqFieldErrors.question}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1">
+                  Answer *
+                </label>
+                <textarea
+                  rows={4}
+                  placeholder="Provide a clear, thorough answer for prospective buyers, landlords, or tenants..."
+                  value={faqForm.answer}
+                  onChange={(e) => {
+                    setFaqForm({ ...faqForm, answer: e.target.value });
+                    if (faqFieldErrors.answer) {
+                      setFaqFieldErrors((prev) => ({ ...prev, answer: undefined }));
+                    }
+                  }}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:bg-white focus:outline-none ${
+                    faqFieldErrors.answer
+                      ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500'
+                      : 'border-slate-200 bg-slate-50 focus:border-accent'
+                  }`}
+                />
+                {faqFieldErrors.answer && (
+                  <p className="mt-1 text-[11px] text-rose-600 font-body">
+                    {faqFieldErrors.answer}
+                  </p>
+                )}
+              </div>
+
+              {faqFormError && (
+                <div className="flex items-start gap-1.5 rounded-xl bg-rose-50 border border-rose-200 px-3 py-2 text-[11px] text-rose-700 font-body">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>{faqFormError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="submit"
+                  disabled={submittingFaq}
+                  className="flex-1 py-3.5 px-6 rounded-full bg-brand hover:bg-accent text-brand-contrast font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                >
+                  {editingFaqId ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                  <span>
+                    {submittingFaq
+                      ? editingFaqId
+                        ? 'Saving changes...'
+                        : 'Adding FAQ...'
+                      : editingFaqId
+                      ? 'Save changes'
+                      : 'Add FAQ'}
+                  </span>
+                </button>
+                {editingFaqId && (
+                  <button
+                    type="button"
+                    onClick={cancelEditFaq}
+                    disabled={submittingFaq}
+                    className="py-3.5 px-5 rounded-full border border-slate-200 hover:border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 font-display font-bold text-xs uppercase tracking-widest transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+
+            <div className="lg:col-span-7 bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200/80 space-y-4">
+              <div>
+                <h3 className="font-display font-bold text-sm sm:text-base text-brand uppercase tracking-tight">
+                  Active Contact FAQs ({filteredFaqs.length})
+                </h3>
+                <p className="text-[11px] text-slate-500 font-body">
+                  Appears on the Contact page directly beneath Regional Offices. Click Edit or Delete to manage items.
+                </p>
+              </div>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search FAQs by question, answer, or category..."
+                  value={faqSearch}
+                  onChange={(e) => setFaqSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:border-accent"
+                />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
+              </div>
+
+              {filteredFaqs.length > 0 ? (
+                <div className="space-y-2.5 max-h-[540px] overflow-y-auto pr-1">
+                  {filteredFaqs.map((faq) => {
+                    const isConfirming = confirmDeleteId === faq.id;
+                    const isEditing = editingFaqId === faq.id;
+
+                    return (
+                      <div
+                        key={faq.id}
+                        className={`flex flex-col gap-2.5 p-3.5 rounded-2xl border bg-white transition-all ${
+                          isEditing
+                            ? 'border-brand ring-1 ring-brand/20'
+                            : 'border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-1">
+                            {faq.category && (
+                              <span className="text-[10px] font-display uppercase tracking-wider text-accent font-bold block">
+                                {faq.category}
+                              </span>
+                            )}
+                            <h4 className="font-display font-bold text-sm text-brand leading-snug">
+                              {faq.question}
+                            </h4>
+                            <p className="font-body text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                              {faq.answer}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 self-end sm:self-start">
+                            <button
+                              type="button"
+                              onClick={() => startEditFaq(faq.id)}
+                              className={`px-3 py-1.5 rounded-full border text-[11px] font-display uppercase tracking-wider font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                                isEditing
+                                  ? 'bg-brand text-brand-contrast border-brand'
+                                  : 'bg-slate-50 hover:bg-brand text-brand hover:text-brand-contrast border-slate-200 hover:border-brand'
+                              }`}
+                            >
+                              <Pencil className="w-3 h-3" />
+                              <span>Edit</span>
+                            </button>
+
+                            {!isConfirming && (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(faq.id)}
+                                className="px-3 py-1.5 rounded-full bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white border border-rose-200 hover:border-rose-600 text-[11px] font-display uppercase tracking-wider font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Delete</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {isConfirming && (
+                          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-rose-50 border border-rose-200 px-3 py-2">
+                            <span className="text-[11px] font-body font-medium text-rose-800">
+                              Delete this FAQ? This cannot be undone.
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleRemove('faqs', faq.id, faq.question)}
+                                className="px-3 py-1 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-display uppercase tracking-wider font-semibold flex items-center gap-1 cursor-pointer"
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>Delete</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="px-3 py-1 rounded-full bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-[11px] font-display uppercase tracking-wider font-semibold cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-10 text-center space-y-1.5 border border-dashed border-slate-200 bg-white rounded-2xl">
+                  <p className="font-display font-bold text-xs text-brand uppercase">
+                    No FAQs Found
+                  </p>
+                  <p className="text-[11px] text-slate-500 font-body">
+                    Add a new FAQ using the form or clear your search filter.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* SECTION 05: HOMEPAGE CLIENT REVIEWS ADD / EDIT / DELETE */}
+      {showReviews && (
+        <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-8 shadow-xl border border-slate-100 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-brand text-brand-contrast flex items-center justify-center shrink-0">
+                <Quote className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-display uppercase tracking-widest text-accent font-bold block">
+                  05 · Homepage Reviews
+                </span>
+                <h2 className="font-display font-extrabold text-xl text-brand uppercase tracking-tight">
+                  Client Reviews Add, Edit &amp; Delete
+                </h2>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {confirmResetSection === 'reviews' ? (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleReset('reviews')}
+                    className="px-3 py-1.5 rounded-full bg-amber-600 text-white text-[11px] font-display uppercase tracking-wider font-semibold cursor-pointer"
+                  >
+                    Confirm Restore
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmResetSection(null)}
+                    className="px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-display uppercase tracking-wider font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmResetSection('reviews')}
+                  className="px-3.5 py-1.5 rounded-full border border-slate-200 hover:bg-slate-50 text-slate-600 text-[11px] font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Restore Defaults</span>
+                </button>
+              )}
+
+              <Link
+                to="/"
+                className="px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-brand text-[11px] font-display uppercase tracking-wider font-semibold text-brand flex items-center gap-1.5 transition-colors"
+              >
+                <span>View Homepage</span>
+                <ExternalLink className="w-3 h-3" />
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <form
+              ref={reviewFormRef}
+              noValidate
+              onSubmit={handleSubmitReview}
+              className="lg:col-span-5 space-y-3.5"
+            >
+              {editingReviewId && (
+                <div className="flex items-center justify-between gap-2 rounded-xl bg-slate-100 border border-slate-200 px-3 py-2">
+                  <span className="text-[11px] font-display uppercase tracking-wider font-bold text-brand truncate">
+                    Editing: {reviewForm.author || 'Review'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={cancelEditReview}
+                    className="text-[11px] font-display uppercase tracking-wider text-slate-600 hover:text-brand font-semibold cursor-pointer shrink-0"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              <div className="rounded-xl bg-slate-50 border border-slate-200/80 px-3.5 py-2.5 text-[11px] text-slate-600 font-body">
+                Homepage review cards display a uniform user avatar icon automatically rather than writer profile photos.
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1">
+                    Reviewer Name *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Dr. Salman Qureshi"
+                    value={reviewForm.author}
+                    onChange={(e) => {
+                      setReviewForm({ ...reviewForm, author: e.target.value });
+                      if (reviewFieldErrors.author) {
+                        setReviewFieldErrors((prev) => ({ ...prev, author: undefined }));
+                      }
+                    }}
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:bg-white focus:outline-none ${
+                      reviewFieldErrors.author
+                        ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500'
+                        : 'border-slate-200 bg-slate-50 focus:border-accent'
+                    }`}
+                  />
+                  {reviewFieldErrors.author && (
+                    <p className="mt-1 text-[11px] text-rose-600 font-body">
+                      {reviewFieldErrors.author}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1">
+                    Role / Client Type
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Overseas Homebuyer"
+                    value={reviewForm.role}
+                    onChange={(e) => setReviewForm({ ...reviewForm, role: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-accent"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1">
+                    Location / City
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={`e.g. ${BRAND_CONFIG.locale.defaultCity}`}
+                    value={reviewForm.location}
+                    onChange={(e) => setReviewForm({ ...reviewForm, location: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-accent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1">
+                    Star Rating (1–5)
+                  </label>
+                  <select
+                    value={reviewForm.rating}
+                    onChange={(e) => setReviewForm({ ...reviewForm, rating: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none"
+                  >
+                    <option value="5">5.0 Stars</option>
+                    <option value="4">4.0 Stars</option>
+                    <option value="3">3.0 Stars</option>
+                    <option value="2">2.0 Stars</option>
+                    <option value="1">1.0 Star</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1">
+                    Property Context
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 1 Kanal Villa · DHA Phase 6"
+                    value={reviewForm.propertyContext}
+                    onChange={(e) =>
+                      setReviewForm({ ...reviewForm, propertyContext: e.target.value })
+                    }
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-accent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1">
+                    Review Date
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. February 2026"
+                    value={reviewForm.date}
+                    onChange={(e) => setReviewForm({ ...reviewForm, date: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:border-accent"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-display uppercase tracking-wider text-slate-700 font-semibold mb-1">
+                  Review Quote *
+                </label>
+                <textarea
+                  rows={4}
+                  placeholder="Share the client's verified experience..."
+                  value={reviewForm.quote}
+                  onChange={(e) => {
+                    setReviewForm({ ...reviewForm, quote: e.target.value });
+                    if (reviewFieldErrors.quote) {
+                      setReviewFieldErrors((prev) => ({ ...prev, quote: undefined }));
+                    }
+                  }}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:bg-white focus:outline-none ${
+                    reviewFieldErrors.quote
+                      ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500'
+                      : 'border-slate-200 bg-slate-50 focus:border-accent'
+                  }`}
+                />
+                {reviewFieldErrors.quote && (
+                  <p className="mt-1 text-[11px] text-rose-600 font-body">
+                    {reviewFieldErrors.quote}
+                  </p>
+                )}
+              </div>
+
+              {reviewFormError && (
+                <div className="flex items-start gap-1.5 rounded-xl bg-rose-50 border border-rose-200 px-3 py-2 text-[11px] text-rose-700 font-body">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>{reviewFormError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="submit"
+                  disabled={submittingReview}
+                  className="flex-1 py-3.5 px-6 rounded-full bg-brand hover:bg-accent text-brand-contrast font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                >
+                  {editingReviewId ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                  <span>
+                    {submittingReview
+                      ? editingReviewId
+                        ? 'Saving changes...'
+                        : 'Adding Review...'
+                      : editingReviewId
+                      ? 'Save changes'
+                      : 'Add Review'}
+                  </span>
+                </button>
+                {editingReviewId && (
+                  <button
+                    type="button"
+                    onClick={cancelEditReview}
+                    disabled={submittingReview}
+                    className="py-3.5 px-5 rounded-full border border-slate-200 hover:border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 font-display font-bold text-xs uppercase tracking-widest transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+
+            <div className="lg:col-span-7 bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200/80 space-y-4">
+              <div>
+                <h3 className="font-display font-bold text-sm sm:text-base text-brand uppercase tracking-tight">
+                  Active Homepage Reviews ({filteredReviews.length})
+                </h3>
+                <p className="text-[11px] text-slate-500 font-body">
+                  Displayed on the homepage above the contact section. Click Edit or Delete to manage reviews.
+                </p>
+              </div>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search reviews by name, city, property, or quote..."
+                  value={reviewSearch}
+                  onChange={(e) => setReviewSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:border-accent"
+                />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
+              </div>
+
+              {filteredReviews.length > 0 ? (
+                <div className="space-y-2.5 max-h-[540px] overflow-y-auto pr-1">
+                  {filteredReviews.map((rev) => {
+                    const isConfirming = confirmDeleteId === rev.id;
+                    const isEditing = editingReviewId === rev.id;
+                    const stars = typeof rev.rating === 'number' ? rev.rating : 5;
+
+                    return (
+                      <div
+                        key={rev.id}
+                        className={`flex flex-col gap-2.5 p-3.5 rounded-2xl border bg-white transition-all ${
+                          isEditing
+                            ? 'border-brand ring-1 ring-brand/20'
+                            : 'border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="inline-flex items-center gap-0.5">
+                                {Array.from({ length: stars }).map((_, idx) => (
+                                  <Star
+                                    key={idx}
+                                    className="w-3 h-3 fill-amber-400 text-amber-400"
+                                  />
+                                ))}
+                                <span className="ml-1 text-[11px] font-display font-bold text-brand">
+                                  {stars.toFixed(1)}
+                                </span>
+                              </span>
+                              <span className="text-slate-300">·</span>
+                              <span className="text-[10px] font-display uppercase tracking-wider text-accent font-bold">
+                                {rev.location}
+                              </span>
+                            </div>
+
+                            <h4 className="font-display font-bold text-sm text-brand">
+                              {rev.author}{' '}
+                              <span className="font-body font-normal text-xs text-slate-500">
+                                — {rev.role}
+                              </span>
+                            </h4>
+
+                            <p className="font-body text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                              “{rev.quote}”
+                            </p>
+
+                            <div className="text-[11px] font-body text-slate-500">
+                              <span>{rev.propertyContext}</span>
+                              {rev.date && (
+                                <>
+                                  <span> · </span>
+                                  <span>{rev.date}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 self-end sm:self-start">
+                            <button
+                              type="button"
+                              onClick={() => startEditReview(rev.id)}
+                              className={`px-3 py-1.5 rounded-full border text-[11px] font-display uppercase tracking-wider font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                                isEditing
+                                  ? 'bg-brand text-brand-contrast border-brand'
+                                  : 'bg-slate-50 hover:bg-brand text-brand hover:text-brand-contrast border-slate-200 hover:border-brand'
+                              }`}
+                            >
+                              <Pencil className="w-3 h-3" />
+                              <span>Edit</span>
+                            </button>
+
+                            {!isConfirming && (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(rev.id)}
+                                className="px-3 py-1.5 rounded-full bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white border border-rose-200 hover:border-rose-600 text-[11px] font-display uppercase tracking-wider font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Delete</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {isConfirming && (
+                          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-rose-50 border border-rose-200 px-3 py-2">
+                            <span className="text-[11px] font-body font-medium text-rose-800">
+                              Delete this review? This cannot be undone.
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleRemove('reviews', rev.id, rev.author)}
+                                className="px-3 py-1 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-display uppercase tracking-wider font-semibold flex items-center gap-1 cursor-pointer"
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>Delete</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="px-3 py-1 rounded-full bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-[11px] font-display uppercase tracking-wider font-semibold cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-10 text-center space-y-1.5 border border-dashed border-slate-200 bg-white rounded-2xl">
+                  <p className="font-display font-bold text-xs text-brand uppercase">
+                    No Reviews Found
+                  </p>
+                  <p className="text-[11px] text-slate-500 font-body">
+                    Add a new review using the form or clear your search filter.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </section>
       )}

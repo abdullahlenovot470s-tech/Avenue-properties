@@ -6,6 +6,12 @@ import { SafeImage } from '../components/common/SafeImage';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { submitInquiry } from '../lib/inquiriesApi';
+import {
+  buildSpamCheckPayload,
+  createSpamChallenge,
+  validateSpamCheckAndContent,
+} from '../lib/spamProtection';
+import { SpamChallengeField } from '../components/common/SpamChallengeField';
 import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../services/enquiryWebhook';
 import {
   Heart,
@@ -26,6 +32,12 @@ import {
   Key,
 } from 'lucide-react';
 import { BRAND_CONFIG } from '../config/brand.config';
+import { handleDemoContactClick } from '../config/siteConfig';
+import { buildPropertyListingJsonLd, usePageMeta } from '../lib/seo';
+import { trackEvent } from '../lib/analytics';
+import { LazyLocationMapEmbed } from '../components/common/LazyLocationMapEmbed';
+import { useLanguage } from '../context/LanguageContext';
+import { URGLISH_COPY } from '../data/urglishTranslations';
 
 export const RentDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -33,6 +45,7 @@ export const RentDetailPage: React.FC = () => {
   const { isPropertySaved, toggleSaveProperty } = useAuth();
   const { rentalListings } = useCatalog();
   const { showToast } = useToast();
+  const { t, isUrglish, getRentalDescription } = useLanguage();
 
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
 
@@ -45,6 +58,8 @@ export const RentDetailPage: React.FC = () => {
   const [tourBooked, setTourBooked] = useState(false);
   const [tourSubmitting, setTourSubmitting] = useState(false);
   const [website, setWebsite] = useState('');
+  const [spamChallenge, setSpamChallenge] = useState(() => createSpamChallenge());
+  const [challengeAnswer, setChallengeAnswer] = useState('');
 
   const listing = useMemo(() => {
     return rentalListings.find((r) => r.id === id) || null;
@@ -52,12 +67,47 @@ export const RentDetailPage: React.FC = () => {
 
   useEffect(() => {
     setActivePhotoIdx(0);
+    setSpamChallenge(createSpamChallenge());
+    setChallengeAnswer('');
+    setTourBooked(false);
     if (listing) {
-      document.title = `${listing.title} | Homes for Rent | ${BRAND_CONFIG.identity.brandShortName}`;
-    } else {
-      document.title = `Rental Residence | ${BRAND_CONFIG.identity.brandName}`;
+      trackEvent('listing_view', {
+        category: 'rent',
+        id: listing.id,
+        title: listing.title,
+        city: listing.city,
+      });
     }
   }, [listing]);
+
+  usePageMeta({
+    title: listing
+      ? `${listing.title} · ${formatRent(listing.monthlyRent)} | ${BRAND_CONFIG.identity.brandShortName}`
+      : `Rental Residence | ${BRAND_CONFIG.identity.brandName}`,
+    description: listing
+      ? `${listing.title} for rent in ${listing.areaSociety}, ${listing.city} at ${formatRent(listing.monthlyRent)}/month. ${listing.description}`
+      : `Explore verified rental residences in ${BRAND_CONFIG.locale.country} with ${BRAND_CONFIG.identity.brandName}.`,
+    path: listing ? `/#/rent/${listing.id}` : '/#/rent',
+    image: listing?.image,
+    type: listing ? 'product' : 'website',
+    noindex: !listing,
+    structuredData: listing
+      ? buildPropertyListingJsonLd({
+          name: listing.title,
+          description: listing.description,
+          path: `/#/rent/${listing.id}`,
+          images: [listing.image, ...(listing.gallery || [])],
+          priceNumeric: listing.monthlyRent,
+          availability: listing.status === 'Rented' ? 'SoldOut' : 'InStock',
+          city: listing.city,
+          address: listing.areaSociety,
+          beds: listing.beds || undefined,
+          baths: listing.baths || undefined,
+          floorSizeText: listing.sizeOrFloor,
+          isRental: true,
+        })
+      : undefined,
+  });
 
   if (!listing) {
     return (
@@ -110,6 +160,24 @@ export const RentDetailPage: React.FC = () => {
       showToast('Please provide your name, email, and preferred viewing date.', 'error');
       return;
     }
+
+    const spamCheck = buildSpamCheckPayload(spamChallenge, challengeAnswer, website);
+    const localSpam = validateSpamCheckAndContent({
+      name: tourName.trim(),
+      email: tourEmail.trim(),
+      phone: tourPhone.trim(),
+      office: listing.city,
+      subject: `Rental Viewing: ${listing.title}`,
+      message: tourNotes.trim(),
+      propertyTitle: listing.title,
+      spamCheck,
+      requireChallenge: true,
+    });
+    if (!localSpam.valid) {
+      showToast(localSpam.error || 'Please complete the verification check.', 'error');
+      return;
+    }
+
     setTourSubmitting(true);
     const res = await submitInquiry({
       name: tourName.trim(),
@@ -121,6 +189,7 @@ export const RentDetailPage: React.FC = () => {
       source: 'Rent Detail Viewing Form',
       propertyTitle: listing.title,
       preferredDate: tourDate,
+      spamCheck,
     });
     setTourSubmitting(false);
 
@@ -141,10 +210,12 @@ export const RentDetailPage: React.FC = () => {
       budget: formatRent(listing.monthlyRent),
       message: siteVisitMessage,
       source: 'Site Visit',
-      website,
+      website: '',
     });
 
     setTourBooked(true);
+    setSpamChallenge(createSpamChallenge());
+    setChallengeAnswer('');
     showToast(`Viewing request registered for ${listing.title}. Concierge will contact you.`, 'success');
   };
 
@@ -197,17 +268,19 @@ export const RentDetailPage: React.FC = () => {
           >
             <Share2 className="w-4 h-4" />
           </button>
-          <button
-            onClick={handleToggleHeart}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all cursor-pointer shadow-sm text-xs font-display uppercase tracking-wider font-semibold ${
-              saved
-                ? 'bg-rose-50 border-rose-200 text-rose-600'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Heart className={`w-4 h-4 ${saved ? 'fill-rose-500 text-rose-500' : ''}`} />
-            <span>{saved ? 'Saved in Shortlist' : 'Save Residence'}</span>
-          </button>
+          {BRAND_CONFIG.features.enableSavedProperties && (
+            <button
+              onClick={handleToggleHeart}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all cursor-pointer shadow-sm text-xs font-display uppercase tracking-wider font-semibold ${
+                saved
+                  ? 'bg-rose-50 border-rose-200 text-rose-600'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <Heart className={`w-4 h-4 ${saved ? 'fill-rose-500 text-rose-500' : ''}`} />
+              <span>{saved ? 'Saved in Shortlist' : 'Save Residence'}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -218,6 +291,7 @@ export const RentDetailPage: React.FC = () => {
           <SafeImage
             src={currentImage}
             alt={`${listing.title} - Photo ${Math.min(activePhotoIdx + 1, images.length)}`}
+            sizes="100vw"
             className="w-full h-full object-cover"
           />
 
@@ -245,20 +319,21 @@ export const RentDetailPage: React.FC = () => {
 
         {/* Thumbnails Strip */}
         {images.length > 1 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 overflow-x-auto pb-2">
             {images.map((photoUrl, idx) => (
               <button
                 key={idx}
                 onClick={() => setActivePhotoIdx(idx)}
-                className={`relative aspect-[16/10] rounded-2xl overflow-hidden border-2 transition-all cursor-pointer ${
+                className={`relative w-24 h-16 sm:w-28 sm:h-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
                   activePhotoIdx === idx
-                    ? 'border-brand shadow-md scale-[1.02]'
-                    : 'border-transparent opacity-75 hover:opacity-100'
+                    ? 'border-brand shadow-md scale-[1.03]'
+                    : 'border-transparent opacity-70 hover:opacity-100'
                 }`}
               >
                 <SafeImage
                   src={photoUrl}
                   alt={`${listing.title} view ${idx + 1}`}
+                  sizes="112px"
                   className="w-full h-full object-cover"
                 />
               </button>
@@ -346,7 +421,7 @@ export const RentDetailPage: React.FC = () => {
                 Residence Overview
               </h2>
               <p className="font-body text-sm text-slate-600 leading-relaxed">
-                {listing.description}
+                {getRentalDescription(listing.id, listing.description)}
               </p>
             </div>
           </div>
@@ -402,6 +477,18 @@ export const RentDetailPage: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {BRAND_CONFIG.features.enableMaps && (
+            <div className="bg-white rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 shadow-xl border border-slate-100 space-y-4">
+              <h2 className="font-display font-bold text-lg text-brand uppercase tracking-wide">
+                Neighborhood &amp; Location Map
+              </h2>
+              <LazyLocationMapEmbed
+                query={`${listing.areaSociety}, ${listing.city}`}
+                title={`${listing.title} Location Map`}
+              />
+            </div>
+          )}
         </div>
 
         {/* Right Column: Tenancy Inquiry & WhatsApp Contact */}
@@ -415,7 +502,10 @@ export const RentDetailPage: React.FC = () => {
                 Schedule Private Viewing
               </h3>
               <p className="font-body text-xs text-slate-500 mt-1">
-                Coordinate an in-person or live biometric video tour of this residence.
+                {t(
+                  'Coordinate an in-person or live biometric video tour of this residence.',
+                  URGLISH_COPY.detailPages.rentViewingSubtext
+                )}
               </p>
             </div>
 
@@ -426,11 +516,23 @@ export const RentDetailPage: React.FC = () => {
                   Viewing Request Confirmed
                 </h4>
                 <p className="text-xs text-emerald-800 font-body">
-                  An {BRAND_CONFIG.identity.brandShortName} leasing advisor will call you to confirm gate access and key handover.
+                  {isUrglish ? (
+                    <>
+                      {BRAND_CONFIG.identity.brandShortName} ke leasing advisor {URGLISH_COPY.detailPages.rentConfirmationSuffix}
+                    </>
+                  ) : (
+                    <>
+                      An {BRAND_CONFIG.identity.brandShortName} leasing advisor will call you to confirm gate access and key handover.
+                    </>
+                  )}
                 </p>
                 <button
                   type="button"
-                  onClick={() => setTourBooked(false)}
+                  onClick={() => {
+                    setTourBooked(false);
+                    setSpamChallenge(createSpamChallenge());
+                    setChallengeAnswer('');
+                  }}
                   className="text-xs font-display text-emerald-700 underline font-semibold cursor-pointer"
                 >
                   Submit Another Request
@@ -440,11 +542,13 @@ export const RentDetailPage: React.FC = () => {
               <form onSubmit={handleTourSubmit} className="space-y-3.5">
                 <input
                   type="text"
-                  name="website"
+                  name="contact_hp_ref"
                   value={website}
                   onChange={(e) => setWebsite(e.target.value)}
                   tabIndex={-1}
-                  autoComplete="off"
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-form-type="other"
                   aria-hidden="true"
                   className="absolute -left-[9999px] w-px h-px overflow-hidden opacity-0 pointer-events-none"
                 />
@@ -515,20 +619,44 @@ export const RentDetailPage: React.FC = () => {
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={tourSubmitting}
-                  className="w-full py-3.5 px-6 rounded-full bg-brand hover:bg-accent disabled:opacity-60 text-brand-contrast font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>
-                    {tourSubmitting
-                      ? 'Submitting Request...'
-                      : isRented
-                      ? 'Ask about similar properties'
-                      : 'Request Viewing Appointment'}
-                  </span>
-                </button>
+                <SpamChallengeField
+                  challenge={spamChallenge}
+                  answer={challengeAnswer}
+                  onAnswerChange={setChallengeAnswer}
+                  onRefresh={() => {
+                    setSpamChallenge(createSpamChallenge());
+                    setChallengeAnswer('');
+                  }}
+                  variant="light"
+                />
+
+                <div className="space-y-2">
+                  <button
+                    type="submit"
+                    disabled={tourSubmitting}
+                    className="w-full py-3.5 px-6 rounded-full bg-brand hover:bg-accent disabled:opacity-60 text-brand-contrast font-display font-bold text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>
+                      {tourSubmitting
+                        ? 'Submitting Request...'
+                        : isRented
+                        ? 'Ask about similar properties'
+                        : 'Request Viewing Appointment'}
+                    </span>
+                  </button>
+                  <p className="text-[11px] text-slate-500 text-center font-body">
+                    By submitting, you agree to our{' '}
+                    <Link to="/privacy" className="underline underline-offset-2 hover:text-brand">
+                      Privacy Policy
+                    </Link>{' '}
+                    &amp;{' '}
+                    <Link to="/terms" className="underline underline-offset-2 hover:text-brand">
+                      Terms
+                    </Link>
+                    .
+                  </p>
+                </div>
               </form>
             )}
 
@@ -538,6 +666,10 @@ export const RentDetailPage: React.FC = () => {
                 href={`https://wa.me/${BRAND_CONFIG.contact.phone.whatsappDigits}?text=${whatsappMessage}`}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => {
+                  trackEvent('whatsapp_click', { location: 'rent_detail', id: listing.id });
+                  handleDemoContactClick(e, showToast);
+                }}
                 className="w-full py-3 px-4 rounded-full border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-display font-semibold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors"
               >
                 <MessageCircle className="w-4 h-4 text-emerald-600" />

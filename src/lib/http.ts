@@ -1,3 +1,14 @@
+export type BackendMode = 'static' | 'server';
+
+export const BACKEND_MODE: BackendMode =
+  String(import.meta.env.VITE_BACKEND_MODE || 'static')
+    .trim()
+    .toLowerCase() === 'server'
+    ? 'server'
+    : 'static';
+
+export const IS_STATIC_MODE: boolean = BACKEND_MODE === 'static';
+
 export interface ParsedApiResponse<T = Record<string, any>> {
   ok: boolean;
   status: number;

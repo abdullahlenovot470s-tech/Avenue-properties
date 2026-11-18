@@ -73,3 +73,20 @@ Copy `.env.example` to `.env` for local development or configure these variables
 2. Deploy the script as a **Web app** with **Execute as: Me** and **Who has access: Anyone**.
 3. Copy the deployed Web app URL into `VITE_ENQUIRY_WEBHOOK_URL` and set your shared key in `VITE_ENQUIRY_KEY` inside `.env` (see `.env.example`), then rebuild the app (`npm run build`).
 4. **Security note**: Vite embeds `VITE_*` environment variables directly into the public frontend bundle, so `VITE_ENQUIRY_KEY` only blocks casual spam and is **not** a password or private secret.
+
+## Firebase App Check (Bot Protection)
+
+1. Register your domain(s) in Google reCAPTCHA for **reCAPTCHA v3** and copy the Site Key.
+2. Add `VITE_RECAPTCHA_SITE_KEY=<your-site-key>` to your `.env` / hosting build environment (for local development, optionally set `VITE_APPCHECK_DEBUG_TOKEN=true` and whitelist the printed token in Firebase Console).
+3. Open **Firebase Console > Build > App Check**, register your Web app with the reCAPTCHA v3 secret key, and enable **Enforcement** for **Cloud Firestore** and **Cloud Storage**.
+
+## Optimizing Static Images
+
+Run the manual image optimizer locally whenever you add or replace `.jpg`/`.png` assets in `public/`:
+
+```bash
+npm run optimize:images
+```
+
+It skips files already under 100 KB, caps widths at `1920px` for hero images and `1600px` for other photos, and recompresses JPEGs (`mozjpeg` quality 75) in place without renaming files. It is **not** run during the automated Cloudflare Pages build.
+

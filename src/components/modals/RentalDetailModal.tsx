@@ -1,11 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { RentalListing } from '../../types';
 import { SafeImage } from '../common/SafeImage';
 import { useToast } from '../../context/ToastContext';
 import { submitInquiry } from '../../lib/inquiriesApi';
+import {
+  buildSpamCheckPayload,
+  createSpamChallenge,
+  validateSpamCheckAndContent,
+} from '../../lib/spamProtection';
+import { SpamChallengeField } from '../common/SpamChallengeField';
 import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../../services/enquiryWebhook';
 import { BRAND_CONFIG } from '../../config/brand.config';
+import { useLanguage } from '../../context/LanguageContext';
+import { URGLISH_COPY } from '../../data/urglishTranslations';
+import { useRevealFallback } from '../../lib/useAnimationFallback';
 import {
   X,
   MapPin,
@@ -34,6 +43,8 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
   onBookViewing,
 }) => {
   const { showToast } = useToast();
+  const { isUrglish, getRentalDescription } = useLanguage();
+  const { forceVisible, markCompleted } = useRevealFallback(900, Boolean(isOpen && rental));
   const [activeImgIndex, setActiveImgIndex] = useState(0);
   const [bookingSubmitted, setBookingSubmitted] = useState(false);
   const [tenantName, setTenantName] = useState('');
@@ -41,6 +52,16 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
   const [visitDate, setVisitDate] = useState('');
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const [website, setWebsite] = useState('');
+  const [spamChallenge, setSpamChallenge] = useState(() => createSpamChallenge());
+  const [challengeAnswer, setChallengeAnswer] = useState('');
+
+  useEffect(() => {
+    if (isOpen && rental?.id) {
+      setSpamChallenge(createSpamChallenge());
+      setChallengeAnswer('');
+      setBookingSubmitted(false);
+    }
+  }, [isOpen, rental?.id]);
 
   if (!isOpen || !rental) return null;
 
@@ -55,6 +76,22 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
       showToast('Please provide your name, phone number, and preferred date.', 'error');
       return;
     }
+
+    const spamCheck = buildSpamCheckPayload(spamChallenge, challengeAnswer, website);
+    const localSpam = validateSpamCheckAndContent({
+      name: tenantName.trim(),
+      phone: tenantPhone.trim(),
+      office: rental.city,
+      subject: `Rental Inspection: ${rental.title}`,
+      propertyTitle: rental.title,
+      spamCheck,
+      requireChallenge: true,
+    });
+    if (!localSpam.valid) {
+      showToast(localSpam.error || 'Please complete the verification check.', 'error');
+      return;
+    }
+
     setBookingSubmitting(true);
     const res = await submitInquiry({
       name: tenantName.trim(),
@@ -65,6 +102,7 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
       source: 'Rental Quick View Modal',
       propertyTitle: rental.title,
       preferredDate: visitDate,
+      spamCheck,
     });
     setBookingSubmitting(false);
 
@@ -86,6 +124,8 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
     });
 
     setBookingSubmitted(true);
+    setSpamChallenge(createSpamChallenge());
+    setChallengeAnswer('');
     showToast(
       `Viewing request registered for ${rental.title}. A ${BRAND_CONFIG.identity.brandShortName} leasing advisor will contact you.`,
       'success'
@@ -103,6 +143,7 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
+          style={forceVisible ? { opacity: 1 } : undefined}
           className="fixed inset-0 bg-brand/80 backdrop-blur-md"
         />
 
@@ -111,6 +152,8 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 16 }}
           transition={{ duration: 0.25, ease: 'easeOut' }}
+          onAnimationComplete={markCompleted}
+          style={forceVisible ? { opacity: 1, transform: 'none' } : undefined}
           className="relative w-full max-w-4xl bg-white rounded-[28px] sm:rounded-[36px] shadow-2xl overflow-hidden border border-slate-100 z-10 max-h-[92vh] flex flex-col"
         >
           <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
@@ -249,7 +292,7 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
                 Property Overview
               </h4>
               <p className="font-body text-xs sm:text-sm text-slate-700 leading-relaxed font-light">
-                {rental.description}
+                {getRentalDescription(rental.id, rental.description)}
               </p>
             </div>
 
@@ -278,18 +321,28 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
                     Viewing Registered
                   </h4>
                   <p className="text-xs text-emerald-800 font-body">
-                    Thank you, {tenantName}. A {BRAND_CONFIG.identity.brandShortName} leasing advisor will coordinate key handover and society entry for {visitDate}.
+                    {isUrglish ? (
+                      <>
+                        Shukriya, {tenantName}. {BRAND_CONFIG.identity.brandShortName} ke leasing advisor {visitDate} ke liye key handover aur society entry coordinate karenge.
+                      </>
+                    ) : (
+                      <>
+                        Thank you, {tenantName}. A {BRAND_CONFIG.identity.brandShortName} leasing advisor will coordinate key handover and society entry for {visitDate}.
+                      </>
+                    )}
                   </p>
                 </div>
               ) : (
                 <form onSubmit={handleBookingSubmit} className="space-y-4">
                   <input
                     type="text"
-                    name="website"
+                    name="contact_hp_ref"
                     value={website}
                     onChange={(e) => setWebsite(e.target.value)}
                     tabIndex={-1}
-                    autoComplete="off"
+                    autoComplete="new-password"
+                    data-lpignore="true"
+                    data-form-type="other"
                     aria-hidden="true"
                     className="absolute -left-[9999px] w-px h-px overflow-hidden opacity-0 pointer-events-none"
                   />
@@ -325,6 +378,17 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
                       className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:border-accent"
                     />
                   </div>
+
+                  <SpamChallengeField
+                    challenge={spamChallenge}
+                    answer={challengeAnswer}
+                    onAnswerChange={setChallengeAnswer}
+                    onRefresh={() => {
+                      setSpamChallenge(createSpamChallenge());
+                      setChallengeAnswer('');
+                    }}
+                    variant="light"
+                  />
 
                   <button
                     type="submit"

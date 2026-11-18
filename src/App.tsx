@@ -8,14 +8,18 @@ import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CatalogProvider } from './context/CatalogContext';
 import { ToastProvider } from './context/ToastContext';
+import { LanguageProvider } from './context/LanguageContext';
 import { ScrollToTop } from './components/common/ScrollToTop';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
+import { FloatingWhatsAppButton } from './components/common/FloatingWhatsAppButton';
 import { HomePage } from './pages/HomePage';
 import { ConsultationModal } from './components/modals/ConsultationModal';
 import { PropertyDetailModal } from './components/modals/PropertyDetailModal';
 import { PropertyListing, PortfolioProject } from './types';
 import { BRAND_CONFIG } from './config/brand.config';
+import { initAnalytics } from './lib/analytics';
 
 // Prefetchable lazy route loaders for instant subsequent page transitions
 const loadAboutPage = () => import('./pages/AboutPage');
@@ -32,6 +36,9 @@ const loadSignupPage = () => import('./pages/SignupPage');
 const loadProfilePage = () => import('./pages/ProfilePage');
 const loadManageCatalogPage = () => import('./pages/ManageCatalogPage');
 const loadClientRecordsPage = () => import('./pages/ClientRecordsPage');
+const loadPrivacyPolicyPage = () => import('./pages/PrivacyPolicyPage');
+const loadTermsPage = () => import('./pages/TermsPage');
+const loadNotFoundPage = () => import('./pages/NotFoundPage');
 
 const AboutPage = lazy(() => loadAboutPage().then((m) => ({ default: m.AboutPage })));
 const ServicesPage = lazy(() => loadServicesPage().then((m) => ({ default: m.ServicesPage })));
@@ -53,6 +60,11 @@ const ManageCatalogPage = lazy(() =>
 const ClientRecordsPage = lazy(() =>
   loadClientRecordsPage().then((m) => ({ default: m.ClientRecordsPage }))
 );
+const PrivacyPolicyPage = lazy(() =>
+  loadPrivacyPolicyPage().then((m) => ({ default: m.PrivacyPolicyPage }))
+);
+const TermsPage = lazy(() => loadTermsPage().then((m) => ({ default: m.TermsPage })));
+const NotFoundPage = lazy(() => loadNotFoundPage().then((m) => ({ default: m.NotFoundPage })));
 
 // Lightweight fallback during rare un-prefetched chunk load
 function PageLoadingFallback() {
@@ -100,6 +112,10 @@ function AnimatedAppContent() {
   );
   const [propertyModalOpen, setPropertyModalOpen] = useState(false);
 
+  useEffect(() => {
+    initAnalytics();
+  }, []);
+
   // Idle background prefetch of primary navigation routes after initial paint
   useEffect(() => {
     const prefetch = () => {
@@ -136,6 +152,9 @@ function AnimatedAppContent() {
     setConsultationOpen(true);
   };
 
+  const loginRouteEnabled =
+    BRAND_CONFIG.features.enableClientLogin || BRAND_CONFIG.features.enableAdminPanel;
+
   return (
     <div className="min-h-screen bg-surface text-brand selection:bg-accent selection:text-accent-contrast antialiased flex flex-col justify-between">
       <ScrollToTop />
@@ -146,115 +165,119 @@ function AnimatedAppContent() {
       {/* Smooth non-blocking route transitions */}
       <main className="flex-1 w-full">
         <div key={location.pathname} className="route-enter">
-          <Suspense fallback={<PageLoadingFallback />}>
-            <Routes location={location}>
-              <Route
-                path="/"
-                element={
-                  <HomePage
-                    onOpenConsultation={handleOpenConsultation}
-                    onSelectProperty={handleSelectProperty}
-                  />
-                }
-              />
-              <Route
-                path="/about"
-                element={<AboutPage onOpenConsultation={handleOpenConsultation} />}
-              />
-              <Route
-                path="/services"
-                element={<ServicesPage onOpenConsultation={handleOpenConsultation} />}
-              />
-              <Route
-                path="/projects"
-                element={
-                  BRAND_CONFIG.features.showProjectsPage ? (
-                    <ProjectsPage />
-                  ) : (
-                    <Navigate to="/" replace />
-                  )
-                }
-              />
-              <Route
-                path="/projects/:id"
-                element={
-                  BRAND_CONFIG.features.showProjectsPage ? (
-                    <ProjectDetailPage />
-                  ) : (
-                    <Navigate to="/" replace />
-                  )
-                }
-              />
+          <ErrorBoundary resetKey={location.pathname}>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <Routes location={location}>
+                <Route
+                  path="/"
+                  element={
+                    <HomePage
+                      onOpenConsultation={handleOpenConsultation}
+                      onSelectProperty={handleSelectProperty}
+                    />
+                  }
+                />
+                <Route
+                  path="/about"
+                  element={<AboutPage onOpenConsultation={handleOpenConsultation} />}
+                />
+                <Route
+                  path="/services"
+                  element={<ServicesPage onOpenConsultation={handleOpenConsultation} />}
+                />
+                <Route
+                  path="/projects"
+                  element={
+                    BRAND_CONFIG.features.showProjectsPage ? <ProjectsPage /> : <NotFoundPage />
+                  }
+                />
+                <Route
+                  path="/projects/:id"
+                  element={
+                    BRAND_CONFIG.features.showProjectsPage ? (
+                      <ProjectDetailPage />
+                    ) : (
+                      <NotFoundPage />
+                    )
+                  }
+                />
 
-              <Route
-                path="/buy"
-                element={
-                  BRAND_CONFIG.features.showBuyPage ? <BuyPage /> : <Navigate to="/" replace />
-                }
-              />
-              <Route
-                path="/buy/:id"
-                element={
-                  BRAND_CONFIG.features.showBuyPage ? (
-                    <BuyDetailPage />
-                  ) : (
-                    <Navigate to="/" replace />
-                  )
-                }
-              />
+                <Route
+                  path="/buy"
+                  element={BRAND_CONFIG.features.showBuyPage ? <BuyPage /> : <NotFoundPage />}
+                />
+                <Route
+                  path="/buy/:id"
+                  element={
+                    BRAND_CONFIG.features.showBuyPage ? <BuyDetailPage /> : <NotFoundPage />
+                  }
+                />
 
-              <Route
-                path="/rent"
-                element={
-                  BRAND_CONFIG.features.showRentPage ? <RentPage /> : <Navigate to="/" replace />
-                }
-              />
-              <Route
-                path="/rent/:id"
-                element={
-                  BRAND_CONFIG.features.showRentPage ? (
-                    <RentDetailPage />
-                  ) : (
-                    <Navigate to="/" replace />
-                  )
-                }
-              />
-              <Route path="/contact" element={<ContactPage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/signup" element={<SignupPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route
-                path="/manage"
-                element={
-                  <ManagementRoute>
-                    <ManageCatalogPage />
-                  </ManagementRoute>
-                }
-              />
-              <Route
-                path="/records"
-                element={
-                  <ManagementRoute>
-                    <ClientRecordsPage />
-                  </ManagementRoute>
-                }
-              />
-              <Route
-                path="*"
-                element={
-                  <HomePage
-                    onOpenConsultation={handleOpenConsultation}
-                    onSelectProperty={handleSelectProperty}
-                  />
-                }
-              />
-            </Routes>
-          </Suspense>
+                <Route
+                  path="/rent"
+                  element={BRAND_CONFIG.features.showRentPage ? <RentPage /> : <NotFoundPage />}
+                />
+                <Route
+                  path="/rent/:id"
+                  element={
+                    BRAND_CONFIG.features.showRentPage ? <RentDetailPage /> : <NotFoundPage />
+                  }
+                />
+                <Route path="/contact" element={<ContactPage />} />
+                <Route path="/privacy" element={<PrivacyPolicyPage />} />
+                <Route path="/terms" element={<TermsPage />} />
+                <Route
+                  path="/login"
+                  element={loginRouteEnabled ? <LoginPage /> : <NotFoundPage />}
+                />
+                <Route
+                  path="/signup"
+                  element={
+                    BRAND_CONFIG.features.enableClientLogin ? <SignupPage /> : <NotFoundPage />
+                  }
+                />
+                <Route
+                  path="/profile"
+                  element={
+                    BRAND_CONFIG.features.enableClientLogin ? <ProfilePage /> : <NotFoundPage />
+                  }
+                />
+                <Route
+                  path="/manage"
+                  element={
+                    BRAND_CONFIG.features.enableAdminPanel ? (
+                      <ManagementRoute>
+                        <ManageCatalogPage />
+                      </ManagementRoute>
+                    ) : (
+                      <NotFoundPage />
+                    )
+                  }
+                />
+                <Route
+                  path="/records"
+                  element={
+                    BRAND_CONFIG.features.enableAdminPanel &&
+                    BRAND_CONFIG.features.enableEnquiriesDashboard ? (
+                      <ManagementRoute>
+                        <ClientRecordsPage />
+                      </ManagementRoute>
+                    ) : (
+                      <NotFoundPage />
+                    )
+                  }
+                />
+                <Route path="*" element={<NotFoundPage />} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
         </div>
       </main>
 
       {/* Shared Footer across all pages */}
       <Footer />
+
+      <FloatingWhatsAppButton />
 
       {/* Interactive Modals */}
       <ConsultationModal
@@ -275,14 +298,18 @@ function AnimatedAppContent() {
 
 export default function App() {
   return (
-    <HashRouter>
-      <AuthProvider>
-        <CatalogProvider>
-          <ToastProvider>
-            <AnimatedAppContent />
-          </ToastProvider>
-        </CatalogProvider>
-      </AuthProvider>
-    </HashRouter>
+    <ErrorBoundary fullViewport>
+      <HashRouter>
+        <LanguageProvider>
+          <AuthProvider>
+            <CatalogProvider>
+              <ToastProvider>
+                <AnimatedAppContent />
+              </ToastProvider>
+            </CatalogProvider>
+          </AuthProvider>
+        </LanguageProvider>
+      </HashRouter>
+    </ErrorBoundary>
   );
 }

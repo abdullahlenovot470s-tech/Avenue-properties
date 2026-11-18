@@ -23,12 +23,24 @@ import {
   Download,
   AlertCircle,
 } from 'lucide-react';
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
-import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, getDocs, deleteDoc, doc, limit, query } from 'firebase/firestore';
+import {
+  auth,
+  db,
+  formatFirestoreQuotaMessage,
+  handleFirestoreError,
+  isFirestoreQuotaError,
+  OperationType,
+} from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { ContactInquiryRecord, RegisteredAccountRecord } from '../lib/inquiriesApi';
-import { parseApiResponse, SERVER_UNREACHABLE_MESSAGE } from '../lib/http';
+import {
+  deleteInquiryFirestore,
+  listInquiriesFirestore,
+  updateInquiryStatusFirestore,
+} from '../lib/inquiriesFirestore';
+import { IS_STATIC_MODE, parseApiResponse, SERVER_UNREACHABLE_MESSAGE } from '../lib/http';
 import {
   sendEnquiryToWebhook,
   isEnquiryWebhookConfigured,
@@ -37,11 +49,21 @@ import {
   PENDING_QUEUE_EVENT,
 } from '../services/enquiryWebhook';
 import { BRAND_CONFIG } from '../config/brand.config';
+import { usePageSeo } from '../lib/seo';
 
 type SectionView = 'all' | 'inquiries' | 'accounts';
 type InquiryStatusFilter = 'all' | 'new' | 'contacted' | 'resolved';
 type DateRangeFilter = 'all' | 'today' | 'week';
 type AccountFilter = 'all' | 'verified' | 'pending' | 'email' | 'google';
+
+const CLIENT_RECORDS_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+let recordsMemoryCache: {
+  fetchedAt: number;
+  inquiries: ContactInquiryRecord[];
+  accounts: RegisteredAccountRecord[];
+  backendOnline: boolean;
+  firestoreMode: boolean;
+} | null = null;
 
 function getTimezoneOffsetMs(timeZone: string, date: Date): number {
   try {
@@ -154,6 +176,8 @@ export const ClientRecordsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [recordsError, setRecordsError] = useState<string | null>(null);
+  const [backendOnline, setBackendOnline] = useState(true);
+  const [firestoreMode, setFirestoreMode] = useState(false);
 
   const [activeView, setActiveView] = useState<SectionView>('all');
 
@@ -187,69 +211,117 @@ export const ClientRecordsPage: React.FC = () => {
   const [accountFilter, setAccountFilter] = useState<AccountFilter>('all');
   const [confirmDeleteAccountId, setConfirmDeleteAccountId] = useState<string | null>(null);
 
-  useEffect(() => {
-    document.title = `Client Records & Accounts | ${BRAND_CONFIG.identity.brandName}`;
-  }, []);
+  usePageSeo({
+    title: `Client Records & Accounts | ${BRAND_CONFIG.identity.brandName}`,
+    description: `Management view of client inquiries and registered accounts for ${BRAND_CONFIG.identity.brandName}.`,
+    path: '/#/client-records',
+    noindex: true,
+  });
 
   const fetchRecords = useCallback(
     async (isManual = false) => {
+      if (
+        !isManual &&
+        recordsMemoryCache &&
+        Date.now() - recordsMemoryCache.fetchedAt < CLIENT_RECORDS_CACHE_TTL_MS
+      ) {
+        setInquiries(recordsMemoryCache.inquiries);
+        setAccounts(recordsMemoryCache.accounts);
+        setBackendOnline(recordsMemoryCache.backendOnline);
+        setFirestoreMode(recordsMemoryCache.firestoreMode);
+        setRecordsError(null);
+        setLoading(false);
+        return;
+      }
+
       const headers = await buildMgmtHeaders(false);
-      if (!headers && !auth.currentUser?.emailVerified) {
+      if (!headers && !auth?.currentUser?.emailVerified) {
         setLoading(false);
         return;
       }
       if (isManual) setRefreshing(true);
       setRecordsError(null);
       try {
+        let loadedInquiries: ContactInquiryRecord[] = [];
         let backendAccounts: RegisteredAccountRecord[] = [];
         let backendLoaded = false;
+        let isBackendOnline = false;
+        let isFirestoreMode = false;
+        let firestoreInquiriesLoaded = false;
+        let firestoreUsersLoaded = false;
+        let pendingError: string | null = null;
 
-        if (headers) {
-          const [res, alertRes] = await Promise.all([
-            fetch('/api/management/records', { headers }),
-            fetch('/api/management/alerts-status', { headers }).catch(() => null),
-          ]);
+        if (!IS_STATIC_MODE && headers) {
+          try {
+            const [res, alertRes] = await Promise.all([
+              fetch('/api/management/records', { headers }),
+              fetch('/api/management/alerts-status', { headers }).catch(() => null),
+            ]);
 
-          if (alertRes) {
-            const parsedAlerts = await parseApiResponse<{
-              success?: boolean;
-              emailProvider?: 'resend' | 'smtp' | 'none';
-              serverWebhookConfigured?: boolean;
-              alertRecipient?: string;
-              configIssue?: string;
-            }>(alertRes);
-            if (parsedAlerts.ok && parsedAlerts.data?.success) {
-              setServerAlertStatus({
-                emailProvider: parsedAlerts.data.emailProvider || 'none',
-                serverWebhookConfigured: Boolean(parsedAlerts.data.serverWebhookConfigured),
-                alertRecipient: parsedAlerts.data.alertRecipient,
-                configIssue: parsedAlerts.data.configIssue,
-              });
+            if (alertRes) {
+              const parsedAlerts = await parseApiResponse<{
+                success?: boolean;
+                emailProvider?: 'resend' | 'smtp' | 'none';
+                serverWebhookConfigured?: boolean;
+                alertRecipient?: string;
+                configIssue?: string;
+              }>(alertRes);
+              if (parsedAlerts.ok && parsedAlerts.data?.success) {
+                setServerAlertStatus({
+                  emailProvider: parsedAlerts.data.emailProvider || 'none',
+                  serverWebhookConfigured: Boolean(parsedAlerts.data.serverWebhookConfigured),
+                  alertRecipient: parsedAlerts.data.alertRecipient,
+                  configIssue: parsedAlerts.data.configIssue,
+                });
+              }
             }
+
+            const parsed = await parseApiResponse<{
+              success?: boolean;
+              error?: string;
+              inquiries?: ContactInquiryRecord[];
+              accounts?: RegisteredAccountRecord[];
+            }>(res);
+
+            if (parsed.unreachable || !parsed.data) {
+              setBackendOnline(false);
+              pendingError = SERVER_UNREACHABLE_MESSAGE;
+            } else if (parsed.status === 401) {
+              const msg = parsed.data.error || 'Management session expired. Please sign in again.';
+              showToast(msg, 'error');
+              void logout();
+              return;
+            } else if (!parsed.ok || !parsed.data.success) {
+              isBackendOnline = true;
+              setBackendOnline(true);
+              pendingError = parsed.data.error || 'Could not load client records.';
+            } else {
+              backendLoaded = true;
+              isBackendOnline = true;
+              setBackendOnline(true);
+              setFirestoreMode(false);
+              loadedInquiries = Array.isArray(parsed.data.inquiries) ? parsed.data.inquiries : [];
+              setInquiries(loadedInquiries);
+              backendAccounts = Array.isArray(parsed.data.accounts) ? parsed.data.accounts : [];
+            }
+          } catch {
+            setBackendOnline(false);
+            pendingError = SERVER_UNREACHABLE_MESSAGE;
           }
+        } else {
+          setBackendOnline(false);
+        }
 
-          const parsed = await parseApiResponse<{
-            success?: boolean;
-            error?: string;
-            inquiries?: ContactInquiryRecord[];
-            accounts?: RegisteredAccountRecord[];
-          }>(res);
-
-          if (parsed.unreachable || !parsed.data) {
-            setRecordsError(SERVER_UNREACHABLE_MESSAGE);
-            showToast(SERVER_UNREACHABLE_MESSAGE, 'error');
-          } else if (parsed.status === 401) {
-            const msg = parsed.data.error || 'Management session expired. Please sign in again.';
-            showToast(msg, 'error');
-            void logout();
-          } else if (!parsed.ok || !parsed.data.success) {
-            const msg = parsed.data.error || 'Could not load client records.';
-            setRecordsError(msg);
-            showToast(msg, 'error');
-          } else {
-            backendLoaded = true;
-            setInquiries(Array.isArray(parsed.data.inquiries) ? parsed.data.inquiries : []);
-            backendAccounts = Array.isArray(parsed.data.accounts) ? parsed.data.accounts : [];
+        if (!backendLoaded && auth?.currentUser?.emailVerified) {
+          const fsInquiries = await listInquiriesFirestore();
+          if (fsInquiries.success) {
+            loadedInquiries = fsInquiries.inquiries;
+            setInquiries(loadedInquiries);
+            firestoreInquiriesLoaded = true;
+            isFirestoreMode = true;
+            setFirestoreMode(true);
+          } else if (fsInquiries.error) {
+            pendingError = fsInquiries.error;
           }
         }
 
@@ -261,10 +333,11 @@ export const ClientRecordsPage: React.FC = () => {
         }
 
         // Also read verified client profiles persisted directly in Firestore /users
-        if (auth.currentUser?.emailVerified) {
+        if (auth?.currentUser?.emailVerified) {
           try {
-            const snap = await getDocs(collection(db, 'users'));
-            const currentAdminEmail = (auth.currentUser.email || '').toLowerCase();
+            const snap = await getDocs(query(collection(db, 'users'), limit(300)));
+            firestoreUsersLoaded = true;
+            const currentAdminEmail = (auth?.currentUser?.email || '').toLowerCase();
             snap.docs.forEach((docSnap) => {
               const data = docSnap.data() as Record<string, unknown>;
               const email = String(data.email || '').trim().toLowerCase();
@@ -290,14 +363,15 @@ export const ClientRecordsPage: React.FC = () => {
               };
               mergedByEmail.set(email, fsRecord);
             });
-            if (mergedByEmail.size > 0 && !backendLoaded) {
-              setRecordsError(null);
-            }
           } catch (err) {
-            try {
-              handleFirestoreError(err, OperationType.LIST, 'users');
-            } catch {
-              // Non-fatal fallback to backend accounts list
+            if (isFirestoreQuotaError(err)) {
+              pendingError = formatFirestoreQuotaMessage(err);
+            } else {
+              try {
+                handleFirestoreError(err, OperationType.LIST, 'users');
+              } catch {
+                // Non-fatal fallback to backend accounts list
+              }
             }
           }
         }
@@ -306,6 +380,25 @@ export const ClientRecordsPage: React.FC = () => {
           (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
         setAccounts(combinedAccounts);
+
+        if (backendLoaded || firestoreInquiriesLoaded || firestoreUsersLoaded) {
+          setRecordsError(null);
+          if (!backendLoaded && (firestoreInquiriesLoaded || firestoreUsersLoaded)) {
+            isFirestoreMode = true;
+            setFirestoreMode(true);
+          }
+          recordsMemoryCache = {
+            fetchedAt: Date.now(),
+            inquiries: loadedInquiries,
+            accounts: combinedAccounts,
+            backendOnline: isBackendOnline,
+            firestoreMode: isFirestoreMode,
+          };
+        } else {
+          const msg = pendingError || SERVER_UNREACHABLE_MESSAGE;
+          setRecordsError(msg);
+          showToast(msg, 'error');
+        }
       } catch {
         setRecordsError(SERVER_UNREACHABLE_MESSAGE);
         showToast(SERVER_UNREACHABLE_MESSAGE, 'error');
@@ -353,9 +446,10 @@ export const ClientRecordsPage: React.FC = () => {
     }
 
     let serverSent = false;
+    let backendReachableForAlert = false;
     let previewUrl: string | undefined;
     let serverError: string | undefined;
-    const alertHeaders = await buildMgmtHeaders(false);
+    const alertHeaders = !IS_STATIC_MODE ? await buildMgmtHeaders(false) : null;
     if (alertHeaders) {
       try {
         const res = await fetch('/api/management/test-alert', {
@@ -369,7 +463,8 @@ export const ClientRecordsPage: React.FC = () => {
           previewUrl?: string;
           error?: string;
         }>(res);
-        if (parsed.ok && parsed.data) {
+        if (!parsed.unreachable && parsed.data) {
+          backendReachableForAlert = true;
           serverSent = Boolean(parsed.data.success);
           previewUrl = parsed.data.previewUrl;
           serverError = parsed.data.error;
@@ -397,6 +492,11 @@ export const ClientRecordsPage: React.FC = () => {
           : 'No live email/webhook configured yet — generated an Ethereal test preview instead.',
         'info'
       );
+    } else if (!backendReachableForAlert && !clientWebhookConfigured) {
+      showToast(
+        'Server SMTP/Resend alerts require a Node backend. On static hosts like Cloudflare Pages, set VITE_ENQUIRY_WEBHOOK_URL for instant alerts.',
+        'info'
+      );
     } else {
       showToast(
         serverError ||
@@ -421,34 +521,93 @@ export const ClientRecordsPage: React.FC = () => {
     }
   };
 
+  const applyInquiryStatusUpdate = (
+    id: string,
+    newStatus: 'new' | 'contacted' | 'resolved'
+  ) => {
+    setInquiries((prev) => {
+      const next = prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item));
+      if (recordsMemoryCache) {
+        recordsMemoryCache = { ...recordsMemoryCache, inquiries: next };
+      }
+      return next;
+    });
+  };
+
+  const applyInquiryRemoval = (id: string) => {
+    setInquiries((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      if (recordsMemoryCache) {
+        recordsMemoryCache = { ...recordsMemoryCache, inquiries: next };
+      }
+      return next;
+    });
+  };
+
+  const applyAccountRemoval = (id: string) => {
+    setAccounts((prev) => {
+      const next = prev.filter((acc) => acc.id !== id);
+      if (recordsMemoryCache) {
+        recordsMemoryCache = { ...recordsMemoryCache, accounts: next };
+      }
+      return next;
+    });
+  };
+
   const handleStatusChange = async (
     id: string,
     newStatus: 'new' | 'contacted' | 'resolved'
   ) => {
     const headers = await buildMgmtHeaders(true);
-    if (!headers) return;
+    if (!headers && !auth?.currentUser?.emailVerified) return;
     setUpdatingInquiryId(id);
     try {
-      const res = await fetch(`/api/management/inquiries/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({ status: newStatus }),
-      });
-      const parsed = await parseApiResponse<{ success?: boolean; error?: string }>(res);
-      if (parsed.unreachable || !parsed.data) {
-        showToast(SERVER_UNREACHABLE_MESSAGE, 'error');
-      } else if (parsed.status === 401) {
-        showToast(parsed.data.error || 'Management session expired. Please sign in again.', 'error');
-        void logout();
-      } else if (!parsed.ok || !parsed.data.success) {
-        showToast(parsed.data.error || 'Failed to update inquiry status.', 'error');
+      let useFirestoreFallback = IS_STATIC_MODE || !headers || !backendOnline;
+
+      if (!IS_STATIC_MODE && headers && backendOnline) {
+        const res = await fetch(`/api/management/inquiries/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ status: newStatus }),
+        });
+        const parsed = await parseApiResponse<{ success?: boolean; error?: string }>(res);
+        if (parsed.unreachable || !parsed.data) {
+          useFirestoreFallback = true;
+          setBackendOnline(false);
+        } else if (parsed.status === 401) {
+          showToast(parsed.data.error || 'Management session expired. Please sign in again.', 'error');
+          void logout();
+          return;
+        } else if (!parsed.ok || !parsed.data.success) {
+          showToast(parsed.data.error || 'Failed to update inquiry status.', 'error');
+          return;
+        } else {
+          applyInquiryStatusUpdate(id, newStatus);
+          showToast(`Marked submission as ${newStatus}.`, 'success');
+          return;
+        }
+      }
+
+      if (useFirestoreFallback && auth?.currentUser?.emailVerified) {
+        const fsRes = await updateInquiryStatusFirestore(id, newStatus);
+        if (fsRes.success) {
+          applyInquiryStatusUpdate(id, newStatus);
+          showToast(`Marked submission as ${newStatus}.`, 'success');
+        } else {
+          showToast(fsRes.error || 'Failed to update inquiry status in Firestore.', 'error');
+        }
       } else {
-        setInquiries((prev) =>
-          prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
-        );
-        showToast(`Marked submission as ${newStatus}.`, 'success');
+        showToast(SERVER_UNREACHABLE_MESSAGE, 'error');
       }
     } catch {
+      if (auth?.currentUser?.emailVerified) {
+        const fsRes = await updateInquiryStatusFirestore(id, newStatus);
+        if (fsRes.success) {
+          applyInquiryStatusUpdate(id, newStatus);
+          showToast(`Marked submission as ${newStatus}.`, 'success');
+          return;
+        }
+      }
       showToast(SERVER_UNREACHABLE_MESSAGE, 'error');
     } finally {
       setUpdatingInquiryId(null);
@@ -457,45 +616,81 @@ export const ClientRecordsPage: React.FC = () => {
 
   const handleDeleteInquiry = async (id: string, name: string) => {
     const headers = await buildMgmtHeaders(false);
-    if (!headers) return;
+    if (!headers && !auth?.currentUser?.emailVerified) return;
     try {
-      const res = await fetch(`/api/management/inquiries/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers,
-      });
-      const parsed = await parseApiResponse<{ success?: boolean; error?: string }>(res);
+      let useFirestoreFallback = IS_STATIC_MODE || !headers || !backendOnline;
+
+      if (!IS_STATIC_MODE && headers && backendOnline) {
+        const res = await fetch(`/api/management/inquiries/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          headers,
+        });
+        const parsed = await parseApiResponse<{ success?: boolean; error?: string }>(res);
+        setConfirmDeleteInquiryId(null);
+        if (parsed.unreachable || !parsed.data) {
+          useFirestoreFallback = true;
+          setBackendOnline(false);
+        } else if (parsed.status === 401) {
+          showToast(parsed.data.error || 'Management session expired. Please sign in again.', 'error');
+          void logout();
+          return;
+        } else if (!parsed.ok || !parsed.data.success) {
+          showToast(parsed.data.error || 'Could not delete submission.', 'error');
+          return;
+        } else {
+          applyInquiryRemoval(id);
+          showToast(`Removed submission from "${name}".`, 'info');
+          return;
+        }
+      }
+
       setConfirmDeleteInquiryId(null);
-      if (parsed.unreachable || !parsed.data) {
-        showToast(SERVER_UNREACHABLE_MESSAGE, 'error');
-      } else if (parsed.status === 401) {
-        showToast(parsed.data.error || 'Management session expired. Please sign in again.', 'error');
-        void logout();
-      } else if (!parsed.ok || !parsed.data.success) {
-        showToast(parsed.data.error || 'Could not delete submission.', 'error');
+      if (useFirestoreFallback && auth?.currentUser?.emailVerified) {
+        const fsRes = await deleteInquiryFirestore(id);
+        if (fsRes.success) {
+          applyInquiryRemoval(id);
+          showToast(`Removed submission from "${name}".`, 'info');
+        } else {
+          showToast(fsRes.error || 'Could not delete submission from Firestore.', 'error');
+        }
       } else {
-        setInquiries((prev) => prev.filter((item) => item.id !== id));
-        showToast(`Removed submission from "${name}".`, 'info');
+        showToast(
+          IS_STATIC_MODE ? 'Could not delete submission from Firestore.' : SERVER_UNREACHABLE_MESSAGE,
+          'error'
+        );
       }
     } catch {
       setConfirmDeleteInquiryId(null);
-      showToast(SERVER_UNREACHABLE_MESSAGE, 'error');
+      if (auth?.currentUser?.emailVerified) {
+        const fsRes = await deleteInquiryFirestore(id);
+        if (fsRes.success) {
+          applyInquiryRemoval(id);
+          showToast(`Removed submission from "${name}".`, 'info');
+          return;
+        }
+      }
+      showToast(
+        IS_STATIC_MODE ? 'Could not delete submission from Firestore.' : SERVER_UNREACHABLE_MESSAGE,
+        'error'
+      );
     }
   };
 
   const handleDeleteAccount = async (id: string, email: string) => {
     const headers = await buildMgmtHeaders(false);
-    if (!headers && !auth.currentUser?.emailVerified) return;
+    if (!headers && !auth?.currentUser?.emailVerified) return;
     try {
-      const res = headers
-        ? await fetch(`/api/management/accounts/${encodeURIComponent(id)}`, {
-            method: 'DELETE',
-            headers,
-          })
-        : null;
+      const res =
+        !IS_STATIC_MODE && headers
+          ? await fetch(`/api/management/accounts/${encodeURIComponent(id)}`, {
+              method: 'DELETE',
+              headers,
+            })
+          : null;
       const parsed = res ? await parseApiResponse<{ success?: boolean; error?: string }>(res) : null;
 
       let deletedFromFirestore = false;
-      if (auth.currentUser?.emailVerified) {
+      if (auth?.currentUser?.emailVerified) {
         try {
           await deleteDoc(doc(db, 'users', id));
           deletedFromFirestore = true;
@@ -510,8 +705,10 @@ export const ClientRecordsPage: React.FC = () => {
 
       setConfirmDeleteAccountId(null);
       if ((parsed?.ok && parsed.data?.success) || deletedFromFirestore) {
-        setAccounts((prev) => prev.filter((acc) => acc.id !== id));
+        applyAccountRemoval(id);
         showToast(`Removed registered account "${email}".`, 'info');
+      } else if (IS_STATIC_MODE) {
+        showToast('Could not delete account record in Firestore.', 'error');
       } else if (!parsed || parsed.unreachable || !parsed.data) {
         showToast(SERVER_UNREACHABLE_MESSAGE, 'error');
       } else if (parsed.status === 401) {
@@ -522,7 +719,10 @@ export const ClientRecordsPage: React.FC = () => {
       }
     } catch {
       setConfirmDeleteAccountId(null);
-      showToast(SERVER_UNREACHABLE_MESSAGE, 'error');
+      showToast(
+        IS_STATIC_MODE ? 'Could not delete account record in Firestore.' : SERVER_UNREACHABLE_MESSAGE,
+        'error'
+      );
     }
   };
 
@@ -682,7 +882,7 @@ export const ClientRecordsPage: React.FC = () => {
               className="px-4 py-2 rounded-full border border-slate-200 hover:border-brand text-slate-700 text-xs font-display uppercase tracking-wider font-semibold flex items-center gap-1.5 transition-colors"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>Manage Inventory</span>
+              <span>Manage Data</span>
             </Link>
             <button
               type="button"
@@ -729,10 +929,17 @@ export const ClientRecordsPage: React.FC = () => {
                         ? ` • Google Sheet webhook & daily ${BRAND_CONFIG.locale.dailyReportLabel} enabled`
                         : ''}
                     </>
+                  ) : !backendOnline ? (
+                    `Running in direct Firebase Firestore mode (no Node backend). Set VITE_ENQUIRY_WEBHOOK_URL + VITE_ENQUIRY_KEY for Google Sheet & daily ${BRAND_CONFIG.locale.dailyReportLabel}s on static hosts.`
                   ) : (
                     `Set RESEND_API_KEY / SMTP_* for instant email alerts or VITE_ENQUIRY_WEBHOOK_URL + VITE_ENQUIRY_KEY for Google Sheet & daily ${BRAND_CONFIG.locale.dailyReportLabel}s.`
                   )}
                 </p>
+                {firestoreMode && !backendOnline && (
+                  <p className="font-body text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5 mt-1">
+                    Connected directly to Firebase Firestore. Submissions, status updates, and client accounts work without a Node server.
+                  </p>
+                )}
                 {serverAlertStatus?.configIssue && (
                   <p className="font-body text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5 mt-1">
                     {serverAlertStatus.configIssue}

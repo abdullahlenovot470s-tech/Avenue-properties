@@ -7,6 +7,9 @@ import { AvatarPlaceholder } from '../components/common/AvatarPlaceholder';
 import { PillButton } from '../components/common/PillButton';
 import { Award, Compass, ShieldCheck, Landmark, Check } from 'lucide-react';
 import { BRAND_CONFIG } from '../config/brand.config';
+import { useLanguage } from '../context/LanguageContext';
+import { URGLISH_COPY } from '../data/urglishTranslations';
+import { buildRealEstateAgentJsonLd, usePageSeo } from '../lib/seo';
 
 interface AboutPageProps {
   onOpenConsultation: (service?: string) => void;
@@ -14,10 +17,15 @@ interface AboutPageProps {
 
 export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
   const navigate = useNavigate();
+  const { t, getTeamBio } = useLanguage();
 
-  React.useEffect(() => {
-    document.title = `About ${BRAND_CONFIG.identity.brandShortName} | ${BRAND_CONFIG.identity.brandName}`;
-  }, []);
+  usePageSeo({
+    title: `About ${BRAND_CONFIG.identity.brandShortName} | ${BRAND_CONFIG.identity.brandName}`,
+    description: `Learn about ${BRAND_CONFIG.identity.brandName}, our leadership team, NOC/fard title verification process, and dedicated Overseas Desk across ${BRAND_CONFIG.locale.country}.`,
+    path: '/#/about',
+    image: BRAND_CONFIG.images.about,
+    structuredData: buildRealEstateAgentJsonLd(),
+  });
 
   return (
     <div className="min-h-screen pt-24 pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-6">
@@ -40,7 +48,10 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
             DEFINING ARCHITECTURAL EXCELLENCE IN {BRAND_CONFIG.locale.country.toUpperCase()}.
           </h1>
           <p className="font-body text-sm sm:text-base text-brand/80 leading-relaxed font-light">
-            Founded on the belief that a home is a family's foundation and enduring legacy, {BRAND_CONFIG.identity.brandShortName} bridges visionary modern architecture with clear legal titles and transparent transfers. We operate not merely as conventional agents, but as trusted advisors for {BRAND_CONFIG.locale.country}'s premier family residences.
+            {t(
+              `Founded on the belief that a home is a family's foundation and enduring legacy, ${BRAND_CONFIG.identity.brandShortName} bridges visionary modern architecture with clear legal titles and transparent transfers. We operate not merely as conventional agents, but as trusted advisors for ${BRAND_CONFIG.locale.country}'s premier family residences.`,
+              URGLISH_COPY.aboutPage.manifestoBody
+            )}
           </p>
 
           <div className="pt-2 flex items-center gap-4">
@@ -74,25 +85,48 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
               PRECISION OVER VOLUME. INTEGRITY OVER SPEED.
             </h2>
             <p className="font-body text-xs sm:text-sm text-brand-contrast/80 leading-relaxed font-light">
-              Unlike volume-driven realtors, {BRAND_CONFIG.identity.brandShortName} represents a vetted selection of luxury residences across {BRAND_CONFIG.locale.mainCities.slice(0, 3).join(', ')}. Each property undergoes a comprehensive audit verifying clear fard and registry, society NOC approval (LDA, CDA, DHA, Bahria), structural stability, and reliable solar and utility infrastructure.
+              {t(
+                `Unlike volume-driven realtors, ${BRAND_CONFIG.identity.brandShortName} represents a vetted selection of luxury residences across ${BRAND_CONFIG.locale.mainCities.slice(0, 3).join(', ')}. Each property undergoes a comprehensive audit verifying clear fard and registry, society NOC approval (LDA, CDA, DHA, Bahria), structural stability, and reliable solar and utility infrastructure.`,
+                URGLISH_COPY.aboutPage.principlesBody
+              )}
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-brand-contrast/10 text-xs">
               <div className="flex items-start gap-2.5">
                 <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <span>100% verified society transfers and clean possession</span>
+                <span>
+                  {t(
+                    '100% verified society transfers and clean possession',
+                    URGLISH_COPY.aboutPage.principlesChecks[0]
+                  )}
+                </span>
               </div>
               <div className="flex items-start gap-2.5">
                 <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <span>Direct consultation with PCATP-registered architects</span>
+                <span>
+                  {t(
+                    'Direct consultation with PCATP-registered architects',
+                    URGLISH_COPY.aboutPage.principlesChecks[1]
+                  )}
+                </span>
               </div>
               <div className="flex items-start gap-2.5">
                 <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <span>Assistance for overseas {BRAND_CONFIG.locale.nationalityAdjective} clients with power of attorney</span>
+                <span>
+                  {t(
+                    `Assistance for overseas ${BRAND_CONFIG.locale.nationalityAdjective} clients with power of attorney`,
+                    URGLISH_COPY.aboutPage.principlesChecks[2]
+                  )}
+                </span>
               </div>
               <div className="flex items-start gap-2.5">
                 <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <span>Load-shedding-proof solar microgrid & generator inspection</span>
+                <span>
+                  {t(
+                    'Load-shedding-proof solar microgrid & generator inspection',
+                    URGLISH_COPY.aboutPage.principlesChecks[3]
+                  )}
+                </span>
               </div>
             </div>
           </div>
@@ -140,7 +174,10 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
             PARTNERS & DIRECTORS
           </h2>
           <p className="text-xs sm:text-sm text-slate-700 font-medium font-body mt-1 max-w-xl">
-            Led by senior {BRAND_CONFIG.locale.nationalityAdjective} property and architecture professionals with degrees from leading design and business institutions.
+            {t(
+              `Led by senior ${BRAND_CONFIG.locale.nationalityAdjective} property and architecture professionals with degrees from leading design and business institutions.`,
+              URGLISH_COPY.aboutPage.leadershipSubtitle
+            )}
           </p>
         </div>
 
@@ -208,7 +245,9 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
                   {member.role}
                 </span>
 
-                <p className="text-xs text-slate-700 font-body leading-relaxed">{member.bio}</p>
+                <p className="text-xs text-slate-700 font-body leading-relaxed">
+                  {getTeamBio(member.name, member.bio)}
+                </p>
               </div>
 
               <div className="pt-5 mt-4 border-t border-slate-200/60">
@@ -232,7 +271,10 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
             DISCUSS AN ACQUISITION WITH {BRAND_CONFIG.identity.brandShortName.toUpperCase()}
           </h3>
           <p className="font-body text-xs sm:text-sm text-accent-contrast/80 leading-relaxed font-light">
-            Whether evaluating a residential plot or acquiring a completed luxury home in {BRAND_CONFIG.locale.mainCities.slice(0, 3).join(', ')}, our managing partners offer trusted counsel.
+            {t(
+              `Whether evaluating a residential plot or acquiring a completed luxury home in ${BRAND_CONFIG.locale.mainCities.slice(0, 3).join(', ')}, our managing partners offer trusted counsel.`,
+              URGLISH_COPY.aboutPage.ctaBody
+            )}
           </p>
           <div className="pt-2 flex items-center justify-center">
             <PillButton

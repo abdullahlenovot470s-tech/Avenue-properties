@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /manage
+Disallow: /records
+Disallow: /profile
+Disallow: /login
+Disallow: /signup
+
+Sitemap: https://example.com/sitemap.xml

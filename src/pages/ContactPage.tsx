@@ -1,19 +1,50 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
+import { Link } from 'react-router-dom';
 import { REGIONAL_OFFICES } from '../data/realEstateData';
 import { useToast } from '../context/ToastContext';
 import {
   SITE_CONFIG,
   getWhatsAppUrl,
+  handleDemoContactClick,
   isValidContactPhone,
   isValidContactEmail,
 } from '../config/siteConfig';
 import { BRAND_CONFIG } from '../config/brand.config';
 import { submitInquiry } from '../lib/inquiriesApi';
+import {
+  buildSpamCheckPayload,
+  createSpamChallenge,
+  validateSpamCheckAndContent,
+} from '../lib/spamProtection';
+import { SpamChallengeField } from '../components/common/SpamChallengeField';
+import { LazyLocationMapEmbed } from '../components/common/LazyLocationMapEmbed';
 import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../services/enquiryWebhook';
-import { MapPin, Phone, Mail, Clock, ShieldCheck, Send, CheckCircle2, Building, Navigation, AlertCircle } from 'lucide-react';
+import { useCatalog } from '../context/CatalogContext';
+import { useLanguage } from '../context/LanguageContext';
+import { URGLISH_COPY } from '../data/urglishTranslations';
+import { usePageMeta } from '../lib/seo';
+import { trackEvent } from '../lib/analytics';
+import {
+  MapPin,
+  Phone,
+  Mail,
+  Clock,
+  ShieldCheck,
+  Send,
+  CheckCircle2,
+  Building,
+  Navigation,
+  AlertCircle,
+} from 'lucide-react';
+
+const ContactFaqSection = lazy(() =>
+  import('../components/ContactFaqSection').then((m) => ({ default: m.ContactFaqSection }))
+);
 
 export const ContactPage: React.FC = () => {
   const { showToast } = useToast();
+  const { faqs } = useCatalog();
+  const { t, isUrglish } = useLanguage();
   const shortBrand = BRAND_CONFIG.identity.brandShortName;
   const defaultOffice = REGIONAL_OFFICES[0]?.city || BRAND_CONFIG.locale.defaultCity;
 
@@ -30,10 +61,30 @@ export const ContactPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState('');
   const [honeypot, setHoneypot] = useState('');
+  const [spamChallenge, setSpamChallenge] = useState(() => createSpamChallenge());
+  const [challengeAnswer, setChallengeAnswer] = useState('');
 
-  React.useEffect(() => {
-    document.title = `Offices & Contact | ${BRAND_CONFIG.identity.brandName}`;
-  }, []);
+  usePageMeta({
+    title: `Offices & Contact | ${BRAND_CONFIG.identity.brandName}`,
+    description: `Contact ${BRAND_CONFIG.identity.brandName} regional offices in ${BRAND_CONFIG.locale.mainCities.slice(0, 3).join(', ')} or our Overseas Desk.`,
+    path: '/#/contact',
+    image: BRAND_CONFIG.images.office1,
+    structuredData:
+      BRAND_CONFIG.features.enableFaqs && faqs.length > 0
+        ? {
+            '@context': 'https://schema.org',
+            '@type': 'FAQPage',
+            mainEntity: faqs.map((faq) => ({
+              '@type': 'Question',
+              name: faq.question,
+              acceptedAnswer: {
+                '@type': 'Answer',
+                text: faq.answer,
+              },
+            })),
+          }
+        : undefined,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +120,24 @@ export const ContactPage: React.FC = () => {
       return;
     }
 
+    const spamCheck = buildSpamCheckPayload(spamChallenge, challengeAnswer, honeypot);
+    const localSpam = validateSpamCheckAndContent({
+      name: trimmedName,
+      email: trimmedEmail,
+      phone: trimmedPhone,
+      office: formData.office,
+      subject: formData.subject,
+      message: trimmedMessage,
+      spamCheck,
+      requireChallenge: true,
+    });
+    if (!localSpam.valid) {
+      const msg = localSpam.error || 'Please complete the verification check.';
+      setFormError(msg);
+      showToast(msg, 'error');
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await submitInquiry({
@@ -79,6 +148,7 @@ export const ContactPage: React.FC = () => {
         subject: formData.subject,
         message: trimmedMessage,
         source: 'Contact Page',
+        spamCheck,
       });
 
       if (res.success || (res.unreachable && isEnquiryWebhookConfigured())) {
@@ -94,6 +164,8 @@ export const ContactPage: React.FC = () => {
           website: '',
         });
         setSubmitted(true);
+        setSpamChallenge(createSpamChallenge());
+        setChallengeAnswer('');
         showToast('Your message has been received. Our partner will connect shortly.', 'success');
       } else {
         const msg = res.error || 'Could not submit inquiry. Please try again.';
@@ -130,7 +202,10 @@ export const ContactPage: React.FC = () => {
             CONNECT WITH {shortBrand.toUpperCase()} IN {BRAND_CONFIG.locale.country.toUpperCase()}.
           </h1>
           <p className="font-body text-sm sm:text-base text-brand/80 leading-relaxed font-light">
-            Our managing partners operate from offices across {BRAND_CONFIG.locale.mainCities.slice(0, 3).join(', ')}, with dedicated support for both local buyers and international clients.
+            {t(
+              `Our managing partners operate from offices across ${BRAND_CONFIG.locale.mainCities.slice(0, 3).join(', ')}, with dedicated support for both local buyers and international clients.`,
+              URGLISH_COPY.contactPage.headerSubtitle
+            )}
           </p>
         </div>
       </section>
@@ -142,7 +217,10 @@ export const ContactPage: React.FC = () => {
             REGIONAL OFFICES & ADVISORY DESKS
           </h2>
           <p className="text-xs text-slate-500 font-body mt-1">
-            Private consultation available Monday to Saturday, 9:00 AM to 6:00 PM {BRAND_CONFIG.locale.timezoneLabel}.
+            {t(
+              `Private consultation available Monday to Saturday, 9:00 AM to 6:00 PM ${BRAND_CONFIG.locale.timezoneLabel}.`,
+              URGLISH_COPY.contactPage.officeHoursSubtitle
+            )}
           </p>
         </div>
 
@@ -184,12 +262,20 @@ export const ContactPage: React.FC = () => {
                 <div className="space-y-2.5 text-xs text-brand-contrast/85 font-body pt-1">
                   <div className="flex items-start gap-2.5">
                     <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <span className="leading-relaxed">{office.address}</span>
+                    <span className="leading-relaxed">
+                      {office.city === 'Overseas Desk'
+                        ? t(office.address, URGLISH_COPY.contactPage.overseasOfficeAddress)
+                        : office.address}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Phone className="w-4 h-4 text-emerald-400 shrink-0" />
                     <a
                       href={`tel:${office.phone.replace(/[^0-9+]/g, '')}`}
+                      onClick={(e) => {
+                        trackEvent('call_click', { location: 'contact_office', city: office.city });
+                        handleDemoContactClick(e, showToast);
+                      }}
                       className="hover:text-brand-contrast hover:underline transition-colors cursor-pointer"
                     >
                       {office.phone}
@@ -199,6 +285,7 @@ export const ContactPage: React.FC = () => {
                     <Mail className="w-4 h-4 text-emerald-400 shrink-0" />
                     <a
                       href={`mailto:${office.email}`}
+                      onClick={(e) => handleDemoContactClick(e, showToast)}
                       className="hover:text-brand-contrast hover:underline transition-colors cursor-pointer"
                     >
                       {office.email}
@@ -207,22 +294,49 @@ export const ContactPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="relative z-10 pt-4 mt-4 border-t border-white/15 flex items-center justify-between">
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(office.address)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs font-display uppercase tracking-wider text-emerald-300 hover:text-brand-contrast font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Navigation className="w-3.5 h-3.5" />
-                  <span>Get directions</span>
-                  <span>→</span>
-                </a>
+              <div className="relative z-10 space-y-3 pt-4 mt-4 border-t border-white/15">
+                {BRAND_CONFIG.features.enableMaps && (
+                  <LazyLocationMapEmbed
+                    query={
+                      office.city === 'Overseas Desk'
+                        ? BRAND_CONFIG.contact.offices[0]?.address || office.city
+                        : `${office.address}, ${office.city}`
+                    }
+                    title={`${office.city} Office Location`}
+                    className="!bg-white/95"
+                  />
+                )}
+                <div className="flex items-center justify-between">
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(office.address)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-display uppercase tracking-wider text-emerald-300 hover:text-brand-contrast font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Navigation className="w-3.5 h-3.5" />
+                    <span>Get directions</span>
+                    <span>→</span>
+                  </a>
+                </div>
               </div>
             </div>
           ))}
         </div>
       </section>
+
+      {/* Frequently Asked Questions Section (Managed via Manage Inventory) */}
+      {BRAND_CONFIG.features.enableFaqs && faqs.length > 0 && (
+        <Suspense
+          fallback={
+            <div
+              aria-hidden="true"
+              className="w-full h-[360px] rounded-[24px] sm:rounded-[32px] bg-white/70 border border-slate-100"
+            />
+          }
+        >
+          <ContactFaqSection />
+        </Suspense>
+      )}
 
       {/* Appointment & Inquiry Form Section */}
       <section className="bg-brand rounded-[28px] sm:rounded-[36px] p-8 sm:p-14 md:p-16 text-brand-contrast shadow-2xl relative overflow-hidden">
@@ -235,17 +349,27 @@ export const ContactPage: React.FC = () => {
               COMMENCE A PRIVATE DIALOGUE
             </h2>
             <p className="font-body text-xs sm:text-sm text-brand-contrast/80 leading-relaxed font-light">
-              All communications are strictly confidential. Whether acquiring a residence or planning a portfolio sale, our senior partners are at your service.
+              {t(
+                'All communications are strictly confidential. Whether acquiring a residence or planning a portfolio sale, our senior partners are at your service.',
+                URGLISH_COPY.contactPage.dialogueBody
+              )}
             </p>
 
             <div className="p-4 rounded-2xl glass-card-subtle space-y-2 text-xs text-brand-contrast/90">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-emerald-400" />
-                <span>Response window: Within 2 business hours ({BRAND_CONFIG.locale.timezoneLabel})</span>
+                <span>
+                  {t(
+                    `Response window: Within 2 business hours (${BRAND_CONFIG.locale.timezoneLabel})`,
+                    URGLISH_COPY.contactPage.responseWindow
+                  )}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>Direct partner representation guaranteed</span>
+                <span>
+                  {t('Direct partner representation guaranteed', URGLISH_COPY.contactPage.directRep)}
+                </span>
               </div>
             </div>
 
@@ -254,6 +378,10 @@ export const ContactPage: React.FC = () => {
                 href={getWhatsAppUrl(BRAND_CONFIG.contact.whatsappGreetings.generalFooter)}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => {
+                  trackEvent('whatsapp_click', { location: 'contact_page' });
+                  handleDemoContactClick(e, showToast);
+                }}
                 className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-display text-xs uppercase tracking-wider font-semibold transition-all shadow-md cursor-pointer"
               >
                 <span>Chat via WhatsApp: {SITE_CONFIG.phone.whatsapp}</span>
@@ -272,13 +400,25 @@ export const ContactPage: React.FC = () => {
                     Inquiry Confirmed
                   </h3>
                   <p className="text-xs sm:text-sm text-white/80 max-w-md mx-auto leading-relaxed font-body">
-                    {BRAND_CONFIG.locale.greeting}, <span className="font-semibold text-white">{formData.name}</span>. The {shortBrand} managing director for {formData.office} will be in touch directly.
+                    {BRAND_CONFIG.locale.greeting},{' '}
+                    <span className="font-semibold text-white">{formData.name}</span>.{' '}
+                    {isUrglish ? (
+                      <>
+                        {formData.office} ke liye {shortBrand} {URGLISH_COPY.contactPage.confirmationText}
+                      </>
+                    ) : (
+                      <>
+                        The {shortBrand} managing director for {formData.office} will be in touch directly.
+                      </>
+                    )}
                   </p>
                   <button
                     type="button"
                     onClick={() => {
                       setSubmitted(false);
                       setFormError('');
+                      setSpamChallenge(createSpamChallenge());
+                      setChallengeAnswer('');
                       setFormData({
                         name: '',
                         email: '',
@@ -409,6 +549,21 @@ export const ContactPage: React.FC = () => {
                     />
                   </div>
 
+                  <SpamChallengeField
+                    challenge={spamChallenge}
+                    answer={challengeAnswer}
+                    onAnswerChange={(val) => {
+                      setFormError('');
+                      setChallengeAnswer(val);
+                    }}
+                    onRefresh={() => {
+                      setFormError('');
+                      setSpamChallenge(createSpamChallenge());
+                      setChallengeAnswer('');
+                    }}
+                    variant="dark"
+                  />
+
                   {formError && (
                     <p
                       role="alert"
@@ -419,7 +574,7 @@ export const ContactPage: React.FC = () => {
                     </p>
                   )}
 
-                  <div className="pt-2">
+                  <div className="pt-2 space-y-2.5">
                     <button
                       type="submit"
                       disabled={loading}
@@ -434,6 +589,17 @@ export const ContactPage: React.FC = () => {
                         </>
                       )}
                     </button>
+                    <p className="text-[11px] text-white/60 text-center font-body">
+                      By submitting, you agree to our{' '}
+                      <Link to="/privacy" className="underline underline-offset-2 hover:text-white">
+                        Privacy Policy
+                      </Link>{' '}
+                      &amp;{' '}
+                      <Link to="/terms" className="underline underline-offset-2 hover:text-white">
+                        Terms
+                      </Link>
+                      .
+                    </p>
                   </div>
                 </form>
               )}

@@ -47,10 +47,12 @@ export const Navbar: React.FC = () => {
     ...(BRAND_CONFIG.features.showProjectsPage ? [{ label: 'Projects', path: '/projects' }] : []),
     ...(BRAND_CONFIG.features.showBuyPage ? [{ label: 'Buy', path: '/buy' }] : []),
     ...(BRAND_CONFIG.features.showRentPage ? [{ label: 'Rent', path: '/rent' }] : []),
-    ...(isManagement
+    ...(isManagement && BRAND_CONFIG.features.enableAdminPanel
       ? [
-          { label: 'Manage Inventory', path: '/manage' },
-          { label: 'Client Records', path: '/records' },
+          { label: 'Manage Data', path: '/manage' },
+          ...(BRAND_CONFIG.features.enableEnquiriesDashboard
+            ? [{ label: 'Client Records', path: '/records' }]
+            : []),
         ]
       : []),
     { label: 'Contact', path: '/contact' },
@@ -164,32 +166,37 @@ export const Navbar: React.FC = () => {
                       </div>
                     </div>
 
-                    <Link
-                      to="/profile"
-                      onClick={() => setUserDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-white/10 transition-colors"
-                    >
-                      <User className="w-4 h-4 text-white/70" />
-                      <span>Profile & Settings</span>
-                    </Link>
+                    {BRAND_CONFIG.features.enableClientLogin && (
+                      <Link
+                        to="/profile"
+                        onClick={() => setUserDropdownOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-white/10 transition-colors"
+                      >
+                        <User className="w-4 h-4 text-white/70" />
+                        <span>Profile & Settings</span>
+                      </Link>
+                    )}
 
-                    <Link
-                      to="/profile"
-                      onClick={() => setUserDropdownOpen(false)}
-                      className="flex items-center justify-between px-3 py-2 rounded-xl text-xs hover:bg-white/10 transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Heart className="w-4 h-4 text-rose-400" />
-                        <span>Saved Residences</span>
-                      </div>
-                      {savedPropertyIds.length > 0 && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white">
-                          {savedPropertyIds.length}
-                        </span>
+                    {BRAND_CONFIG.features.enableClientLogin &&
+                      BRAND_CONFIG.features.enableSavedProperties && (
+                        <Link
+                          to="/profile"
+                          onClick={() => setUserDropdownOpen(false)}
+                          className="flex items-center justify-between px-3 py-2 rounded-xl text-xs hover:bg-white/10 transition-colors"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <Heart className="w-4 h-4 text-rose-400" />
+                            <span>Saved Residences</span>
+                          </div>
+                          {savedPropertyIds.length > 0 && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white">
+                              {savedPropertyIds.length}
+                            </span>
+                          )}
+                        </Link>
                       )}
-                    </Link>
 
-                    {isManagement && (
+                    {isManagement && BRAND_CONFIG.features.enableAdminPanel && (
                       <>
                         <Link
                           to="/manage"
@@ -197,16 +204,18 @@ export const Navbar: React.FC = () => {
                           className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-white/10 transition-colors"
                         >
                           <SlidersHorizontal className="w-4 h-4 text-emerald-400" />
-                          <span>Manage Inventory</span>
+                          <span>Manage Data</span>
                         </Link>
-                        <Link
-                          to="/records"
-                          onClick={() => setUserDropdownOpen(false)}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-white/10 transition-colors"
-                        >
-                          <Users className="w-4 h-4 text-sky-300" />
-                          <span>Client Records</span>
-                        </Link>
+                        {BRAND_CONFIG.features.enableEnquiriesDashboard && (
+                          <Link
+                            to="/records"
+                            onClick={() => setUserDropdownOpen(false)}
+                            className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-white/10 transition-colors"
+                          >
+                            <Users className="w-4 h-4 text-sky-300" />
+                            <span>Client Records</span>
+                          </Link>
+                        )}
                       </>
                     )}
 
@@ -223,23 +232,25 @@ export const Navbar: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="hidden sm:flex items-center gap-4">
-                <Link
-                  to="/login"
-                  className="text-sm font-semibold text-white px-3.5 py-1.5 rounded-full hover:bg-white/15 transition-all tracking-wide"
-                >
-                  Login
-                </Link>
+              BRAND_CONFIG.features.enableClientLogin && (
+                <div className="hidden sm:flex items-center gap-4">
+                  <Link
+                    to="/login"
+                    className="text-sm font-semibold text-white px-3.5 py-1.5 rounded-full hover:bg-white/15 transition-all tracking-wide"
+                  >
+                    Login
+                  </Link>
 
-                <PillButton
-                  variant="white"
-                  size="sm"
-                  className="!text-xs !py-1.5 !pl-4 !pr-1.5"
-                  onClick={() => navigate('/signup')}
-                >
-                  Sign Up
-                </PillButton>
-              </div>
+                  <PillButton
+                    variant="white"
+                    size="sm"
+                    className="!text-xs !py-1.5 !pl-4 !pr-1.5"
+                    onClick={() => navigate('/signup')}
+                  >
+                    Sign Up
+                  </PillButton>
+                </div>
+              )
             )}
 
             <button
@@ -315,14 +326,16 @@ export const Navbar: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <Link
-                    to="/profile"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="py-3 px-4 rounded-full glass-panel text-center text-xs font-display uppercase tracking-wider font-semibold"
-                  >
-                    Profile
-                  </Link>
+                <div className={BRAND_CONFIG.features.enableClientLogin ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-1 gap-3'}>
+                  {BRAND_CONFIG.features.enableClientLogin && (
+                    <Link
+                      to="/profile"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="py-3 px-4 rounded-full glass-panel text-center text-xs font-display uppercase tracking-wider font-semibold"
+                    >
+                      Profile
+                    </Link>
+                  )}
                   <button
                     onClick={() => {
                       setMobileMenuOpen(false);
@@ -335,27 +348,29 @@ export const Navbar: React.FC = () => {
                 </div>
               </>
             ) : (
-              <div className="flex flex-col gap-3">
-                <Link
-                  to="/login"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="w-full py-3 px-6 rounded-full glass-panel text-center font-display uppercase tracking-widest text-xs font-bold hover:bg-white/20 transition-all text-current"
-                >
-                  Login to Account
-                </Link>
+              BRAND_CONFIG.features.enableClientLogin && (
+                <div className="flex flex-col gap-3">
+                  <Link
+                    to="/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="w-full py-3 px-6 rounded-full glass-panel text-center font-display uppercase tracking-widest text-xs font-bold hover:bg-white/20 transition-all text-current"
+                  >
+                    Login to Account
+                  </Link>
 
-                <PillButton
-                  variant="white"
-                  size="lg"
-                  className="w-full justify-between"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    navigate('/signup');
-                  }}
-                >
-                  Create Account
-                </PillButton>
-              </div>
+                  <PillButton
+                    variant="white"
+                    size="lg"
+                    className="w-full justify-between"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      navigate('/signup');
+                    }}
+                  >
+                    Create Account
+                  </PillButton>
+                </div>
+              )
             )}
           </div>
         </div>

@@ -12,6 +12,36 @@ function escapeHtmlAttr(value: string): string {
     .replace(/>/g, '&gt;');
 }
 
+function buildBrandJsonLd(): string {
+  const siteUrl = BRAND_CONFIG.identity.siteUrl.replace(/\/+$/, '');
+  const toAbs = (p: string) =>
+    /^https?:\/\//i.test(p) ? p : `${siteUrl}${p.startsWith('/') ? p : `/${p}`}`;
+
+  const data = {
+    '@context': 'https://schema.org',
+    '@type': ['RealEstateAgent', 'Organization'],
+    name: BRAND_CONFIG.identity.brandName,
+    description: BRAND_CONFIG.identity.metaDescription,
+    url: siteUrl,
+    logo: toAbs(BRAND_CONFIG.images.logo),
+    image: toAbs(BRAND_CONFIG.images.hero),
+    telephone: BRAND_CONFIG.contact.phone.whatsapp,
+    email: BRAND_CONFIG.contact.email.general,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: BRAND_CONFIG.contact.offices[0]?.address || '',
+      addressLocality: BRAND_CONFIG.contact.offices[0]?.city || BRAND_CONFIG.locale.defaultCity,
+      addressCountry: BRAND_CONFIG.locale.country,
+    },
+    areaServed: [...BRAND_CONFIG.locale.mainCities].map((city) => ({
+      '@type': 'City',
+      name: city,
+    })),
+  };
+
+  return JSON.stringify(data).replace(/</g, '\\u003c');
+}
+
 function brandHtmlPlugin(): Plugin {
   return {
     name: 'brand-config-html',
@@ -23,6 +53,7 @@ function brandHtmlPlugin(): Plugin {
         __BRAND_FAVICON__: escapeHtmlAttr(BRAND_CONFIG.images.favicon),
         __BRAND_HERO_IMAGE__: escapeHtmlAttr(BRAND_CONFIG.images.hero),
         __BRAND_GOOGLE_FONTS_URL__: escapeHtmlAttr(BRAND_CONFIG.fonts.googleFontsUrl),
+        __BRAND_JSONLD__: buildBrandJsonLd(),
       };
 
       let result = html;
@@ -40,6 +71,35 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+      },
+    },
+    build: {
+      target: 'es2020',
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (
+              id.includes('/node_modules/react/') ||
+              id.includes('/node_modules/react-dom/') ||
+              id.includes('/node_modules/react-router/') ||
+              id.includes('/node_modules/react-router-dom/') ||
+              id.includes('/node_modules/scheduler/')
+            ) {
+              return 'react-vendor';
+            }
+            if (id.includes('/node_modules/firebase/') || id.includes('/node_modules/@firebase/')) {
+              return 'firebase-vendor';
+            }
+            if (id.includes('/node_modules/motion/') || id.includes('/node_modules/framer-motion/')) {
+              return 'motion-vendor';
+            }
+            if (id.includes('/node_modules/lucide-react/')) {
+              return 'icons-vendor';
+            }
+            return undefined;
+          },
+        },
       },
     },
     server: {

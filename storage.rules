@@ -1,0 +1,23 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isManagementAdmin() {
+      return request.auth != null &&
+        request.auth.token.email_verified == true &&
+        request.auth.token.email == 'abdullah.lenovot470s@gmail.com';
+    }
+
+    match /catalog/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isManagementAdmin() &&
+        request.resource != null &&
+        request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
+      allow delete: if isManagementAdmin();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -4,6 +4,9 @@ import { SafeImage } from '../components/common/SafeImage';
 import { PillButton } from '../components/common/PillButton';
 import { BRAND_CONFIG } from '../config/brand.config';
 import { Check, ShieldCheck, Layers, FileCheck, Landmark } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
+import { URGLISH_COPY } from '../data/urglishTranslations';
+import { buildRealEstateAgentJsonLd, usePageSeo } from '../lib/seo';
 
 interface ServicesPageProps {
   onOpenConsultation: (serviceTitle?: string) => void;
@@ -11,14 +14,20 @@ interface ServicesPageProps {
 
 export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }) => {
   const [activeTab, setActiveTab] = useState<string>(SERVICES_OFFERED[0].id);
+  const { t, getServiceOfferedCopy } = useLanguage();
 
   const selectedService = SERVICES_OFFERED.find((s) => s.id === activeTab) || SERVICES_OFFERED[0];
+  const localizedService = getServiceOfferedCopy(selectedService.id, selectedService);
   const shortBrand = BRAND_CONFIG.identity.brandShortName;
   const primaryCities = BRAND_CONFIG.locale.mainCities.slice(0, 3).join(', ');
 
-  React.useEffect(() => {
-    document.title = `Services & Advisory | ${BRAND_CONFIG.identity.brandName}`;
-  }, []);
+  usePageSeo({
+    title: `Services & Advisory | ${BRAND_CONFIG.identity.brandName}`,
+    description: `Residential acquisition, overseas property management, corporate leasing, and FBR/title investment advisory by ${BRAND_CONFIG.identity.brandName} in ${primaryCities}.`,
+    path: '/#/services',
+    image: BRAND_CONFIG.images.serviceVilla,
+    structuredData: buildRealEstateAgentJsonLd(),
+  });
 
   return (
     <div className="min-h-screen pt-24 pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-6">
@@ -41,7 +50,10 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
             STRATEGIC PROPERTY & ARCHITECTURAL ADVISORY.
           </h1>
           <p className="font-body text-sm sm:text-base text-brand/80 leading-relaxed font-light">
-            We operate at the intersection of modern architecture and family property preservation, providing {BRAND_CONFIG.locale.nationalityAdjective} buyers and overseas families with absolute transparency, verified documentation, and private advisory access.
+            {t(
+              `We operate at the intersection of modern architecture and family property preservation, providing ${BRAND_CONFIG.locale.nationalityAdjective} buyers and overseas families with absolute transparency, verified documentation, and private advisory access.`,
+              URGLISH_COPY.servicesPage.headerBody
+            )}
           </p>
         </div>
       </section>
@@ -75,7 +87,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
               {selectedService.title}
             </h2>
             <p className="font-body text-xs sm:text-sm text-accent-contrast/80 leading-relaxed font-light">
-              {selectedService.description}
+              {localizedService.description}
             </p>
 
             {/* Scope Details */}
@@ -84,7 +96,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
                 Core Engagement Scope:
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {selectedService.expandedDetails.map((item, idx) => (
+                {localizedService.expandedDetails.map((item, idx) => (
                   <div key={idx} className="flex items-start gap-2.5 text-xs text-accent-contrast/80">
                     <Check className="w-4 h-4 text-emerald-300 shrink-0 mt-0.5" />
                     <span>{item}</span>
@@ -94,14 +106,14 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
             </div>
 
             {/* Deliverables List */}
-            {selectedService.deliverables && (
+            {localizedService.deliverables && (
               <div className="p-5 rounded-2xl glass-panel border border-white/20 mt-4 text-white">
                 <div className="flex items-center gap-2 text-xs font-display uppercase tracking-widest text-amber-200 mb-2">
                   <FileCheck className="w-4 h-4 text-amber-300" />
                   <span>Key Practice Deliverables</span>
                 </div>
                 <ul className="space-y-2 text-xs text-white/90">
-                  {selectedService.deliverables.map((del, dIdx) => (
+                  {localizedService.deliverables.map((del, dIdx) => (
                     <li key={dIdx} className="flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                       <span>{del}</span>
@@ -155,7 +167,10 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
             FAMILY OFFICES & OVERSEAS DESK
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 font-body mt-1 max-w-xl">
-            Tailored property solutions designed for family groups, corporate investors, and overseas clients.
+            {t(
+              'Tailored property solutions designed for family groups, corporate investors, and overseas clients.',
+              URGLISH_COPY.servicesPage.specialisedSubtitle
+            )}
           </p>
         </div>
 
@@ -168,7 +183,10 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
               Family Property Management
             </h3>
             <p className="text-xs text-slate-600 font-body leading-relaxed">
-              We manage property portfolios for business families, handling society transfers, verified tenant placement, and annual property valuation reviews.
+              {t(
+                'We manage property portfolios for business families, handling society transfers, verified tenant placement, and annual property valuation reviews.',
+                URGLISH_COPY.servicesPage.familyOfficeCards[0].description
+              )}
             </p>
           </div>
 
@@ -180,7 +198,10 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
               Architect & Builder Coordination
             </h3>
             <p className="text-xs text-slate-600 font-body leading-relaxed">
-              For clients constructing custom houses, we connect you with licensed architects and trusted construction contractors across {primaryCities}.
+              {t(
+                `For clients constructing custom houses, we connect you with licensed architects and trusted construction contractors across ${primaryCities}.`,
+                URGLISH_COPY.servicesPage.familyOfficeCards[1].description
+              )}
             </p>
           </div>
 
@@ -192,7 +213,10 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
               Discreet Private Sales
             </h3>
             <p className="text-xs text-slate-600 font-body leading-relaxed">
-              Sell premium residences without public signage or unverified walkthroughs. Sales are arranged discreetly between verified principals.
+              {t(
+                'Sell premium residences without public signage or unverified walkthroughs. Sales are arranged discreetly between verified principals.',
+                URGLISH_COPY.servicesPage.familyOfficeCards[2].description
+              )}
             </p>
           </div>
         </div>

@@ -5,6 +5,12 @@ import { SafeImage } from '../components/common/SafeImage';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { submitInquiry } from '../lib/inquiriesApi';
+import {
+  buildSpamCheckPayload,
+  createSpamChallenge,
+  validateSpamCheckAndContent,
+} from '../lib/spamProtection';
+import { SpamChallengeField } from '../components/common/SpamChallengeField';
 import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../services/enquiryWebhook';
 import {
   Heart,
@@ -16,7 +22,6 @@ import {
   ShieldCheck,
   CheckCircle2,
   ArrowLeft,
-  Calculator,
   Send,
   Building2,
   Share2,
@@ -24,6 +29,13 @@ import {
   MessageCircle,
 } from 'lucide-react';
 import { BRAND_CONFIG } from '../config/brand.config';
+import { handleDemoContactClick } from '../config/siteConfig';
+import { buildPropertyListingJsonLd, usePageMeta } from '../lib/seo';
+import { trackEvent } from '../lib/analytics';
+import { LazyLocationMapEmbed } from '../components/common/LazyLocationMapEmbed';
+import { InstallmentCalculator } from '../components/property/InstallmentCalculator';
+import { useLanguage } from '../context/LanguageContext';
+import { URGLISH_COPY } from '../data/urglishTranslations';
 
 export const BuyDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -31,6 +43,7 @@ export const BuyDetailPage: React.FC = () => {
   const { isPropertySaved, toggleSaveProperty } = useAuth();
   const { buyProperties } = useCatalog();
   const { showToast } = useToast();
+  const { t, isUrglish, getBuyDescription } = useLanguage();
 
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
 
@@ -43,11 +56,8 @@ export const BuyDetailPage: React.FC = () => {
   const [tourBooked, setTourBooked] = useState(false);
   const [tourSubmitting, setTourSubmitting] = useState(false);
   const [website, setWebsite] = useState('');
-
-  // Home Financing / Installment Calculator state in PKR
-  const [downPaymentPercent, setDownPaymentPercent] = useState(30);
-  const [financingRate, setFinancingRate] = useState(14.5);
-  const [loanTermYears, setLoanTermYears] = useState(15);
+  const [spamChallenge, setSpamChallenge] = useState(() => createSpamChallenge());
+  const [challengeAnswer, setChallengeAnswer] = useState('');
 
   const property = useMemo(() => {
     return buyProperties.find((p) => p.id === id) || null;
@@ -55,12 +65,46 @@ export const BuyDetailPage: React.FC = () => {
 
   useEffect(() => {
     setActivePhotoIdx(0);
+    setSpamChallenge(createSpamChallenge());
+    setChallengeAnswer('');
+    setTourBooked(false);
     if (property) {
-      document.title = `${property.title} | Properties for Sale | ${BRAND_CONFIG.identity.brandShortName}`;
-    } else {
-      document.title = `Property For Sale | ${BRAND_CONFIG.identity.brandName}`;
+      trackEvent('listing_view', {
+        category: 'buy',
+        id: property.id,
+        title: property.title,
+        city: property.city,
+      });
     }
   }, [property]);
+
+  usePageMeta({
+    title: property
+      ? `${property.title} · ${property.price} | ${BRAND_CONFIG.identity.brandShortName}`
+      : `Property For Sale | ${BRAND_CONFIG.identity.brandName}`,
+    description: property
+      ? `${property.title} in ${property.location} (${property.area}) for ${property.price}. ${property.description}`
+      : `Explore verified properties for sale in ${BRAND_CONFIG.locale.country} with ${BRAND_CONFIG.identity.brandName}.`,
+    path: property ? `/#/buy/${property.id}` : '/#/buy',
+    image: property?.image,
+    type: property ? 'product' : 'website',
+    noindex: !property,
+    structuredData: property
+      ? buildPropertyListingJsonLd({
+          name: property.title,
+          description: property.description,
+          path: `/#/buy/${property.id}`,
+          images: [property.image, ...(property.gallery || [])],
+          priceNumeric: property.numericPrice,
+          availability: property.status === 'Sold' ? 'SoldOut' : 'InStock',
+          city: property.city,
+          address: property.location,
+          beds: property.beds || undefined,
+          baths: property.baths || undefined,
+          floorSizeText: property.area,
+        })
+      : undefined,
+  });
 
   if (!property) {
     return (
@@ -109,6 +153,24 @@ export const BuyDetailPage: React.FC = () => {
       showToast('Please provide your name, email, and preferred date.', 'error');
       return;
     }
+
+    const spamCheck = buildSpamCheckPayload(spamChallenge, challengeAnswer, website);
+    const localSpam = validateSpamCheckAndContent({
+      name: tourName.trim(),
+      email: tourEmail.trim(),
+      phone: tourPhone.trim(),
+      office: property.city,
+      subject: `Purchase Viewing: ${property.title}`,
+      message: tourNotes.trim(),
+      propertyTitle: property.title,
+      spamCheck,
+      requireChallenge: true,
+    });
+    if (!localSpam.valid) {
+      showToast(localSpam.error || 'Please complete the verification check.', 'error');
+      return;
+    }
+
     setTourSubmitting(true);
     const res = await submitInquiry({
       name: tourName.trim(),
@@ -120,6 +182,7 @@ export const BuyDetailPage: React.FC = () => {
       source: 'Buy Property Viewing Form',
       propertyTitle: property.title,
       preferredDate: tourDate,
+      spamCheck,
     });
     setTourSubmitting(false);
 
@@ -140,29 +203,13 @@ export const BuyDetailPage: React.FC = () => {
       budget: property.price,
       message: siteVisitMessage,
       source: 'Site Visit',
-      website,
+      website: '',
     });
 
     setTourBooked(true);
+    setSpamChallenge(createSpamChallenge());
+    setChallengeAnswer('');
     showToast(`Viewing scheduled. An ${BRAND_CONFIG.identity.brandShortName} senior advisor will contact you within 2 hours.`, 'success');
-  };
-
-  // Financing calculation in PKR
-  const downPaymentAmount = (property.numericPrice * downPaymentPercent) / 100;
-  const loanPrincipal = property.numericPrice - downPaymentAmount;
-  const monthlyRate = financingRate / 100 / 12;
-  const totalMonths = loanTermYears * 12;
-  const monthlyPayment =
-    monthlyRate > 0
-      ? (loanPrincipal * monthlyRate * Math.pow(1 + monthlyRate, totalMonths)) /
-        (Math.pow(1 + monthlyRate, totalMonths) - 1)
-      : loanPrincipal / totalMonths;
-
-  const formatPKR = (amount: number) => {
-    if (amount >= 10000000) {
-      return `${BRAND_CONFIG.locale.currencyCode} ${(amount / 10000000).toFixed(2)} Crore`;
-    }
-    return `${BRAND_CONFIG.locale.currencyCode} ${(amount / 100000).toFixed(1)} Lakh`;
   };
 
   const rawImages = property.gallery && property.gallery.length > 0 ? property.gallery : [property.image];
@@ -214,6 +261,10 @@ export const BuyDetailPage: React.FC = () => {
             )}`}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => {
+              trackEvent('whatsapp_click', { location: 'buy_detail', id: property.id });
+              handleDemoContactClick(e, showToast);
+            }}
             className="h-10 px-4 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2 text-xs font-display uppercase tracking-wider font-semibold transition-colors shadow-sm"
           >
             <MessageCircle className="w-4 h-4" />
@@ -228,17 +279,19 @@ export const BuyDetailPage: React.FC = () => {
             <Share2 className="w-4 h-4" />
           </button>
 
-          <button
-            onClick={handleToggleHeart}
-            className={`w-10 h-10 rounded-full border transition-all flex items-center justify-center shadow-sm cursor-pointer ${
-              saved
-                ? 'bg-rose-50 border-rose-200 text-rose-500 fill-rose-500 scale-105'
-                : 'bg-white border-slate-200 text-slate-700 hover:text-rose-500'
-            }`}
-            title={saved ? 'Remove from shortlist' : 'Save to shortlist'}
-          >
-            <Heart className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
-          </button>
+          {BRAND_CONFIG.features.enableSavedProperties && (
+            <button
+              onClick={handleToggleHeart}
+              className={`w-10 h-10 rounded-full border transition-all flex items-center justify-center shadow-sm cursor-pointer ${
+                saved
+                  ? 'bg-rose-50 border-rose-200 text-rose-500 fill-rose-500 scale-105'
+                  : 'bg-white border-slate-200 text-slate-700 hover:text-rose-500'
+              }`}
+              title={saved ? 'Remove from shortlist' : 'Save to shortlist'}
+            >
+              <Heart className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -248,7 +301,7 @@ export const BuyDetailPage: React.FC = () => {
           <SafeImage
             src={currentImage}
             alt={property.title}
-            priority={true}
+            sizes="100vw"
             className="w-full h-full object-cover"
           />
 
@@ -286,7 +339,7 @@ export const BuyDetailPage: React.FC = () => {
                     : 'border-transparent opacity-60 hover:opacity-100'
                 }`}
               >
-                <SafeImage src={img} alt="" className="w-full h-full object-cover" />
+                <SafeImage src={img} alt="" sizes="112px" className="w-full h-full object-cover" />
               </button>
             ))}
           </div>
@@ -372,7 +425,7 @@ export const BuyDetailPage: React.FC = () => {
                 Property Overview
               </h3>
               <p className="font-body text-xs sm:text-sm text-slate-700 leading-relaxed font-light">
-                {property.description}
+                {getBuyDescription(property.id, property.description)}
               </p>
             </div>
 
@@ -392,71 +445,21 @@ export const BuyDetailPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Location Map */}
+          {BRAND_CONFIG.features.enableMaps && (
+            <div className="bg-white rounded-[28px] sm:rounded-[36px] p-6 sm:p-8 shadow-xl border border-slate-100 space-y-4">
+              <h3 className="text-xs font-display uppercase tracking-widest text-accent font-bold">
+                Neighborhood &amp; Location Map
+              </h3>
+              <LazyLocationMapEmbed
+                query={`${property.location}, ${property.city}`}
+                title={`${property.title} Location Map`}
+              />
+            </div>
+          )}
+
           {/* Capital & Home Financing Calculator */}
-          <div className="bg-brand rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 text-brand-contrast shadow-xl space-y-6">
-            <div className="flex items-center justify-between border-b border-brand-contrast/10 pb-4">
-              <div className="flex items-center gap-2.5">
-                <Calculator className="w-5 h-5 text-amber-300" />
-                <h3 className="font-display font-bold text-lg sm:text-xl uppercase tracking-tight text-brand-contrast">
-                  HOME FINANCING & INSTALLMENT CALCULATOR
-                </h3>
-              </div>
-              <span className="text-[10px] font-display uppercase tracking-widest text-brand-contrast/60">
-                {BRAND_CONFIG.locale.nationalityAdjective} Bank / Developer Model
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              <div>
-                <label className="block text-[10px] uppercase font-display tracking-wider text-brand-contrast/70 mb-1">
-                  Down Payment ({downPaymentPercent}% Pay Order)
-                </label>
-                <div className="font-display font-bold text-lg text-emerald-300">
-                  {formatPKR(downPaymentAmount)}
-                </div>
-                <input
-                  type="range"
-                  min="20"
-                  max="60"
-                  step="5"
-                  value={downPaymentPercent}
-                  onChange={(e) => setDownPaymentPercent(Number(e.target.value))}
-                  className="w-full mt-2 accent-white cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] uppercase font-display tracking-wider text-brand-contrast/70 mb-1">
-                  Financing Rate ({financingRate}%)
-                </label>
-                <div className="font-display font-bold text-lg text-brand-contrast">
-                  {financingRate}% p.a.
-                </div>
-                <input
-                  type="range"
-                  min="10"
-                  max="22"
-                  step="0.5"
-                  value={financingRate}
-                  onChange={(e) => setFinancingRate(Number(e.target.value))}
-                  className="w-full mt-2 accent-white cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] uppercase font-display tracking-wider text-brand-contrast/70 mb-1">
-                  Estimated Monthly Installment
-                </label>
-                <div className="font-display font-bold text-xl sm:text-2xl text-amber-200">
-                  {formatPKR(monthlyPayment)}
-                  <span className="text-xs text-brand-contrast/60 font-body font-normal"> / mo</span>
-                </div>
-                <span className="text-[10px] text-brand-contrast/50 block mt-1">
-                  Excludes stamp duty, CVT & society transfer fee
-                </span>
-              </div>
-            </div>
-          </div>
+          <InstallmentCalculator defaultPrice={property.numericPrice} />
         </div>
 
         {/* Right Column: Private Viewing Booking Card */}
@@ -470,7 +473,10 @@ export const BuyDetailPage: React.FC = () => {
                 SCHEDULE PRIVATE SITE VISIT
               </h3>
               <p className="text-xs text-slate-500 font-body mt-1">
-                Site visits are escorted directly by an {BRAND_CONFIG.identity.brandShortName} partner with society security clearances.
+                {t(
+                  `Site visits are escorted directly by an ${BRAND_CONFIG.identity.brandShortName} partner with society security clearances.`,
+                  URGLISH_COPY.detailPages.buyViewingSubtext
+                )}
               </p>
             </div>
 
@@ -481,18 +487,29 @@ export const BuyDetailPage: React.FC = () => {
                   Viewing Confirmed
                 </h4>
                 <p className="text-xs text-emerald-800 font-body">
-                  {BRAND_CONFIG.locale.greeting}, {tourName}. An {BRAND_CONFIG.identity.brandShortName} partner will coordinate your private visit to the property for {tourDate}.
+                  {BRAND_CONFIG.locale.greeting}, {tourName}.{' '}
+                  {isUrglish ? (
+                    <>
+                      {BRAND_CONFIG.identity.brandShortName} partner {tourDate} ke liye {URGLISH_COPY.detailPages.buyConfirmationSuffix}
+                    </>
+                  ) : (
+                    <>
+                      An {BRAND_CONFIG.identity.brandShortName} partner will coordinate your private visit to the property for {tourDate}.
+                    </>
+                  )}
                 </p>
               </div>
             ) : (
               <form onSubmit={handleTourSubmit} className="space-y-3.5">
                 <input
                   type="text"
-                  name="website"
+                  name="contact_hp_ref"
                   value={website}
                   onChange={(e) => setWebsite(e.target.value)}
                   tabIndex={-1}
-                  autoComplete="off"
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-form-type="other"
                   aria-hidden="true"
                   className="absolute -left-[9999px] w-px h-px overflow-hidden opacity-0 pointer-events-none"
                 />
@@ -563,7 +580,18 @@ export const BuyDetailPage: React.FC = () => {
                   />
                 </div>
 
-                <div className="pt-2">
+                <SpamChallengeField
+                  challenge={spamChallenge}
+                  answer={challengeAnswer}
+                  onAnswerChange={setChallengeAnswer}
+                  onRefresh={() => {
+                    setSpamChallenge(createSpamChallenge());
+                    setChallengeAnswer('');
+                  }}
+                  variant="light"
+                />
+
+                <div className="pt-2 space-y-2">
                   <button
                     type="submit"
                     disabled={tourSubmitting}
@@ -578,13 +606,29 @@ export const BuyDetailPage: React.FC = () => {
                     </span>
                     <Send className="w-3.5 h-3.5" />
                   </button>
+                  <p className="text-[11px] text-slate-500 text-center font-body">
+                    By submitting, you agree to our{' '}
+                    <Link to="/privacy" className="underline underline-offset-2 hover:text-brand">
+                      Privacy Policy
+                    </Link>{' '}
+                    &amp;{' '}
+                    <Link to="/terms" className="underline underline-offset-2 hover:text-brand">
+                      Terms
+                    </Link>
+                    .
+                  </p>
                 </div>
               </form>
             )}
 
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-2.5 text-[11px] text-slate-600 font-body">
               <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-              <span>Full registry, fard, NDC, and society transfer verification conducted prior to viewing.</span>
+              <span>
+                {t(
+                  'Full registry, fard, NDC, and society transfer verification conducted prior to viewing.',
+                  URGLISH_COPY.detailPages.buyVerificationNote
+                )}
+              </span>
             </div>
           </div>
         </div>

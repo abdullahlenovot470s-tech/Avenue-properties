@@ -19,9 +19,15 @@ import type {
   ProjectStatus,
   BuyStatus,
   RentStatus,
+  FaqItem,
+  ClientReview,
 } from './src/types/index.ts';
 import { BRAND_CONFIG } from './src/config/brand.config.ts';
 import { resolveBrandImagePath } from './src/data/legacyImageMap.ts';
+import {
+  normalizeInquiryFingerprint,
+  validateSpamCheckAndContent,
+} from './src/lib/spamProtection.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
 const MANAGEMENT_EMAIL = (process.env.MANAGEMENT_EMAIL || '').trim().toLowerCase();
@@ -262,9 +268,34 @@ interface CatalogStore {
   listings: PropertyListing[];
   buy: BuyProperty[];
   rent: RentalListing[];
+  faqs: FaqItem[];
+  reviews: ClientReview[];
 }
 
 const VALID_CITIES: CityCategory[] = [...BRAND_CONFIG.locale.mainCities];
+const DEFAULT_FAQ_CATEGORIES = ['Title & Legal', 'Overseas Buyers', 'Pricing & Taxes'];
+
+function getDefaultFaqs(): FaqItem[] {
+  return BRAND_CONFIG.copy.faqs.map((faq, idx) => ({
+    id: `faq-${idx + 1}`,
+    question: faq.question,
+    answer: faq.answer,
+    category: DEFAULT_FAQ_CATEGORIES[idx] || 'General Advisory',
+  }));
+}
+
+function getDefaultReviews(): ClientReview[] {
+  return BRAND_CONFIG.copy.testimonials.map((review) => ({
+    id: review.id,
+    quote: review.quote,
+    author: review.author,
+    role: review.role,
+    location: review.location,
+    propertyContext: review.propertyContext,
+    rating: review.rating,
+    date: review.date,
+  }));
+}
 
 function normalizeCity(city: string): CityCategory {
   return VALID_CITIES.includes(city) ? city : BRAND_CONFIG.locale.defaultCity;
@@ -276,6 +307,8 @@ function getDefaultCatalog(): CatalogStore {
     listings: JSON.parse(JSON.stringify(PROPERTY_LISTINGS)),
     buy: JSON.parse(JSON.stringify(BUY_PROPERTIES)),
     rent: JSON.parse(JSON.stringify(RENTAL_LISTINGS)),
+    faqs: getDefaultFaqs(),
+    reviews: getDefaultReviews(),
   };
 }
 
@@ -323,6 +356,8 @@ function normalizeCatalogImages(store: CatalogStore): CatalogStore {
       image: normalizeStockImageUrl(r.image),
       gallery: Array.isArray(r.gallery) ? r.gallery.map(normalizeStockImageUrl) : r.gallery,
     })),
+    faqs: Array.isArray(store.faqs) ? store.faqs : getDefaultFaqs(),
+    reviews: Array.isArray(store.reviews) ? store.reviews : getDefaultReviews(),
   };
 }
 
@@ -340,11 +375,40 @@ function emailDocId(email: string): string {
   return crypto.createHash('sha256').update(email.trim().toLowerCase()).digest('hex');
 }
 
-// Ephemeral in-memory fallback store (only used when Firestore Admin credentials are unavailable)
+const SERVER_CATALOG_CACHE_TTL_MS = 30 * 60 * 1000;
+const SERVER_USERS_CACHE_TTL_MS = 60 * 1000;
+const SERVER_USER_BY_EMAIL_TTL_MS = 30 * 1000;
+const SERVER_INQUIRIES_CACHE_TTL_MS = 60 * 1000;
+const MAX_CATALOG_DOCS_PER_SECTION = 250;
+const MAX_SNAPSHOT_DOC_BYTES = 920 * 1024;
+const MAX_ADMIN_LIST_DOCS = 300;
+
 const memoryUsersByEmail = new Map<string, StoredUser>();
 let memoryInquiries: ContactInquiryRecord[] = [];
 let memoryCatalog: CatalogStore = normalizeCatalogImages(getDefaultCatalog());
 let catalogSeedPromise: Promise<void> | null = null;
+let catalogSeedConfirmed = false;
+let faqsSeedConfirmed = false;
+let reviewsSeedConfirmed = false;
+
+let serverCatalogCache: { data: CatalogStore; fetchedAt: number } | null = null;
+let serverCatalogFetchPromise: Promise<CatalogStore> | null = null;
+let serverUsersListCache: { data: StoredUser[]; fetchedAt: number } | null = null;
+const serverUserByEmailCache = new Map<string, { data: StoredUser | null; fetchedAt: number }>();
+let serverInquiriesCache: { data: ContactInquiryRecord[]; fetchedAt: number } | null = null;
+
+function invalidateUserCaches(email?: string): void {
+  serverUsersListCache = null;
+  if (email) {
+    serverUserByEmailCache.delete(email.trim().toLowerCase());
+  } else {
+    serverUserByEmailCache.clear();
+  }
+}
+
+function invalidateInquiriesCache(): void {
+  serverInquiriesCache = null;
+}
 
 async function seedCatalogSection(
   db: Firestore,
@@ -365,20 +429,38 @@ async function seedCatalogSection(
 
 async function ensureCatalogSeeded(): Promise<void> {
   if (!firestoreDb) return;
+  if (catalogSeedConfirmed) return;
   if (catalogSeedPromise) return catalogSeedPromise;
 
   catalogSeedPromise = (async () => {
     const db = firestoreDb!;
     const metaRef = db.collection('catalog_meta').doc('state');
     const metaSnap = await metaRef.get();
-    if (metaSnap.exists) return;
+    if (metaSnap.exists) {
+      const data = metaSnap.data() as Record<string, unknown>;
+      catalogSeedConfirmed = true;
+      if (data.faqsSeeded === true) faqsSeedConfirmed = true;
+      if (data.reviewsSeeded === true) reviewsSeedConfirmed = true;
+      return;
+    }
 
     const defaults = normalizeCatalogImages(getDefaultCatalog());
     await seedCatalogSection(db, 'catalog_projects', defaults.projects);
     await seedCatalogSection(db, 'catalog_listings', defaults.listings);
     await seedCatalogSection(db, 'catalog_buy', defaults.buy);
     await seedCatalogSection(db, 'catalog_rent', defaults.rent);
-    await metaRef.set({ seeded: true, seededAt: new Date().toISOString() });
+    await seedCatalogSection(db, 'catalog_faqs', defaults.faqs);
+    await seedCatalogSection(db, 'catalog_reviews', defaults.reviews);
+    await metaRef.set({
+      seeded: true,
+      seededAt: new Date().toISOString(),
+      faqsSeeded: true,
+      reviewsSeeded: true,
+    });
+    await writeServerPublicSnapshot(db, defaults);
+    catalogSeedConfirmed = true;
+    faqsSeedConfirmed = true;
+    reviewsSeedConfirmed = true;
   })().catch((err) => {
     catalogSeedPromise = null;
     throw err;
@@ -387,11 +469,71 @@ async function ensureCatalogSeeded(): Promise<void> {
   return catalogSeedPromise;
 }
 
+async function ensureFaqsSeeded(): Promise<void> {
+  if (!firestoreDb) return;
+  await ensureCatalogSeeded();
+  if (faqsSeedConfirmed) return;
+
+  const db = firestoreDb;
+  const metaRef = db.collection('catalog_meta').doc('state');
+  const metaSnap = await metaRef.get();
+  const metaData = (metaSnap.exists ? metaSnap.data() : {}) as Record<string, unknown>;
+  if (metaData.faqsSeeded === true) {
+    faqsSeedConfirmed = true;
+    return;
+  }
+  const existing = await readOrderedCollection<FaqItem>(db, 'catalog_faqs');
+  if (existing.length === 0) {
+    await seedCatalogSection(db, 'catalog_faqs', getDefaultFaqs());
+  }
+  await metaRef.set(
+    {
+      seeded: Boolean(metaData.seeded ?? true),
+      seededAt: String(metaData.seededAt || new Date().toISOString()),
+      faqsSeeded: true,
+    },
+    { merge: true }
+  );
+  faqsSeedConfirmed = true;
+}
+
+async function ensureReviewsSeeded(): Promise<void> {
+  if (!firestoreDb) return;
+  await ensureCatalogSeeded();
+  if (reviewsSeedConfirmed) return;
+
+  const db = firestoreDb;
+  const metaRef = db.collection('catalog_meta').doc('state');
+  const metaSnap = await metaRef.get();
+  const metaData = (metaSnap.exists ? metaSnap.data() : {}) as Record<string, unknown>;
+  if (metaData.reviewsSeeded === true) {
+    reviewsSeedConfirmed = true;
+    return;
+  }
+  const existing = await readOrderedCollection<ClientReview>(db, 'catalog_reviews');
+  if (existing.length === 0) {
+    await seedCatalogSection(db, 'catalog_reviews', getDefaultReviews());
+  }
+  await metaRef.set(
+    {
+      seeded: Boolean(metaData.seeded ?? true),
+      seededAt: String(metaData.seededAt || new Date().toISOString()),
+      reviewsSeeded: true,
+    },
+    { merge: true }
+  );
+  reviewsSeedConfirmed = true;
+}
+
 async function readOrderedCollection<T extends { id: string }>(
   db: Firestore,
   collectionName: string
 ): Promise<T[]> {
-  const snap = await db.collection(collectionName).orderBy('_sortOrder', 'desc').get();
+  const snap = await db
+    .collection(collectionName)
+    .orderBy('_sortOrder', 'desc')
+    .limit(MAX_CATALOG_DOCS_PER_SECTION)
+    .get();
   return snap.docs.map((docSnap) => {
     const data = docSnap.data() as Record<string, unknown>;
     const { _sortOrder: _ignored, ...rest } = data;
@@ -406,9 +548,14 @@ async function getUserByEmail(email: string): Promise<StoredUser | null> {
   if (!firestoreDb) {
     return memoryUsersByEmail.get(clean) || null;
   }
+  const cached = serverUserByEmailCache.get(clean);
+  if (cached && Date.now() - cached.fetchedAt < SERVER_USER_BY_EMAIL_TTL_MS) {
+    return cached.data;
+  }
   const snap = await firestoreDb.collection('auth_users').doc(emailDocId(clean)).get();
-  if (!snap.exists) return null;
-  return snap.data() as StoredUser;
+  const resolved = snap.exists ? (snap.data() as StoredUser) : null;
+  serverUserByEmailCache.set(clean, { data: resolved, fetchedAt: Date.now() });
+  return resolved;
 }
 
 async function saveUser(user: StoredUser): Promise<void> {
@@ -421,14 +568,21 @@ async function saveUser(user: StoredUser): Promise<void> {
     .collection('auth_users')
     .doc(emailDocId(normalized.email))
     .set(stripUndefined(normalized as unknown as Record<string, unknown>));
+  invalidateUserCaches(normalized.email);
+  serverUserByEmailCache.set(normalized.email, { data: normalized, fetchedAt: Date.now() });
 }
 
 async function listUsers(): Promise<StoredUser[]> {
   if (!firestoreDb) {
     return Array.from(memoryUsersByEmail.values());
   }
-  const snap = await firestoreDb.collection('auth_users').get();
-  return snap.docs.map((d) => d.data() as StoredUser);
+  if (serverUsersListCache && Date.now() - serverUsersListCache.fetchedAt < SERVER_USERS_CACHE_TTL_MS) {
+    return serverUsersListCache.data;
+  }
+  const snap = await firestoreDb.collection('auth_users').limit(MAX_ADMIN_LIST_DOCS).get();
+  const data = snap.docs.map((d) => d.data() as StoredUser);
+  serverUsersListCache = { data, fetchedAt: Date.now() };
+  return data;
 }
 
 async function deleteUserById(id: string): Promise<boolean> {
@@ -443,7 +597,9 @@ async function deleteUserById(id: string): Promise<boolean> {
   }
   const snap = await firestoreDb.collection('auth_users').where('id', '==', id).limit(1).get();
   if (snap.empty) return false;
+  const deletedUser = snap.docs[0].data() as StoredUser;
   await snap.docs[0].ref.delete();
+  invalidateUserCaches(deletedUser?.email);
   return true;
 }
 
@@ -453,8 +609,17 @@ async function listInquiries(): Promise<ContactInquiryRecord[]> {
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
   }
-  const snap = await firestoreDb.collection('inquiries').orderBy('createdAt', 'desc').get();
-  return snap.docs.map((d) => d.data() as ContactInquiryRecord);
+  if (serverInquiriesCache && Date.now() - serverInquiriesCache.fetchedAt < SERVER_INQUIRIES_CACHE_TTL_MS) {
+    return serverInquiriesCache.data;
+  }
+  const snap = await firestoreDb
+    .collection('inquiries')
+    .orderBy('createdAt', 'desc')
+    .limit(MAX_ADMIN_LIST_DOCS)
+    .get();
+  const data = snap.docs.map((d) => d.data() as ContactInquiryRecord);
+  serverInquiriesCache = { data, fetchedAt: Date.now() };
+  return data;
 }
 
 async function createInquiry(record: ContactInquiryRecord): Promise<void> {
@@ -466,6 +631,15 @@ async function createInquiry(record: ContactInquiryRecord): Promise<void> {
     .collection('inquiries')
     .doc(record.id)
     .set(stripUndefined(record as unknown as Record<string, unknown>));
+  if (serverInquiriesCache) {
+    serverInquiriesCache = {
+      data: [record, ...serverInquiriesCache.data.filter((item) => item.id !== record.id)].slice(
+        0,
+        MAX_ADMIN_LIST_DOCS
+      ),
+      fetchedAt: Date.now(),
+    };
+  }
 }
 
 async function updateInquiryStatus(
@@ -483,6 +657,14 @@ async function updateInquiryStatus(
   if (!snap.exists) return null;
   await ref.update({ status });
   const updated = { ...(snap.data() as ContactInquiryRecord), status };
+  if (serverInquiriesCache) {
+    serverInquiriesCache = {
+      data: serverInquiriesCache.data.map((item) => (item.id === id ? updated : item)),
+      fetchedAt: Date.now(),
+    };
+  } else {
+    invalidateInquiriesCache();
+  }
   return updated;
 }
 
@@ -496,25 +678,136 @@ async function deleteInquiry(id: string): Promise<boolean> {
   const snap = await ref.get();
   if (!snap.exists) return false;
   await ref.delete();
+  if (serverInquiriesCache) {
+    serverInquiriesCache = {
+      data: serverInquiriesCache.data.filter((item) => item.id !== id),
+      fetchedAt: Date.now(),
+    };
+  } else {
+    invalidateInquiriesCache();
+  }
   return true;
 }
 
-async function getCatalog(): Promise<CatalogStore> {
+async function writeServerPublicSnapshot(db: Firestore, catalog: CatalogStore): Promise<void> {
+  try {
+    const clean = JSON.parse(
+      JSON.stringify({
+        id: 'public',
+        version: Date.now(),
+        updatedAt: new Date().toISOString(),
+        projects: (catalog.projects || []).slice(0, MAX_CATALOG_DOCS_PER_SECTION),
+        listings: (catalog.listings || []).slice(0, MAX_CATALOG_DOCS_PER_SECTION),
+        buy: (catalog.buy || []).slice(0, MAX_CATALOG_DOCS_PER_SECTION),
+        rent: (catalog.rent || []).slice(0, MAX_CATALOG_DOCS_PER_SECTION),
+        faqs: (catalog.faqs || []).slice(0, MAX_CATALOG_DOCS_PER_SECTION),
+        reviews: (catalog.reviews || []).slice(0, MAX_CATALOG_DOCS_PER_SECTION),
+      })
+    ) as Record<string, unknown>;
+    const bytes = Buffer.byteLength(JSON.stringify(clean), 'utf8');
+    if (bytes > MAX_SNAPSHOT_DOC_BYTES) {
+      console.warn(
+        `[Persistence] Skipping catalog_snapshot/public update (${Math.ceil(bytes / 1024)} KB > 920 KB).`
+      );
+      return;
+    }
+    await db.collection('catalog_snapshot').doc('public').set(clean);
+  } catch (err) {
+    console.warn('[Persistence] Could not write catalog_snapshot/public:', err);
+  }
+}
+
+async function getCatalog(forceRefresh = false): Promise<CatalogStore> {
   if (!firestoreDb) {
     return memoryCatalog;
   }
-  await ensureCatalogSeeded();
-  const [projects, listings, buy, rent] = await Promise.all([
-    readOrderedCollection<PortfolioProject>(firestoreDb, 'catalog_projects'),
-    readOrderedCollection<PropertyListing>(firestoreDb, 'catalog_listings'),
-    readOrderedCollection<BuyProperty>(firestoreDb, 'catalog_buy'),
-    readOrderedCollection<RentalListing>(firestoreDb, 'catalog_rent'),
-  ]);
-  return normalizeCatalogImages({ projects, listings, buy, rent });
+  if (
+    !forceRefresh &&
+    serverCatalogCache &&
+    Date.now() - serverCatalogCache.fetchedAt < SERVER_CATALOG_CACHE_TTL_MS
+  ) {
+    return serverCatalogCache.data;
+  }
+  if (!forceRefresh && serverCatalogFetchPromise) {
+    return serverCatalogFetchPromise;
+  }
+
+  const fetchTask = (async (): Promise<CatalogStore> => {
+    const snapshotSnap = await firestoreDb!.collection('catalog_snapshot').doc('public').get();
+    if (snapshotSnap.exists) {
+      const snapData = snapshotSnap.data() as Partial<CatalogStore>;
+      const normalized = normalizeCatalogImages({
+        projects: Array.isArray(snapData.projects) ? snapData.projects : [],
+        listings: Array.isArray(snapData.listings) ? snapData.listings : [],
+        buy: Array.isArray(snapData.buy) ? snapData.buy : [],
+        rent: Array.isArray(snapData.rent) ? snapData.rent : [],
+        faqs: Array.isArray(snapData.faqs) && snapData.faqs.length > 0 ? snapData.faqs : getDefaultFaqs(),
+        reviews:
+          Array.isArray(snapData.reviews) && snapData.reviews.length > 0
+            ? snapData.reviews
+            : getDefaultReviews(),
+      });
+      catalogSeedConfirmed = true;
+      faqsSeedConfirmed = true;
+      reviewsSeedConfirmed = true;
+      serverCatalogCache = { data: normalized, fetchedAt: Date.now() };
+      return normalized;
+    }
+
+    await ensureCatalogSeeded();
+    const [projects, listings, buy, rent, faqs, reviews] = await Promise.all([
+      readOrderedCollection<PortfolioProject>(firestoreDb!, 'catalog_projects'),
+      readOrderedCollection<PropertyListing>(firestoreDb!, 'catalog_listings'),
+      readOrderedCollection<BuyProperty>(firestoreDb!, 'catalog_buy'),
+      readOrderedCollection<RentalListing>(firestoreDb!, 'catalog_rent'),
+      readOrderedCollection<FaqItem>(firestoreDb!, 'catalog_faqs'),
+      readOrderedCollection<ClientReview>(firestoreDb!, 'catalog_reviews'),
+    ]);
+    const faqsSeeded = faqsSeedConfirmed || faqs.length > 0;
+    const reviewsSeeded = reviewsSeedConfirmed || reviews.length > 0;
+    const normalized = normalizeCatalogImages({
+      projects,
+      listings,
+      buy,
+      rent,
+      faqs: faqsSeeded ? faqs : getDefaultFaqs(),
+      reviews: reviewsSeeded ? reviews : getDefaultReviews(),
+    });
+    serverCatalogCache = { data: normalized, fetchedAt: Date.now() };
+    await writeServerPublicSnapshot(firestoreDb!, normalized);
+    return normalized;
+  })().finally(() => {
+    if (serverCatalogFetchPromise === fetchTask) {
+      serverCatalogFetchPromise = null;
+    }
+  });
+
+  serverCatalogFetchPromise = fetchTask;
+  return fetchTask;
+}
+
+async function updateServerCatalogCache(
+  updater: (prev: CatalogStore) => CatalogStore
+): Promise<CatalogStore> {
+  if (!serverCatalogCache) {
+    const fresh = await getCatalog(true);
+    const updated = normalizeCatalogImages(updater(fresh));
+    serverCatalogCache = { data: updated, fetchedAt: Date.now() };
+    if (firestoreDb) {
+      await writeServerPublicSnapshot(firestoreDb, updated);
+    }
+    return updated;
+  }
+  const next = normalizeCatalogImages(updater(serverCatalogCache.data));
+  serverCatalogCache = { data: next, fetchedAt: Date.now() };
+  if (firestoreDb) {
+    await writeServerPublicSnapshot(firestoreDb, next);
+  }
+  return next;
 }
 
 async function clearCollection(db: Firestore, collectionName: string): Promise<void> {
-  const snap = await db.collection(collectionName).get();
+  const snap = await db.collection(collectionName).limit(MAX_CATALOG_DOCS_PER_SECTION).get();
   if (snap.empty) return;
   const batch = db.batch();
   snap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
@@ -534,7 +827,10 @@ async function addCatalogProject(item: PortfolioProject): Promise<CatalogStore> 
       ...stripUndefined(item as unknown as Record<string, unknown>),
       _sortOrder: Date.now(),
     });
-  return getCatalog();
+  return updateServerCatalogCache((prev) => ({
+    ...prev,
+    projects: [item, ...prev.projects.filter((p) => p.id !== item.id)],
+  }));
 }
 
 async function removeCatalogProject(id: string): Promise<{ removed: boolean; catalog: CatalogStore }> {
@@ -559,7 +855,12 @@ async function removeCatalogProject(id: string): Promise<{ removed: boolean; cat
   if (projSnap.exists) ops.push(projRef.delete());
   if (listSnap.exists) ops.push(listRef.delete());
   await Promise.all(ops);
-  return { removed: true, catalog: await getCatalog() };
+  const catalog = await updateServerCatalogCache((prev) => ({
+    ...prev,
+    projects: prev.projects.filter((p) => p.id !== id),
+    listings: prev.listings.filter((l) => l.id !== id),
+  }));
+  return { removed: true, catalog };
 }
 
 async function addCatalogBuy(item: BuyProperty): Promise<CatalogStore> {
@@ -575,7 +876,10 @@ async function addCatalogBuy(item: BuyProperty): Promise<CatalogStore> {
       ...stripUndefined(item as unknown as Record<string, unknown>),
       _sortOrder: Date.now(),
     });
-  return getCatalog();
+  return updateServerCatalogCache((prev) => ({
+    ...prev,
+    buy: [item, ...prev.buy.filter((b) => b.id !== item.id)],
+  }));
 }
 
 async function removeCatalogBuy(id: string): Promise<{ removed: boolean; catalog: CatalogStore }> {
@@ -594,7 +898,11 @@ async function removeCatalogBuy(id: string): Promise<{ removed: boolean; catalog
     return { removed: false, catalog: await getCatalog() };
   }
   await ref.delete();
-  return { removed: true, catalog: await getCatalog() };
+  const catalog = await updateServerCatalogCache((prev) => ({
+    ...prev,
+    buy: prev.buy.filter((b) => b.id !== id),
+  }));
+  return { removed: true, catalog };
 }
 
 async function addCatalogRent(item: RentalListing): Promise<CatalogStore> {
@@ -610,7 +918,10 @@ async function addCatalogRent(item: RentalListing): Promise<CatalogStore> {
       ...stripUndefined(item as unknown as Record<string, unknown>),
       _sortOrder: Date.now(),
     });
-  return getCatalog();
+  return updateServerCatalogCache((prev) => ({
+    ...prev,
+    rent: [item, ...prev.rent.filter((r) => r.id !== item.id)],
+  }));
 }
 
 async function removeCatalogRent(id: string): Promise<{ removed: boolean; catalog: CatalogStore }> {
@@ -629,7 +940,11 @@ async function removeCatalogRent(id: string): Promise<{ removed: boolean; catalo
     return { removed: false, catalog: await getCatalog() };
   }
   await ref.delete();
-  return { removed: true, catalog: await getCatalog() };
+  const catalog = await updateServerCatalogCache((prev) => ({
+    ...prev,
+    rent: prev.rent.filter((r) => r.id !== id),
+  }));
+  return { removed: true, catalog };
 }
 
 function mapProjectToPropertyListing(
@@ -688,7 +1003,11 @@ async function updateCatalogProject(
       ...stripUndefined(item as unknown as Record<string, unknown>),
       _sortOrder: sortOrder,
     });
-    return { updated: true, catalog: await getCatalog() };
+    const catalog = await updateServerCatalogCache((prev) => ({
+      ...prev,
+      projects: prev.projects.map((p) => (p.id === id ? item : p)),
+    }));
+    return { updated: true, catalog };
   }
   const listingRef = firestoreDb.collection('catalog_listings').doc(id);
   const listingSnap = await listingRef.get();
@@ -703,7 +1022,11 @@ async function updateCatalogProject(
     ...stripUndefined(updatedListing as unknown as Record<string, unknown>),
     _sortOrder: sortOrder,
   });
-  return { updated: true, catalog: await getCatalog() };
+  const catalog = await updateServerCatalogCache((prev) => ({
+    ...prev,
+    listings: prev.listings.map((l) => (l.id === id ? updatedListing : l)),
+  }));
+  return { updated: true, catalog };
 }
 
 async function updateCatalogBuy(
@@ -732,7 +1055,11 @@ async function updateCatalogBuy(
     ...stripUndefined(item as unknown as Record<string, unknown>),
     _sortOrder: sortOrder,
   });
-  return { updated: true, catalog: await getCatalog() };
+  const catalog = await updateServerCatalogCache((prev) => ({
+    ...prev,
+    buy: prev.buy.map((b) => (b.id === id ? item : b)),
+  }));
+  return { updated: true, catalog };
 }
 
 async function updateCatalogRent(
@@ -761,7 +1088,161 @@ async function updateCatalogRent(
     ...stripUndefined(item as unknown as Record<string, unknown>),
     _sortOrder: sortOrder,
   });
-  return { updated: true, catalog: await getCatalog() };
+  const catalog = await updateServerCatalogCache((prev) => ({
+    ...prev,
+    rent: prev.rent.map((r) => (r.id === id ? item : r)),
+  }));
+  return { updated: true, catalog };
+}
+
+async function addCatalogFaq(item: FaqItem): Promise<CatalogStore> {
+  if (!firestoreDb) {
+    memoryCatalog = { ...memoryCatalog, faqs: [item, ...memoryCatalog.faqs] };
+    return memoryCatalog;
+  }
+  await ensureFaqsSeeded();
+  await firestoreDb
+    .collection('catalog_faqs')
+    .doc(item.id)
+    .set({
+      ...stripUndefined(item as unknown as Record<string, unknown>),
+      _sortOrder: Date.now(),
+    });
+  return updateServerCatalogCache((prev) => ({
+    ...prev,
+    faqs: [item, ...prev.faqs.filter((f) => f.id !== item.id)],
+  }));
+}
+
+async function updateCatalogFaq(
+  id: string,
+  item: FaqItem
+): Promise<{ updated: boolean; catalog: CatalogStore }> {
+  if (!firestoreDb) {
+    const idx = memoryCatalog.faqs.findIndex((f) => f.id === id);
+    if (idx === -1) {
+      return { updated: false, catalog: memoryCatalog };
+    }
+    const nextFaqs = [...memoryCatalog.faqs];
+    nextFaqs[idx] = item;
+    memoryCatalog = { ...memoryCatalog, faqs: nextFaqs };
+    return { updated: true, catalog: memoryCatalog };
+  }
+  await ensureFaqsSeeded();
+  const ref = firestoreDb.collection('catalog_faqs').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    return { updated: false, catalog: await getCatalog() };
+  }
+  const existingData = snap.data() as Record<string, unknown>;
+  const sortOrder = typeof existingData._sortOrder === 'number' ? existingData._sortOrder : Date.now();
+  await ref.set({
+    ...stripUndefined(item as unknown as Record<string, unknown>),
+    _sortOrder: sortOrder,
+  });
+  const catalog = await updateServerCatalogCache((prev) => ({
+    ...prev,
+    faqs: prev.faqs.map((f) => (f.id === id ? item : f)),
+  }));
+  return { updated: true, catalog };
+}
+
+async function removeCatalogFaq(id: string): Promise<{ removed: boolean; catalog: CatalogStore }> {
+  if (!firestoreDb) {
+    const before = memoryCatalog.faqs.length;
+    memoryCatalog = {
+      ...memoryCatalog,
+      faqs: memoryCatalog.faqs.filter((item) => item.id !== id),
+    };
+    return { removed: memoryCatalog.faqs.length !== before, catalog: memoryCatalog };
+  }
+  await ensureFaqsSeeded();
+  const ref = firestoreDb.collection('catalog_faqs').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    return { removed: false, catalog: await getCatalog() };
+  }
+  await ref.delete();
+  const catalog = await updateServerCatalogCache((prev) => ({
+    ...prev,
+    faqs: prev.faqs.filter((f) => f.id !== id),
+  }));
+  return { removed: true, catalog };
+}
+
+async function addCatalogReview(item: ClientReview): Promise<CatalogStore> {
+  if (!firestoreDb) {
+    memoryCatalog = { ...memoryCatalog, reviews: [item, ...memoryCatalog.reviews] };
+    return memoryCatalog;
+  }
+  await ensureReviewsSeeded();
+  await firestoreDb
+    .collection('catalog_reviews')
+    .doc(item.id)
+    .set({
+      ...stripUndefined(item as unknown as Record<string, unknown>),
+      _sortOrder: Date.now(),
+    });
+  return updateServerCatalogCache((prev) => ({
+    ...prev,
+    reviews: [item, ...prev.reviews.filter((r) => r.id !== item.id)],
+  }));
+}
+
+async function updateCatalogReview(
+  id: string,
+  item: ClientReview
+): Promise<{ updated: boolean; catalog: CatalogStore }> {
+  if (!firestoreDb) {
+    const idx = memoryCatalog.reviews.findIndex((r) => r.id === id);
+    if (idx === -1) {
+      return { updated: false, catalog: memoryCatalog };
+    }
+    const nextReviews = [...memoryCatalog.reviews];
+    nextReviews[idx] = item;
+    memoryCatalog = { ...memoryCatalog, reviews: nextReviews };
+    return { updated: true, catalog: memoryCatalog };
+  }
+  await ensureReviewsSeeded();
+  const ref = firestoreDb.collection('catalog_reviews').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    return { updated: false, catalog: await getCatalog() };
+  }
+  const existingData = snap.data() as Record<string, unknown>;
+  const sortOrder = typeof existingData._sortOrder === 'number' ? existingData._sortOrder : Date.now();
+  await ref.set({
+    ...stripUndefined(item as unknown as Record<string, unknown>),
+    _sortOrder: sortOrder,
+  });
+  const catalog = await updateServerCatalogCache((prev) => ({
+    ...prev,
+    reviews: prev.reviews.map((r) => (r.id === id ? item : r)),
+  }));
+  return { updated: true, catalog };
+}
+
+async function removeCatalogReview(id: string): Promise<{ removed: boolean; catalog: CatalogStore }> {
+  if (!firestoreDb) {
+    const before = memoryCatalog.reviews.length;
+    memoryCatalog = {
+      ...memoryCatalog,
+      reviews: memoryCatalog.reviews.filter((item) => item.id !== id),
+    };
+    return { removed: memoryCatalog.reviews.length !== before, catalog: memoryCatalog };
+  }
+  await ensureReviewsSeeded();
+  const ref = firestoreDb.collection('catalog_reviews').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    return { removed: false, catalog: await getCatalog() };
+  }
+  await ref.delete();
+  const catalog = await updateServerCatalogCache((prev) => ({
+    ...prev,
+    reviews: prev.reviews.filter((r) => r.id !== id),
+  }));
+  return { removed: true, catalog };
 }
 
 async function resetCatalogSection(section: string): Promise<CatalogStore> {
@@ -773,6 +1254,10 @@ async function resetCatalogSection(section: string): Promise<CatalogStore> {
       memoryCatalog = { ...memoryCatalog, buy: defaults.buy };
     } else if (section === 'rent') {
       memoryCatalog = { ...memoryCatalog, rent: defaults.rent };
+    } else if (section === 'faqs') {
+      memoryCatalog = { ...memoryCatalog, faqs: defaults.faqs };
+    } else if (section === 'reviews') {
+      memoryCatalog = { ...memoryCatalog, reviews: defaults.reviews };
     } else {
       memoryCatalog = defaults;
     }
@@ -780,34 +1265,94 @@ async function resetCatalogSection(section: string): Promise<CatalogStore> {
   }
 
   const db = firestoreDb;
+  const metaRef = db.collection('catalog_meta').doc('state');
   if (section === 'projects') {
     await Promise.all([clearCollection(db, 'catalog_projects'), clearCollection(db, 'catalog_listings')]);
     await Promise.all([
       seedCatalogSection(db, 'catalog_projects', defaults.projects),
       seedCatalogSection(db, 'catalog_listings', defaults.listings),
     ]);
+    await metaRef.set({ seeded: true, seededAt: new Date().toISOString() }, { merge: true });
+    catalogSeedConfirmed = true;
+    return updateServerCatalogCache((prev) => ({
+      ...prev,
+      projects: defaults.projects,
+      listings: defaults.listings,
+    }));
   } else if (section === 'buy') {
     await clearCollection(db, 'catalog_buy');
     await seedCatalogSection(db, 'catalog_buy', defaults.buy);
+    await metaRef.set({ seeded: true, seededAt: new Date().toISOString() }, { merge: true });
+    catalogSeedConfirmed = true;
+    return updateServerCatalogCache((prev) => ({
+      ...prev,
+      buy: defaults.buy,
+    }));
   } else if (section === 'rent') {
     await clearCollection(db, 'catalog_rent');
     await seedCatalogSection(db, 'catalog_rent', defaults.rent);
-  } else {
-    await Promise.all([
-      clearCollection(db, 'catalog_projects'),
-      clearCollection(db, 'catalog_listings'),
-      clearCollection(db, 'catalog_buy'),
-      clearCollection(db, 'catalog_rent'),
-    ]);
-    await Promise.all([
-      seedCatalogSection(db, 'catalog_projects', defaults.projects),
-      seedCatalogSection(db, 'catalog_listings', defaults.listings),
-      seedCatalogSection(db, 'catalog_buy', defaults.buy),
-      seedCatalogSection(db, 'catalog_rent', defaults.rent),
-    ]);
+    await metaRef.set({ seeded: true, seededAt: new Date().toISOString() }, { merge: true });
+    catalogSeedConfirmed = true;
+    return updateServerCatalogCache((prev) => ({
+      ...prev,
+      rent: defaults.rent,
+    }));
+  } else if (section === 'faqs') {
+    await clearCollection(db, 'catalog_faqs');
+    await seedCatalogSection(db, 'catalog_faqs', defaults.faqs);
+    await metaRef.set(
+      { seeded: true, seededAt: new Date().toISOString(), faqsSeeded: true },
+      { merge: true }
+    );
+    catalogSeedConfirmed = true;
+    faqsSeedConfirmed = true;
+    return updateServerCatalogCache((prev) => ({
+      ...prev,
+      faqs: defaults.faqs,
+    }));
+  } else if (section === 'reviews') {
+    await clearCollection(db, 'catalog_reviews');
+    await seedCatalogSection(db, 'catalog_reviews', defaults.reviews);
+    await metaRef.set(
+      { seeded: true, seededAt: new Date().toISOString(), reviewsSeeded: true },
+      { merge: true }
+    );
+    catalogSeedConfirmed = true;
+    reviewsSeedConfirmed = true;
+    return updateServerCatalogCache((prev) => ({
+      ...prev,
+      reviews: defaults.reviews,
+    }));
   }
-  await db.collection('catalog_meta').doc('state').set({ seeded: true, seededAt: new Date().toISOString() });
-  return getCatalog();
+
+  await Promise.all([
+    clearCollection(db, 'catalog_projects'),
+    clearCollection(db, 'catalog_listings'),
+    clearCollection(db, 'catalog_buy'),
+    clearCollection(db, 'catalog_rent'),
+    clearCollection(db, 'catalog_faqs'),
+    clearCollection(db, 'catalog_reviews'),
+  ]);
+  await Promise.all([
+    seedCatalogSection(db, 'catalog_projects', defaults.projects),
+    seedCatalogSection(db, 'catalog_listings', defaults.listings),
+    seedCatalogSection(db, 'catalog_buy', defaults.buy),
+    seedCatalogSection(db, 'catalog_rent', defaults.rent),
+    seedCatalogSection(db, 'catalog_faqs', defaults.faqs),
+    seedCatalogSection(db, 'catalog_reviews', defaults.reviews),
+  ]);
+  await metaRef.set({
+    seeded: true,
+    seededAt: new Date().toISOString(),
+    faqsSeeded: true,
+    reviewsSeeded: true,
+  });
+  catalogSeedConfirmed = true;
+  faqsSeedConfirmed = true;
+  reviewsSeedConfirmed = true;
+  serverCatalogCache = { data: defaults, fetchedAt: Date.now() };
+  await writeServerPublicSnapshot(db, defaults);
+  return defaults;
 }
 
 // Crypto & Token Helpers
@@ -889,6 +1434,26 @@ function verifyManagementToken(token: string): boolean {
   return isManagementEmail(decoded.email) && decoded.role === 'management';
 }
 
+const PENDING_VERIFY_TTL_MS = 30 * 60 * 1000;
+
+function createPendingVerificationToken(email: string): string {
+  const now = Date.now();
+  return signHmacPayload({
+    email: email.toLowerCase(),
+    purpose: 'pending_verify',
+    iat: now,
+    exp: now + PENDING_VERIFY_TTL_MS,
+  });
+}
+
+function verifyPendingVerificationToken(token: string, expectedEmail: string): boolean {
+  const decoded = verifyHmacPayload<{ email?: string; purpose?: string; exp?: number }>(token);
+  if (!decoded || decoded.purpose !== 'pending_verify' || typeof decoded.email !== 'string') {
+    return false;
+  }
+  return decoded.email.toLowerCase() === expectedEmail.trim().toLowerCase();
+}
+
 function createUserToken(user: { id: string; email: string }): string {
   const now = Date.now();
   return signHmacPayload({
@@ -928,11 +1493,20 @@ async function requireManagement(req: Request, res: Response, next: NextFunction
   }
 
   // Fallback for multi-instance restarts or fresh sessions: verify a 3-part Firebase ID token
+  // and enforce the 8-hour management session lifetime against auth_time.
   const jwtCandidate =
     firebaseHeaderToken || (candidateToken.split('.').length === 3 ? candidateToken : '');
   if (jwtCandidate) {
     const verified = await verifyFirebaseIdToken(jwtCandidate);
-    if (verified && verified.emailVerified && isManagementEmail(verified.email)) {
+    const authAgeMs =
+      typeof verified?.authTime === 'number' ? Date.now() - verified.authTime * 1000 : Infinity;
+    if (
+      verified &&
+      verified.emailVerified &&
+      isManagementEmail(verified.email) &&
+      authAgeMs >= -300000 &&
+      authAgeMs <= MANAGEMENT_TOKEN_TTL_MS
+    ) {
       return next();
     }
   }
@@ -950,6 +1524,7 @@ interface VerifiedFirebaseIdentity {
   photoURL?: string;
   emailVerified: boolean;
   signInProvider?: string;
+  authTime?: number;
 }
 
 const GOOGLE_SECURETOKEN_CERTS_URL =
@@ -1046,6 +1621,7 @@ async function verifyFirebaseJwtWithGoogleCerts(
       photoURL: claims.picture || undefined,
       emailVerified: Boolean(claims.email_verified),
       signInProvider: claims.firebase?.sign_in_provider,
+      authTime: typeof claims.auth_time === 'number' ? claims.auth_time : claims.iat,
     };
   } catch {
     return null;
@@ -1067,6 +1643,7 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseI
         photoURL: decoded.picture || undefined,
         emailVerified: Boolean(decoded.email_verified),
         signInProvider: decoded.firebase?.sign_in_provider,
+        authTime: typeof decoded.auth_time === 'number' ? decoded.auth_time : decoded.iat,
       };
     } catch {
       return null;
@@ -1096,6 +1673,8 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseI
       iss?: string;
       sub?: string;
       exp?: number;
+      iat?: number;
+      auth_time?: number;
       firebase?: {
         sign_in_provider?: string;
       };
@@ -1141,6 +1720,7 @@ async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseI
       photoURL: fbUser.photoUrl || undefined,
       emailVerified: Boolean(fbUser.emailVerified),
       signInProvider: claims.firebase?.sign_in_provider,
+      authTime: typeof claims.auth_time === 'number' ? claims.auth_time : claims.iat,
     };
   } catch {
     return null;
@@ -1787,7 +2367,7 @@ function computeAreaCategory(area: string): BuyProperty['areaCategory'] {
 }
 
 const DEFAULT_FALLBACK_IMAGE = BRAND_CONFIG.images.fallbackVilla;
-const MAX_GALLERY_IMAGES = 4;
+const MAX_GALLERY_IMAGES = 30;
 const MAX_CATALOG_ITEM_BYTES = 800 * 1024;
 const ALLOWED_PROJECT_STATUSES: readonly ProjectStatus[] = ['Available', 'Under Offer', 'Sold'];
 const ALLOWED_BUY_STATUSES: readonly BuyStatus[] = ['Available', 'Under Offer', 'Sold'];
@@ -1795,8 +2375,9 @@ const ALLOWED_RENT_STATUSES: readonly RentStatus[] = ['Available', 'Rented'];
 
 function isValidCatalogImage(value: string): boolean {
   if (!value) return false;
-  if (value.startsWith('data:image/jpeg;base64,')) {
-    return value.length > 'data:image/jpeg;base64,'.length;
+  if (/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(value)) {
+    const idx = value.indexOf(',');
+    return idx !== -1 && value.length > idx + 1;
   }
   if (value.startsWith('/')) {
     return value.length > 1;
@@ -1810,7 +2391,7 @@ function validateGalleryAndMainImage(
   if (body.gallery !== undefined && !Array.isArray(body.gallery)) {
     return {
       ok: false,
-      error: 'Gallery must be an array of up to 4 image URLs or data:image/jpeg;base64 strings.',
+      error: `Gallery must be an array of up to ${MAX_GALLERY_IMAGES} image URLs.`,
     };
   }
 
@@ -1830,7 +2411,7 @@ function validateGalleryAndMainImage(
       if (!isValidCatalogImage(entry)) {
         return {
           ok: false,
-          error: 'Each gallery image must be a valid URL or data:image/jpeg;base64 string.',
+          error: 'Each gallery image must be a valid https:// URL, /brand/ path, or uploaded photo.',
         };
       }
     }
@@ -1841,7 +2422,7 @@ function validateGalleryAndMainImage(
   if (!isValidCatalogImage(mainImage)) {
     return {
       ok: false,
-      error: 'Main image must be a valid URL or data:image/jpeg;base64 string.',
+      error: 'Main image must be a valid https:// URL or /brand/ path.',
     };
   }
   return { ok: true, image: mainImage, gallery: [mainImage] };
@@ -2086,6 +2667,79 @@ function buildRentFromBody(
   return { ok: true, item };
 }
 
+function buildFaqFromBody(
+  id: string,
+  body: Record<string, unknown>
+): { ok: true; item: FaqItem } | { ok: false; error: string } {
+  const question = String(body.question || '').trim().slice(0, 500);
+  const answer = String(body.answer || '').trim().slice(0, 5000);
+  const category = String(body.category || '').trim().slice(0, 120);
+
+  if (!question || !answer) {
+    return {
+      ok: false,
+      error: 'Both question and answer are required.',
+    };
+  }
+
+  const item: FaqItem = {
+    id,
+    question,
+    answer,
+    ...(category ? { category } : {}),
+  };
+
+  const sizeError = checkCatalogItemSize(item);
+  if (sizeError) return { ok: false, error: sizeError };
+
+  return { ok: true, item };
+}
+
+function buildReviewFromBody(
+  id: string,
+  body: Record<string, unknown>
+): { ok: true; item: ClientReview } | { ok: false; error: string } {
+  const author = String(body.author || '').trim().slice(0, 120);
+  const quote = String(body.quote || '').trim().slice(0, 3000);
+  const role = (String(body.role || '').trim() || 'Verified Client').slice(0, 120);
+  const location = (String(body.location || '').trim() || BRAND_CONFIG.locale.defaultCity).slice(0, 120);
+  const propertyContext = (String(body.propertyContext || '').trim() || 'Private Consultation').slice(
+    0,
+    160
+  );
+  const rawRating = Number(body.rating ?? 5);
+  const rating = Number.isFinite(rawRating)
+    ? Math.min(5, Math.max(1, Math.round(rawRating)))
+    : 5;
+  const date = (
+    String(body.date || '').trim() ||
+    new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  ).slice(0, 64);
+
+  if (!author || !quote) {
+    return {
+      ok: false,
+      error: 'Reviewer name and review quote are required.',
+    };
+  }
+
+  const item: ClientReview = {
+    id,
+    quote,
+    author,
+    role,
+    location,
+    propertyContext,
+    rating,
+    date,
+  };
+
+  const sizeError = checkCatalogItemSize(item);
+  if (sizeError) return { ok: false, error: sizeError };
+
+  return { ok: true, item };
+}
+
 const loginLimiter = createRateLimiter({
   bucket: 'login',
   windowMs: 15 * 60 * 1000,
@@ -2124,14 +2778,89 @@ const resetPasswordLimiter = createRateLimiter({
 const inquiryLimiter = createRateLimiter({
   bucket: 'inquiries',
   windowMs: 15 * 60 * 1000,
-  max: 30,
-  message: 'Too many inquiries submitted. Please wait a few minutes and try again.',
+  max: 6,
+  message: 'Too many inquiries submitted from this connection. Please wait a few minutes and try again.',
 });
+
+const INQUIRY_ENTITY_WINDOW_MS = 15 * 60 * 1000;
+const MAX_INQUIRIES_PER_ENTITY = 4;
+const INQUIRY_DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
+const inquiryEntityBuckets = new Map<string, number[]>();
+const recentInquiryFingerprints = new Map<string, number>();
+
+function checkServerInquiryAntiFlood(
+  email: string,
+  phone: string,
+  fingerprint: string
+): { allowed: true } | { allowed: false; status: number; error: string } {
+  const now = Date.now();
+
+  if (recentInquiryFingerprints.size > 500) {
+    for (const [k, ts] of recentInquiryFingerprints.entries()) {
+      if (now - ts > INQUIRY_DUPLICATE_WINDOW_MS) {
+        recentInquiryFingerprints.delete(k);
+      }
+    }
+  }
+  if (inquiryEntityBuckets.size > 500) {
+    for (const [k, list] of inquiryEntityBuckets.entries()) {
+      const fresh = list.filter((ts) => now - ts <= INQUIRY_ENTITY_WINDOW_MS);
+      if (fresh.length === 0) inquiryEntityBuckets.delete(k);
+      else inquiryEntityBuckets.set(k, fresh);
+    }
+  }
+
+  const lastDuplicateTs = recentInquiryFingerprints.get(fingerprint);
+  if (lastDuplicateTs && now - lastDuplicateTs < INQUIRY_DUPLICATE_WINDOW_MS) {
+    return {
+      allowed: false,
+      status: 429,
+      error: 'A similar inquiry was already received recently. Our advisory team will respond shortly.',
+    };
+  }
+
+  const normalizedPhone = phone.replace(/[\s\-().]/g, '').trim();
+  const entityKeys = [
+    email ? `e:${email.toLowerCase()}` : '',
+    normalizedPhone ? `p:${normalizedPhone}` : '',
+  ].filter(Boolean);
+
+  for (const key of entityKeys) {
+    const timestamps = (inquiryEntityBuckets.get(key) || []).filter(
+      (ts) => now - ts <= INQUIRY_ENTITY_WINDOW_MS
+    );
+    if (timestamps.length >= MAX_INQUIRIES_PER_ENTITY) {
+      return {
+        allowed: false,
+        status: 429,
+        error: 'Multiple inquiries from this contact were already received. Please allow time for a response or call our office directly.',
+      };
+    }
+    timestamps.push(now);
+    inquiryEntityBuckets.set(key, timestamps);
+  }
+
+  recentInquiryFingerprints.set(fingerprint, now);
+  return { allowed: true };
+}
 
 async function startServer() {
   const app = express();
   app.set('trust proxy', 1);
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: '2mb' }));
+  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (
+      err &&
+      typeof err === 'object' &&
+      ('type' in err && (err as { type?: string }).type === 'entity.too.large')
+    ) {
+      return res.status(413).json({
+        success: false,
+        error: 'Request payload is too large (max 2 MB).',
+      });
+    }
+    return next(err);
+  });
   app.use(
     '/stock',
     express.static(path.resolve(process.cwd(), 'public/stock'), {
@@ -2145,10 +2874,77 @@ async function startServer() {
     return res.json({ ok: true, persistence: firestoreDb ? 'firestore' : 'memory' });
   });
 
+  // --- Cloud Media Configuration & Cloudinary Signature Routes ---
+  app.get('/api/media/config', (_req: Request, res: Response) => {
+    const cloudName = (
+      process.env.CLOUDINARY_CLOUD_NAME ||
+      process.env.VITE_CLOUDINARY_CLOUD_NAME ||
+      ''
+    ).trim();
+    const apiKey = (process.env.CLOUDINARY_API_KEY || '').trim();
+    const apiSecret = (process.env.CLOUDINARY_API_SECRET || '').trim();
+    const uploadPreset = (process.env.VITE_CLOUDINARY_UPLOAD_PRESET || '').trim();
+
+    const hasSignedCloudinary = Boolean(cloudName && apiKey && apiSecret);
+    const hasUnsignedCloudinary = Boolean(cloudName && uploadPreset);
+
+    return res.json({
+      success: true,
+      cloudinary: {
+        configured: hasSignedCloudinary || hasUnsignedCloudinary,
+        mode: hasSignedCloudinary ? 'signed' : hasUnsignedCloudinary ? 'unsigned' : 'none',
+        cloudName: hasSignedCloudinary || hasUnsignedCloudinary ? cloudName : undefined,
+        uploadPreset: !hasSignedCloudinary && hasUnsignedCloudinary ? uploadPreset : undefined,
+      },
+      firebaseStorage: {
+        bucket:
+          (process.env.FIREBASE_STORAGE_BUCKET || '').trim() ||
+          String((firebaseAppletConfig as Record<string, unknown>).storageBucket || ''),
+      },
+    });
+  });
+
+  app.post('/api/media/cloudinary-signature', requireManagement, (req: Request, res: Response) => {
+    const cloudName = (
+      process.env.CLOUDINARY_CLOUD_NAME ||
+      process.env.VITE_CLOUDINARY_CLOUD_NAME ||
+      ''
+    ).trim();
+    const apiKey = (process.env.CLOUDINARY_API_KEY || '').trim();
+    const apiSecret = (process.env.CLOUDINARY_API_SECRET || '').trim();
+
+    if (!cloudName || !apiKey || !apiSecret) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cloudinary server credentials (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET) are not configured.',
+      });
+    }
+
+    const rawFolder = String(req.body?.folder || 'catalog').trim();
+    const folder = rawFolder.replace(/[^a-zA-Z0-9/_-]/g, '').slice(0, 80) || 'catalog';
+    const timestamp = Math.floor(Date.now() / 1000);
+    const paramsToSign = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;
+    const signature = crypto.createHash('sha1').update(paramsToSign).digest('hex');
+
+    return res.json({
+      success: true,
+      signature,
+      timestamp,
+      apiKey,
+      cloudName,
+      folder,
+    });
+  });
+
   // --- Catalog CRUD Routes (Projects, Buy, Rent) ---
-  app.get('/api/catalog', async (_req: Request, res: Response) => {
+  app.get('/api/catalog', async (req: Request, res: Response) => {
     try {
-      const catalog = await getCatalog();
+      const force = req.query.refresh === '1';
+      const catalog = await getCatalog(force);
+      res.setHeader(
+        'Cache-Control',
+        force ? 'no-store' : 'public, max-age=300, s-maxage=900, stale-while-revalidate=3600'
+      );
       return res.json({ success: true, catalog });
     } catch (err) {
       console.error('GET /api/catalog error:', err);
@@ -2309,6 +3105,108 @@ async function startServer() {
     }
   });
 
+  app.post('/api/catalog/faqs', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const built = buildFaqFromBody(
+        `faq-${crypto.randomBytes(5).toString('hex')}`,
+        (req.body || {}) as Record<string, unknown>
+      );
+      if (!built.ok) {
+        return res.status(400).json({ success: false, error: built.error });
+      }
+
+      const catalog = await addCatalogFaq(built.item);
+      return res.status(201).json({ success: true, item: built.item, catalog });
+    } catch (err) {
+      console.error('POST /api/catalog/faqs error:', err);
+      return res.status(500).json({ success: false, error: 'Could not add FAQ.' });
+    }
+  });
+
+  app.put('/api/catalog/faqs/:id', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id || '').trim();
+      const built = buildFaqFromBody(id, (req.body || {}) as Record<string, unknown>);
+      if (!built.ok) {
+        return res.status(400).json({ success: false, error: built.error });
+      }
+
+      const { updated, catalog } = await updateCatalogFaq(id, built.item);
+      if (!updated) {
+        return res.status(404).json({ success: false, error: 'FAQ not found.' });
+      }
+      return res.json({ success: true, item: built.item, catalog });
+    } catch (err) {
+      console.error('PUT /api/catalog/faqs error:', err);
+      return res.status(500).json({ success: false, error: 'Could not update FAQ.' });
+    }
+  });
+
+  app.delete('/api/catalog/faqs/:id', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id || '');
+      const { removed, catalog } = await removeCatalogFaq(id);
+      if (!removed) {
+        return res.status(404).json({ success: false, error: 'FAQ not found.' });
+      }
+      return res.json({ success: true, catalog });
+    } catch (err) {
+      console.error('DELETE /api/catalog/faqs error:', err);
+      return res.status(500).json({ success: false, error: 'Could not remove FAQ.' });
+    }
+  });
+
+  app.post('/api/catalog/reviews', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const built = buildReviewFromBody(
+        `rev-${crypto.randomBytes(5).toString('hex')}`,
+        (req.body || {}) as Record<string, unknown>
+      );
+      if (!built.ok) {
+        return res.status(400).json({ success: false, error: built.error });
+      }
+
+      const catalog = await addCatalogReview(built.item);
+      return res.status(201).json({ success: true, item: built.item, catalog });
+    } catch (err) {
+      console.error('POST /api/catalog/reviews error:', err);
+      return res.status(500).json({ success: false, error: 'Could not add review.' });
+    }
+  });
+
+  app.put('/api/catalog/reviews/:id', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id || '').trim();
+      const built = buildReviewFromBody(id, (req.body || {}) as Record<string, unknown>);
+      if (!built.ok) {
+        return res.status(400).json({ success: false, error: built.error });
+      }
+
+      const { updated, catalog } = await updateCatalogReview(id, built.item);
+      if (!updated) {
+        return res.status(404).json({ success: false, error: 'Review not found.' });
+      }
+      return res.json({ success: true, item: built.item, catalog });
+    } catch (err) {
+      console.error('PUT /api/catalog/reviews error:', err);
+      return res.status(500).json({ success: false, error: 'Could not update review.' });
+    }
+  });
+
+  app.delete('/api/catalog/reviews/:id', requireManagement, async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id || '');
+      const { removed, catalog } = await removeCatalogReview(id);
+      if (!removed) {
+        return res.status(404).json({ success: false, error: 'Review not found.' });
+      }
+      return res.json({ success: true, catalog });
+    } catch (err) {
+      console.error('DELETE /api/catalog/reviews error:', err);
+      return res.status(500).json({ success: false, error: 'Could not remove review.' });
+    }
+  });
+
   app.post('/api/catalog/reset', requireManagement, async (req: Request, res: Response) => {
     try {
       const section = String(req.body?.section || 'all');
@@ -2390,6 +3288,7 @@ async function startServer() {
         email,
         previewUrl: emailResult.previewUrl,
         provider: emailResult.provider,
+        verificationSessionToken: createPendingVerificationToken(email),
       });
     } catch (err: unknown) {
       console.error('Signup route error:', err);
@@ -2440,6 +3339,7 @@ async function startServer() {
         success: true,
         previewUrl: emailResult.previewUrl,
         provider: emailResult.provider,
+        verificationSessionToken: createPendingVerificationToken(email),
       });
     } catch (err: unknown) {
       console.error('Resend verification error:', err);
@@ -2462,10 +3362,9 @@ async function startServer() {
       }
 
       if (user.emailVerified) {
-        return res.json({
-          success: true,
-          user: sanitizeUser(user),
-          userToken: createUserToken(user),
+        return res.status(400).json({
+          success: false,
+          error: 'This email is already verified. Please sign in with your password.',
         });
       }
 
@@ -2516,7 +3415,7 @@ async function startServer() {
   });
 
   // 4. Verify Email via Direct Email Link
-  app.get('/api/auth/verify-link', async (req: Request, res: Response) => {
+  app.get('/api/auth/verify-link', verifyCodeLimiter, async (req: Request, res: Response) => {
     try {
       const email = String(req.query.email || '').trim().toLowerCase();
       const token = String(req.query.token || '').trim();
@@ -2568,10 +3467,14 @@ async function startServer() {
     }
   });
 
-  // 5. Check Verification Status
-  app.post('/api/auth/check-verified', async (req: Request, res: Response) => {
+  // 5. Check Verification Status (requires HMAC pending verification token from signup/resend/login)
+  app.post('/api/auth/check-verified', verifyCodeLimiter, async (req: Request, res: Response) => {
     try {
       const email = String(req.body?.email || '').trim().toLowerCase();
+      const verificationToken = String(req.body?.verificationSessionToken || '').trim();
+      if (!email || !verificationToken || !verifyPendingVerificationToken(verificationToken, email)) {
+        return res.status(401).json({ verified: false });
+      }
       const user = await getUserByEmail(email);
       if (!user || !user.emailVerified) {
         return res.json({ verified: false });
@@ -2661,6 +3564,7 @@ async function startServer() {
           success: false,
           unverified: true,
           email: user.email,
+          verificationSessionToken: createPendingVerificationToken(user.email),
         });
       }
 
@@ -2683,7 +3587,7 @@ async function startServer() {
   });
 
   // 6b. Sync Google Sign-In Accounts to Backend Registry (verifies Firebase ID token)
-  app.post('/api/auth/google-sync', async (req: Request, res: Response) => {
+  app.post('/api/auth/google-sync', loginLimiter, async (req: Request, res: Response) => {
     try {
       const idToken = extractBearerToken(req) || String(req.body?.idToken || '').trim();
       const verified = await verifyFirebaseIdToken(idToken);
@@ -2736,6 +3640,14 @@ async function startServer() {
       }
 
       if (isMgmtAccount) {
+        const authAgeMs =
+          typeof verified.authTime === 'number' ? Date.now() - verified.authTime * 1000 : Infinity;
+        if (authAgeMs < -300000 || authAgeMs > MANAGEMENT_TOKEN_TTL_MS) {
+          return res.status(401).json({
+            success: false,
+            error: 'Management session expired. Please sign in again.',
+          });
+        }
         return res.status(statusCode).json({
           success: true,
           isManagement: true,
@@ -2939,16 +3851,16 @@ async function startServer() {
   app.post('/api/inquiries', inquiryLimiter, async (req: Request, res: Response) => {
     try {
       const body = req.body || {};
-      const name = String(body.name || '').trim();
-      const email = String(body.email || '').trim().toLowerCase();
-      const phone = String(body.phone || '').trim();
-      const office = String(body.office || BRAND_CONFIG.locale.defaultCity).trim();
-      const subject = String(body.subject || 'General Inquiry').trim();
-      const message = String(body.message || '').trim();
-      const source = String(body.source || 'Contact Page').trim();
-      const propertyTitle = body.propertyTitle ? String(body.propertyTitle).trim() : undefined;
-      const preferredDate = body.preferredDate ? String(body.preferredDate).trim() : undefined;
-      const timeframe = body.timeframe ? String(body.timeframe).trim() : undefined;
+      const name = String(body.name || '').trim().slice(0, 120);
+      const email = String(body.email || '').trim().toLowerCase().slice(0, 254);
+      const phone = String(body.phone || '').trim().slice(0, 32);
+      const office = String(body.office || BRAND_CONFIG.locale.defaultCity).trim().slice(0, 100);
+      const subject = String(body.subject || 'General Inquiry').trim().slice(0, 200);
+      const message = String(body.message || '').trim().slice(0, 5000);
+      const source = (String(body.source || 'Contact Page').trim() || 'Contact Page').slice(0, 100);
+      const propertyTitle = body.propertyTitle ? String(body.propertyTitle).trim().slice(0, 200) : undefined;
+      const preferredDate = body.preferredDate ? String(body.preferredDate).trim().slice(0, 64) : undefined;
+      const timeframe = body.timeframe ? String(body.timeframe).trim().slice(0, 100) : undefined;
 
       if (!name) {
         return res.status(400).json({ success: false, error: 'Full name is required.' });
@@ -2957,6 +3869,40 @@ async function startServer() {
         return res.status(400).json({
           success: false,
           error: 'Please provide an email address or contact phone number.',
+        });
+      }
+
+      const spamResult = validateSpamCheckAndContent({
+        name,
+        email,
+        phone,
+        office,
+        subject,
+        message,
+        propertyTitle,
+        spamCheck: body.spamCheck,
+        legacyWebsite: body.website,
+        requireChallenge: true,
+      });
+      if (!spamResult.valid) {
+        return res.status(400).json({
+          success: false,
+          error: spamResult.error || 'Could not verify submission.',
+        });
+      }
+
+      const fingerprint = normalizeInquiryFingerprint({
+        email,
+        phone,
+        subject,
+        message,
+        propertyTitle,
+      });
+      const floodCheck = checkServerInquiryAntiFlood(email, phone, fingerprint);
+      if (!floodCheck.allowed) {
+        return res.status(floodCheck.status).json({
+          success: false,
+          error: floodCheck.error,
         });
       }
 
@@ -2973,7 +3919,7 @@ async function startServer() {
         preferredDate,
         timeframe,
         status: 'new',
-        createdAt: new Date().toISOString(),
+        createdAt: new Date().toISOString().slice(0, 64),
       };
 
       await createInquiry(record);

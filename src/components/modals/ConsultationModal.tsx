@@ -1,10 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, CheckCircle2, ShieldCheck, Clock, User, Mail, Phone } from 'lucide-react';
 import { PillButton } from '../common/PillButton';
 import { BRAND_CONFIG } from '../../config/brand.config';
 import { submitInquiry } from '../../lib/inquiriesApi';
+import {
+  buildSpamCheckPayload,
+  createSpamChallenge,
+  validateSpamCheckAndContent,
+} from '../../lib/spamProtection';
+import { SpamChallengeField } from '../common/SpamChallengeField';
 import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../../services/enquiryWebhook';
+import { useLanguage } from '../../context/LanguageContext';
+import { URGLISH_COPY } from '../../data/urglishTranslations';
 
 interface ConsultationModalProps {
   isOpen: boolean;
@@ -17,6 +26,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   onClose,
   defaultService = BRAND_CONFIG.locale.defaultServiceInterest,
 }) => {
+  const { t, isUrglish } = useLanguage();
   const [service, setService] = useState(defaultService);
   const [formData, setFormData] = useState({
     name: '',
@@ -30,6 +40,16 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [website, setWebsite] = useState('');
+  const [spamChallenge, setSpamChallenge] = useState(() => createSpamChallenge());
+  const [challengeAnswer, setChallengeAnswer] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setSpamChallenge(createSpamChallenge());
+      setChallengeAnswer('');
+      setError('');
+    }
+  }, [isOpen]);
 
   const servicesList = BRAND_CONFIG.locale.serviceInterests;
 
@@ -44,6 +64,22 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       return;
     }
 
+    const spamCheck = buildSpamCheckPayload(spamChallenge, challengeAnswer, website);
+    const localSpam = validateSpamCheckAndContent({
+      name: formData.name.trim(),
+      email: formData.email.trim(),
+      phone: formData.phone.trim(),
+      office: 'Private Advisory',
+      subject: service,
+      message: formData.notes,
+      spamCheck,
+      requireChallenge: true,
+    });
+    if (!localSpam.valid) {
+      setError(localSpam.error || 'Please complete the verification check.');
+      return;
+    }
+
     setLoading(true);
     const res = await submitInquiry({
       name: formData.name,
@@ -54,6 +90,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       timeframe: formData.timeframe,
       message: formData.notes,
       source: 'Consultation Modal',
+      spamCheck,
     });
     setLoading(false);
 
@@ -69,9 +106,11 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           ? `${formData.notes.trim()} (Timeframe: ${formData.timeframe})`
           : `Timeframe: ${formData.timeframe}`,
         source: 'Consultation',
-        website,
+        website: '',
       });
       setSubmitted(true);
+      setSpamChallenge(createSpamChallenge());
+      setChallengeAnswer('');
     } else {
       setError(res.error || 'Could not submit consultation request.');
     }
@@ -106,8 +145,17 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               </h3>
               <p className="text-sm text-white/80 max-w-md mx-auto leading-relaxed font-body">
                 {BRAND_CONFIG.locale.greeting},{' '}
-                <span className="font-semibold text-white">{formData.name}</span>. Our Senior Advisor for{' '}
-                <span className="font-semibold text-emerald-300">{service}</span> will contact you to coordinate your consultation.
+                <span className="font-semibold text-white">{formData.name}</span>.{' '}
+                {isUrglish ? (
+                  <>
+                    <span className="font-semibold text-emerald-300">{service}</span> ke liye hamare Senior Advisor {URGLISH_COPY.detailPages.consultationConfirmationSuffix}
+                  </>
+                ) : (
+                  <>
+                    Our Senior Advisor for{' '}
+                    <span className="font-semibold text-emerald-300">{service}</span> will contact you to coordinate your consultation.
+                  </>
+                )}
               </p>
               <div className="pt-6">
                 <PillButton variant="white" size="md" onClick={onClose}>
@@ -126,7 +174,10 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   BOOK A CONSULTATION
                 </h3>
                 <p className="text-xs text-white/70 mt-1 font-body">
-                  Connect with {BRAND_CONFIG.identity.brandShortName}&apos;s senior partners for discreet acquisition, transfer verification, and investment counsel.
+                  {t(
+                    `Connect with ${BRAND_CONFIG.identity.brandShortName}'s senior partners for discreet acquisition, transfer verification, and investment counsel.`,
+                    URGLISH_COPY.detailPages.consultationModalSubtext
+                  )}
                 </p>
               </div>
 
@@ -139,11 +190,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <form onSubmit={handleSubmit} className="space-y-4">
                 <input
                   type="text"
-                  name="website"
+                  name="contact_hp_ref"
                   value={website}
                   onChange={(e) => setWebsite(e.target.value)}
                   tabIndex={-1}
-                  autoComplete="off"
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-form-type="other"
                   aria-hidden="true"
                   className="absolute -left-[9999px] w-px h-px overflow-hidden opacity-0 pointer-events-none"
                 />
@@ -257,9 +310,32 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   />
                 </div>
 
-                <div className="pt-3 flex items-center justify-between">
+                <SpamChallengeField
+                  challenge={spamChallenge}
+                  answer={challengeAnswer}
+                  onAnswerChange={(val) => {
+                    setError('');
+                    setChallengeAnswer(val);
+                  }}
+                  onRefresh={() => {
+                    setError('');
+                    setSpamChallenge(createSpamChallenge());
+                    setChallengeAnswer('');
+                  }}
+                  variant="dark"
+                />
+
+                <div className="pt-3 flex flex-wrap items-center justify-between gap-3">
                   <span className="text-[11px] text-white/60">
-                    Complete privacy and discretion assured.
+                    Subject to our{' '}
+                    <Link to="/privacy" onClick={onClose} className="underline underline-offset-2 hover:text-white">
+                      Privacy Policy
+                    </Link>{' '}
+                    &amp;{' '}
+                    <Link to="/terms" onClick={onClose} className="underline underline-offset-2 hover:text-white">
+                      Terms
+                    </Link>
+                    .
                   </span>
                   <button
                     type="submit"

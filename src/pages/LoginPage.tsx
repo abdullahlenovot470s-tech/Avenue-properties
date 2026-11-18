@@ -20,6 +20,10 @@ import { SafeImage } from '../components/common/SafeImage';
 import { HERO_ASSETS } from '../data/realEstateData';
 import { GoogleSignInButton } from '../components/common/GoogleSignInButton';
 import { BRAND_CONFIG } from '../config/brand.config';
+import { useLanguage } from '../context/LanguageContext';
+import { URGLISH_COPY } from '../data/urglishTranslations';
+import { usePageSeo } from '../lib/seo';
+import { useRevealFallback } from '../lib/useAnimationFallback';
 
 // Mask email e.g. "ahmed.raza@example.com" -> "ahm***@example.com"
 function maskEmail(emailStr: string): string {
@@ -32,6 +36,7 @@ function maskEmail(emailStr: string): string {
 }
 
 export const LoginPage: React.FC = () => {
+  const { forceVisible, markCompleted } = useRevealFallback(1000);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -73,15 +78,19 @@ export const LoginPage: React.FC = () => {
     confirmPasswordResetWithCode,
   } = useAuth();
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
 
   const shortBrand = BRAND_CONFIG.identity.brandShortName;
   const from = (location.state as any)?.from?.pathname || '/profile';
 
-  React.useEffect(() => {
-    document.title = `Client Login | ${BRAND_CONFIG.identity.brandName}`;
-  }, []);
+  usePageSeo({
+    title: `Client Login | ${BRAND_CONFIG.identity.brandName}`,
+    description: `Sign in to your ${BRAND_CONFIG.identity.brandName} account to view shortlisted residences and inquiries.`,
+    path: '/#/login',
+    noindex: true,
+  });
 
   // Cooldown timer
   React.useEffect(() => {
@@ -283,6 +292,8 @@ export const LoginPage: React.FC = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
+        onAnimationComplete={markCompleted}
+        style={forceVisible ? { opacity: 1, transform: 'none' } : undefined}
         className="w-full max-w-5xl bg-white rounded-[28px] sm:rounded-[36px] overflow-hidden shadow-2xl border border-slate-100 grid grid-cols-1 lg:grid-cols-12 min-h-[640px]"
       >
         {/* Left Half: Villa Visual with Glass Quote Card */}
@@ -313,7 +324,7 @@ export const LoginPage: React.FC = () => {
               </span>
             </div>
             <p className="font-display font-bold text-xl sm:text-2xl tracking-tight text-white leading-snug">
-              {BRAND_CONFIG.copy.auth.loginQuote}
+              {t(BRAND_CONFIG.copy.auth.loginQuote, URGLISH_COPY.auth.loginQuote)}
             </p>
             <p className="font-body text-xs text-white/70 mt-2">
               {BRAND_CONFIG.copy.auth.loginQuoteAuthor}
@@ -449,7 +460,7 @@ export const LoginPage: React.FC = () => {
                     {BRAND_CONFIG.copy.auth.loginHeading}
                   </h2>
                   <p className="font-body text-xs sm:text-sm text-slate-500 mt-1">
-                    {BRAND_CONFIG.copy.auth.loginSubtitle}
+                    {t(BRAND_CONFIG.copy.auth.loginSubtitle, URGLISH_COPY.auth.loginSubtitle)}
                   </p>
                 </div>
 
@@ -540,7 +551,7 @@ export const LoginPage: React.FC = () => {
                     </label>
                   </div>
 
-                  <div className="pt-2">
+                  <div className="pt-2 space-y-2">
                     <button
                       type="submit"
                       disabled={loading}
@@ -551,19 +562,32 @@ export const LoginPage: React.FC = () => {
                         <ArrowRight className="w-3.5 h-3.5" />
                       </span>
                     </button>
+                    <p className="text-[11px] text-slate-500 text-center font-body">
+                      By signing in, you agree to our{' '}
+                      <Link to="/privacy" className="underline underline-offset-2 hover:text-brand">
+                        Privacy Policy
+                      </Link>{' '}
+                      &amp;{' '}
+                      <Link to="/terms" className="underline underline-offset-2 hover:text-brand">
+                        Terms of Use
+                      </Link>
+                      .
+                    </p>
                   </div>
 
-                  <div className="pt-4 text-center">
-                    <span className="text-xs text-slate-500 font-body">
-                      Don't have an account?{' '}
-                      <Link
-                        to="/signup"
-                        className="font-display uppercase tracking-wider text-xs font-bold text-brand hover:text-accent"
-                      >
-                        {BRAND_CONFIG.copy.auth.loginFooterCta}
-                      </Link>
-                    </span>
-                  </div>
+                  {BRAND_CONFIG.features.enableClientLogin && (
+                    <div className="pt-4 text-center">
+                      <span className="text-xs text-slate-500 font-body">
+                        Don't have an account?{' '}
+                        <Link
+                          to="/signup"
+                          className="font-display uppercase tracking-wider text-xs font-bold text-brand hover:text-accent"
+                        >
+                          {BRAND_CONFIG.copy.auth.loginFooterCta}
+                        </Link>
+                      </span>
+                    </div>
+                  )}
                 </form>
               </>
             )}

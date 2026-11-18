@@ -4,6 +4,9 @@ import { PropertyListing, PortfolioProject } from '../../types';
 import { SafeImage } from '../common/SafeImage';
 import { PillButton } from '../common/PillButton';
 import { X, MapPin, Bed, Bath, Maximize2, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
+import { URGLISH_COPY } from '../../data/urglishTranslations';
+import { useRevealFallback } from '../../lib/useAnimationFallback';
 
 interface PropertyDetailModalProps {
   property: PropertyListing | PortfolioProject | null;
@@ -19,6 +22,8 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   onBookViewing,
 }) => {
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
+  const { t, getPropertyDescription, getPortfolioSummary } = useLanguage();
+  const { forceVisible, markCompleted } = useRevealFallback(900, Boolean(isOpen && property));
 
   if (!isOpen || !property) return null;
 
@@ -29,7 +34,9 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const beds = property.beds;
   const baths = property.baths;
   const sqft = isListing ? property.sqft : property.size;
-  const description = isListing ? property.description : property.summary;
+  const description = isListing
+    ? getPropertyDescription(property.id, property.description)
+    : getPortfolioSummary(property.id, property.summary);
   const amenities = isListing
     ? property.amenities
     : [
@@ -53,6 +60,8 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          onAnimationComplete={markCompleted}
+          style={forceVisible ? { opacity: 1, transform: 'none' } : undefined}
           className="relative w-full max-w-4xl bg-white rounded-[28px] sm:rounded-[36px] overflow-hidden text-brand shadow-2xl p-6 sm:p-10 border border-slate-100 max-h-[92vh] flex flex-col justify-between overflow-y-auto"
         >
           <button
@@ -76,12 +85,12 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
             </div>
 
             {images.length > 1 && (
-              <div className="flex items-center gap-3 mt-3">
+              <div className="flex items-center gap-3 mt-3 overflow-x-auto pb-2">
                 {images.map((img, i) => (
                   <button
                     key={i}
                     onClick={() => setActivePhotoIdx(i)}
-                    className={`relative w-20 h-14 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
+                    className={`relative w-20 h-14 shrink-0 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
                       activePhotoIdx === i
                         ? 'border-brand scale-105'
                         : 'border-transparent opacity-60 hover:opacity-100'
@@ -158,7 +167,12 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
           <div className="pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>Complete fard, registry, and society NOC verification available upon request</span>
+              <span>
+                {t(
+                  'Complete fard, registry, and society NOC verification available upon request',
+                  URGLISH_COPY.detailPages.propertyModalVerification
+                )}
+              </span>
             </div>
 
             <div className="flex items-center gap-3 w-full sm:w-auto">

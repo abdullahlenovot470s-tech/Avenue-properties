@@ -33,6 +33,113 @@
  * ============================================================================
  */
 
+export interface BrandFeatures {
+  demoMode: boolean;
+  enableGoogleLogin: boolean;
+  enableEmailPasswordLogin: boolean;
+  enableEnquiryWebhook: boolean;
+  showProjectsPage: boolean;
+  showBuyPage: boolean;
+  showRentPage: boolean;
+  showSampleDataOnError: boolean;
+  enableClientLogin: boolean;
+  enableAdminPanel: boolean;
+  enableSavedProperties: boolean;
+  enableEnquiriesDashboard: boolean;
+  enableReviews: boolean;
+  enableFaqs: boolean;
+  enableCalculator: boolean;
+  enableFloatingWhatsApp: boolean;
+  enableMaps: boolean;
+  enableAnalytics: boolean;
+  enableUrglishToggle: boolean;
+}
+
+const DEFAULT_FEATURES: BrandFeatures = {
+  demoMode: false,
+  enableGoogleLogin: true,
+  enableEmailPasswordLogin: true,
+  enableEnquiryWebhook: true,
+  showProjectsPage: true,
+  showBuyPage: true,
+  showRentPage: true,
+  showSampleDataOnError: true,
+  enableClientLogin: true,
+  enableAdminPanel: true,
+  enableSavedProperties: true,
+  enableEnquiriesDashboard: true,
+  enableReviews: true,
+  enableFaqs: true,
+  enableCalculator: true,
+  enableFloatingWhatsApp: true,
+  enableMaps: true,
+  enableAnalytics: true,
+  enableUrglishToggle: true,
+};
+
+export const TIER_PRESETS: Record<'plot' | 'villa' | 'estate', BrandFeatures> = {
+  plot: {
+    ...DEFAULT_FEATURES,
+    showProjectsPage: true,
+    showBuyPage: false,
+    showRentPage: false,
+    enableGoogleLogin: false,
+    enableEmailPasswordLogin: false,
+    enableClientLogin: false,
+    enableAdminPanel: false,
+    enableSavedProperties: false,
+    enableEnquiriesDashboard: false,
+    enableReviews: false,
+    enableFaqs: false,
+    enableCalculator: false,
+    enableFloatingWhatsApp: true,
+    enableMaps: true,
+    enableAnalytics: false,
+    enableUrglishToggle: false,
+  },
+  villa: {
+    ...DEFAULT_FEATURES,
+    showProjectsPage: true,
+    showBuyPage: true,
+    showRentPage: true,
+    enableGoogleLogin: false,
+    enableEmailPasswordLogin: false,
+    enableClientLogin: false,
+    enableAdminPanel: false,
+    enableSavedProperties: false,
+    enableEnquiriesDashboard: false,
+    enableReviews: true,
+    enableFaqs: true,
+    enableCalculator: true,
+    enableFloatingWhatsApp: true,
+    enableMaps: true,
+    enableAnalytics: true,
+    enableUrglishToggle: false,
+  },
+  estate: {
+    ...DEFAULT_FEATURES,
+  },
+};
+
+function resolveTierFeatures(): BrandFeatures {
+  const rawTier =
+    (typeof import.meta !== 'undefined' && import.meta.env
+      ? import.meta.env.VITE_TIER
+      : undefined) ||
+    (
+      globalThis as {
+        process?: { env?: Record<string, string | undefined> };
+      }
+    ).process?.env?.VITE_TIER ||
+    '';
+
+  const normalized = String(rawTier).trim().toLowerCase();
+  if (normalized === 'plot' || normalized === 'villa' || normalized === 'estate') {
+    return TIER_PRESETS[normalized];
+  }
+  return DEFAULT_FEATURES;
+}
+
 export const BRAND_CONFIG = {
   // --------------------------------------------------------------------------
   // 1. IDENTITY
@@ -85,7 +192,7 @@ export const BRAND_CONFIG = {
     displayFont: 'Unbounded',
     bodyFont: 'Manrope',
     googleFontsUrl:
-      'https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=Unbounded:wght@400;600;700;800;900&display=swap',
+      'https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&family=Unbounded:wght@600;700;800&display=swap',
   },
 
   // --------------------------------------------------------------------------
@@ -504,18 +611,78 @@ export const BRAND_CONFIG = {
           'Listed prices represent asking property valuations. Standard government stamp duty, FBR withholding tax, and society transfer fees are outlined transparently in every deal sheet.',
       },
     ],
+    reviewsSection: {
+      watermark: 'REVIEWS',
+      eyebrow: 'CLIENT REVIEWS',
+      heading: 'TRUSTED BY HOMEOWNERS & INVESTORS',
+      summary: '4.9 / 5 client rating across verified residential transfers, luxury rentals, and overseas advisory.',
+    },
     testimonials: [
       {
+        id: 'rev-1',
         quote:
-          'Avenue handled our Sector F-7 acquisition from initial structural audit to CDA biometric transfer with complete transparency.',
+          'Avenue handled our Sector F-7 acquisition from initial structural audit to CDA biometric transfer with complete transparency. Having verified fard and engineer inspection notes ahead of negotiations gave us full confidence from London.',
         author: 'Dr. Salman Qureshi',
+        role: 'Overseas Homebuyer',
         location: 'Islamabad & London',
+        propertyContext: '1 Kanal Modern Residence · Sector F-7',
+        rating: 5,
+        date: 'January 2026',
       },
       {
+        id: 'rev-2',
         quote:
-          'Having verified fard documentation ready on day one saved us weeks of uncertainty in DHA Phase 6.',
+          'Having verified fard documentation and clear society dues ready on day one saved us weeks of uncertainty in DHA Phase 6. Every step of the transfer took place on schedule with zero hidden commissions.',
         author: 'Sana Tariq',
+        role: 'Residential Buyer',
         location: 'Lahore',
+        propertyContext: '1 Kanal Contemporary Villa · DHA Phase 6',
+        rating: 5,
+        date: 'December 2025',
+      },
+      {
+        id: 'rev-3',
+        quote:
+          'Managing two corporate-leased residences in Clifton while based in Dubai used to be stressful until Avenue took over stewardship. Tenant screening, solar maintenance, and monthly remittances run like clockwork.',
+        author: 'Tariq Mehmood',
+        role: 'Portfolio Landlord',
+        location: 'Karachi & Dubai',
+        propertyContext: 'Coastal Villas · Clifton Block 4',
+        rating: 5,
+        date: 'November 2025',
+      },
+      {
+        id: 'rev-4',
+        quote:
+          'We relied on Avenue’s Overseas Desk for embassy-attested Power of Attorney execution and live walkthroughs. Their legal counsel caught an encumbrance on an earlier option and guided us into a spotless corner residence instead.',
+        author: 'Zainab & Kamran Farooq',
+        role: 'Overseas Family Acquisition',
+        location: 'Manchester & Lahore',
+        propertyContext: '10 Marla Designer Home · Gulberg III',
+        rating: 5,
+        date: 'February 2026',
+      },
+      {
+        id: 'rev-5',
+        quote:
+          'Their architectural team evaluated structural drawings, waterproofing, and inverter load capacity before we signed the bayana. You rarely encounter that depth of technical due diligence in Pakistani real estate.',
+        author: 'Usman Ghani',
+        role: 'Private Investor',
+        location: 'Islamabad',
+        propertyContext: '2 Kanal Architectural Estate · Bahria Town',
+        rating: 5,
+        date: 'October 2025',
+      },
+      {
+        id: 'rev-6',
+        quote:
+          'Securing a diplomatic-grade upper portion in F-6 on a tight relocation timeline felt effortless. Viewing schedules were punctual, lease covenants were balanced, and utility transfers were closed prior to move-in.',
+        author: 'Nadia Hussain',
+        role: 'Executive Tenant',
+        location: 'Islamabad',
+        propertyContext: 'Corporate Lease · Sector F-6/3',
+        rating: 5,
+        date: 'January 2026',
       },
     ],
   },
@@ -559,17 +726,17 @@ export const BRAND_CONFIG = {
   ],
 
   // --------------------------------------------------------------------------
-  // 10. FEATURE FLAGS
+  // 10. FINANCE DEFAULTS (PLACEHOLDER — replace with partner bank terms)
   // --------------------------------------------------------------------------
-  features: {
-    demoMode: false,
-    showBuyPage: true,
-    showRentPage: true,
-    showProjectsPage: true,
-    enableGoogleLogin: true,
-    enableEnquiryWebhook: true,
-    enableEmailAlerts: true,
+  finance: {
+    // PLACEHOLDER: default annual markup / financing rate (%) used by the Buy installment estimator
+    defaultAnnualRate: 14.5,
   },
+
+  // --------------------------------------------------------------------------
+  // 11. FEATURE FLAGS
+  // --------------------------------------------------------------------------
+  features: resolveTierFeatures(),
 } as const;
 
 export type BrandImageKey = keyof typeof BRAND_CONFIG.images;

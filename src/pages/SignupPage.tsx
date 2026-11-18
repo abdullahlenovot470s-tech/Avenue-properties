@@ -19,6 +19,10 @@ import { SafeImage } from '../components/common/SafeImage';
 import { HERO_ASSETS } from '../data/realEstateData';
 import { GoogleSignInButton } from '../components/common/GoogleSignInButton';
 import { BRAND_CONFIG } from '../config/brand.config';
+import { usePageSeo } from '../lib/seo';
+import { useLanguage } from '../context/LanguageContext';
+import { URGLISH_COPY } from '../data/urglishTranslations';
+import { useRevealFallback } from '../lib/useAnimationFallback';
 
 // Mask email e.g. "fatima.noor@example.com" -> "fat***@example.com"
 function maskEmail(email: string): string {
@@ -31,6 +35,7 @@ function maskEmail(email: string): string {
 }
 
 export const SignupPage: React.FC = () => {
+  const { forceVisible, markCompleted } = useRevealFallback(1000);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -65,11 +70,15 @@ export const SignupPage: React.FC = () => {
     resendVerificationEmail,
   } = useAuth();
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    document.title = `Create Account | ${BRAND_CONFIG.identity.brandName}`;
-  }, []);
+  usePageSeo({
+    title: `Create Account | ${BRAND_CONFIG.identity.brandName}`,
+    description: `Create a ${BRAND_CONFIG.identity.brandName} client account to save property shortlists and book private viewings.`,
+    path: '/#/signup',
+    noindex: true,
+  });
 
   // Cooldown countdown timer
   useEffect(() => {
@@ -226,6 +235,8 @@ export const SignupPage: React.FC = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
+        onAnimationComplete={markCompleted}
+        style={forceVisible ? { opacity: 1, transform: 'none' } : undefined}
         className="w-full max-w-5xl bg-white rounded-[28px] sm:rounded-[36px] overflow-hidden shadow-2xl border border-slate-100 grid grid-cols-1 lg:grid-cols-12 min-h-[680px]"
       >
         {/* Left Half: Clean White Form / Verification Card */}
@@ -241,7 +252,7 @@ export const SignupPage: React.FC = () => {
                     {BRAND_CONFIG.copy.auth.signupHeading}
                   </h2>
                   <p className="font-body text-xs sm:text-sm text-slate-500 mt-1">
-                    {BRAND_CONFIG.copy.auth.signupSubtitle}
+                    {t(BRAND_CONFIG.copy.auth.signupSubtitle, URGLISH_COPY.auth.signupSubtitle)}
                   </p>
                 </div>
 
@@ -390,7 +401,7 @@ export const SignupPage: React.FC = () => {
                   </div>
 
                   {/* Terms Checkbox */}
-                  <div className="pt-1">
+                  <div className="pt-1 space-y-1">
                     <label className="flex items-start gap-2.5 text-xs text-slate-600 cursor-pointer select-none">
                       <input
                         type="checkbox"
@@ -400,7 +411,21 @@ export const SignupPage: React.FC = () => {
                         }
                         className="mt-0.5 rounded border-slate-300 text-brand focus:ring-accent cursor-pointer"
                       />
-                      <span>{BRAND_CONFIG.copy.auth.signupTermsLabel}</span>
+                      <span>
+                        {t(
+                          BRAND_CONFIG.copy.auth.signupTermsLabel,
+                          URGLISH_COPY.auth.signupTermsLabel
+                        )}{' '}
+                        (
+                        <Link to="/privacy" className="underline underline-offset-2 text-brand hover:text-accent">
+                          Privacy Policy
+                        </Link>
+                        {' · '}
+                        <Link to="/terms" className="underline underline-offset-2 text-brand hover:text-accent">
+                          Terms of Use
+                        </Link>
+                        )
+                      </span>
                     </label>
                     {errors.agreeTerms && (
                       <p className="text-[11px] text-rose-500 font-body mt-1">
@@ -599,10 +624,10 @@ export const SignupPage: React.FC = () => {
               </span>
             </div>
             <p className="font-display font-bold text-xl sm:text-2xl tracking-tight text-white leading-snug">
-              {BRAND_CONFIG.copy.auth.signupQuote}
+              {t(BRAND_CONFIG.copy.auth.signupQuote, URGLISH_COPY.auth.signupQuote)}
             </p>
             <p className="font-body text-xs text-white/70 mt-2">
-              {BRAND_CONFIG.copy.auth.signupQuoteSubtext}
+              {t(BRAND_CONFIG.copy.auth.signupQuoteSubtext, URGLISH_COPY.auth.signupQuoteSubtext)}
             </p>
           </div>
         </div>

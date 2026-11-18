@@ -114,6 +114,7 @@ export function applyTheme(config = BRAND_CONFIG): void {
   const fontLink = document.getElementById('brand-google-fonts') as HTMLLinkElement | null;
   if (fontLink && fonts.googleFontsUrl && fontLink.href !== fonts.googleFontsUrl) {
     fontLink.href = fonts.googleFontsUrl;
+    fontLink.rel = 'stylesheet';
   }
 
   // Sync favicon

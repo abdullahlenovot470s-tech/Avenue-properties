@@ -137,3 +137,22 @@ export interface OfficeLocation {
 
 // Backward-compatible alias
 export type GlobalOffice = OfficeLocation;
+
+export interface FaqItem {
+  id: string;
+  question: string;
+  answer: string;
+  category?: string;
+}
+
+export interface ClientReview {
+  id: string;
+  quote: string;
+  author: string;
+  role: string;
+  location: string;
+  propertyContext: string;
+  rating: number;
+  date: string;
+}
+

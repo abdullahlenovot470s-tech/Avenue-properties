@@ -3,13 +3,18 @@ import { motion } from 'motion/react';
 import { HERO_ASSETS, HERO_STATS } from '../data/realEstateData';
 import { BRAND_CONFIG } from '../config/brand.config';
 import { PillButton } from './common/PillButton';
+import { useLanguage } from '../context/LanguageContext';
+import { URGLISH_COPY } from '../data/urglishTranslations';
+import { useRevealFallback } from '../lib/useAnimationFallback';
 
 interface HeroProps {
   onOpenConsultation: () => void;
 }
 
 export const Hero: React.FC<HeroProps> = ({ onOpenConsultation }) => {
+  const { t } = useLanguage();
   const [heroSrc, setHeroSrc] = useState<string>(HERO_ASSETS.heroImage);
+  const { forceVisible, markCompleted } = useRevealFallback(1000);
 
   const handleHeroImgError = () => {
     if (heroSrc !== HERO_ASSETS.heroFallback) {
@@ -67,6 +72,8 @@ export const Hero: React.FC<HeroProps> = ({ onOpenConsultation }) => {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: 'easeOut' }}
+            onAnimationComplete={markCompleted}
+            style={forceVisible ? { opacity: 1, transform: 'none' } : undefined}
             className="w-full lg:max-w-[45%]"
           >
             <h1
@@ -81,7 +88,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenConsultation }) => {
             </h1>
 
             <p className="mt-2.5 sm:mt-3 font-body text-white/80 font-light leading-relaxed max-w-md line-clamp-2 text-xs sm:text-base">
-              {BRAND_CONFIG.copy.hero.subtitle}
+              {t(BRAND_CONFIG.copy.hero.subtitle, URGLISH_COPY.hero.subtitle)}
             </p>
 
             <div className="mt-4 sm:mt-5">
@@ -101,6 +108,8 @@ export const Hero: React.FC<HeroProps> = ({ onOpenConsultation }) => {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.08, ease: 'easeOut' }}
+            onAnimationComplete={markCompleted}
+            style={forceVisible ? { opacity: 1, transform: 'none' } : undefined}
             className="grid grid-cols-2 sm:flex sm:flex-row gap-2.5 sm:gap-3 shrink-0 w-full lg:w-auto"
           >
             {HERO_STATS.map((stat) => (

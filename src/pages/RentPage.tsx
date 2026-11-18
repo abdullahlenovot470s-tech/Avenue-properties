@@ -20,6 +20,10 @@ import {
   X,
 } from 'lucide-react';
 import { BRAND_CONFIG } from '../config/brand.config';
+import { getWhatsAppUrl } from '../config/siteConfig';
+import { useLanguage } from '../context/LanguageContext';
+import { URGLISH_COPY } from '../data/urglishTranslations';
+import { usePageSeo } from '../lib/seo';
 
 export const RentPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,13 +36,23 @@ export const RentPage: React.FC = () => {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const { isPropertySaved, toggleSaveProperty } = useAuth();
-  const { rentalListings } = useCatalog();
+  const { rentalListings, catalogUnavailable } = useCatalog();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const { t, getRentalDescription } = useLanguage();
 
-  useEffect(() => {
-    document.title = `Homes For Rent | ${BRAND_CONFIG.identity.brandName}`;
-  }, []);
+  usePageSeo({
+    title: `Homes For Rent | ${BRAND_CONFIG.identity.brandName}`,
+    description: `Verified houses, executive apartments, and upper/lower portions for rent in ${BRAND_CONFIG.locale.mainCities.join(', ')} from ${BRAND_CONFIG.identity.brandName}.`,
+    path: '/#/rent',
+    image: BRAND_CONFIG.images.rent1,
+    structuredData: {
+      '@context': 'https://schema.org',
+      '@type': 'CollectionPage',
+      name: `Homes For Rent | ${BRAND_CONFIG.identity.brandName}`,
+      description: `Executive homes and apartments available for rent across ${BRAND_CONFIG.locale.country}.`,
+    },
+  });
 
   const cities = ['All', ...BRAND_CONFIG.locale.mainCities];
   const types = ['All', 'Apartment', 'House', 'Upper Portion', 'Lower Portion'];
@@ -161,7 +175,10 @@ export const RentPage: React.FC = () => {
             HOMES FOR RENT
           </h1>
           <p className="font-body text-xs sm:text-base text-brand/80 leading-relaxed font-light">
-            Verified apartments, houses and portions for rent in {BRAND_CONFIG.locale.mainCities.join(', ')}.
+            {t(
+              `Verified apartments, houses and portions for rent in ${BRAND_CONFIG.locale.mainCities.join(', ')}.`,
+              URGLISH_COPY.rentPage.headerSubtitle
+            )}
           </p>
         </div>
 
@@ -464,13 +481,15 @@ export const RentPage: React.FC = () => {
                         height={225}
                         className="w-full h-full object-cover"
                       />
-                      <button
-                        onClick={(e) => handleHeartClick(e, listing.id, listing.title)}
-                        className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full glass-panel flex items-center justify-center cursor-pointer shadow-xs"
-                        aria-label="Save rental"
-                      >
-                        <Heart className={`w-3.5 h-3.5 ${saved ? 'text-rose-500 fill-current' : 'text-white'}`} />
-                      </button>
+                      {BRAND_CONFIG.features.enableSavedProperties && (
+                        <button
+                          onClick={(e) => handleHeartClick(e, listing.id, listing.title)}
+                          className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full glass-panel flex items-center justify-center cursor-pointer shadow-xs"
+                          aria-label="Save rental"
+                        >
+                          <Heart className={`w-3.5 h-3.5 ${saved ? 'text-rose-500 fill-current' : 'text-white'}`} />
+                        </button>
+                      )}
                     </div>
 
                     {/* Text on right */}
@@ -529,12 +548,14 @@ export const RentPage: React.FC = () => {
                           </span>
                         )}
                       </div>
-                      <button
-                        onClick={(e) => handleHeartClick(e, listing.id, listing.title)}
-                        className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full glass-panel flex items-center justify-center cursor-pointer shadow-sm"
-                      >
-                        <Heart className={`w-3.5 h-3.5 ${saved ? 'text-rose-500 fill-current' : 'text-white'}`} />
-                      </button>
+                      {BRAND_CONFIG.features.enableSavedProperties && (
+                        <button
+                          onClick={(e) => handleHeartClick(e, listing.id, listing.title)}
+                          className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full glass-panel flex items-center justify-center cursor-pointer shadow-sm"
+                        >
+                          <Heart className={`w-3.5 h-3.5 ${saved ? 'text-rose-500 fill-current' : 'text-white'}`} />
+                        </button>
+                      )}
                     </div>
                     <div className="p-3.5 flex flex-col justify-between flex-1 space-y-2">
                       <div>
@@ -591,18 +612,20 @@ export const RentPage: React.FC = () => {
                         )}
                       </div>
 
-                      <button
-                        onClick={(e) => handleHeartClick(e, listing.id, listing.title)}
-                        className={`absolute top-3.5 right-3.5 w-10 h-10 rounded-full glass-panel flex items-center justify-center transition-all cursor-pointer shadow-md ${
-                          saved
-                            ? 'text-rose-500 fill-rose-500 bg-white/90 scale-105'
-                            : 'text-white hover:text-rose-400 hover:scale-105'
-                        }`}
-                        aria-label="Save rental to shortlist"
-                        title={saved ? 'Remove from shortlist' : 'Save to shortlist'}
-                      >
-                        <Heart className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
-                      </button>
+                      {BRAND_CONFIG.features.enableSavedProperties && (
+                        <button
+                          onClick={(e) => handleHeartClick(e, listing.id, listing.title)}
+                          className={`absolute top-3.5 right-3.5 w-10 h-10 rounded-full glass-panel flex items-center justify-center transition-all cursor-pointer shadow-md ${
+                            saved
+                              ? 'text-rose-500 fill-rose-500 bg-white/90 scale-105'
+                              : 'text-white hover:text-rose-400 hover:scale-105'
+                          }`}
+                          aria-label="Save rental to shortlist"
+                          title={saved ? 'Remove from shortlist' : 'Save to shortlist'}
+                        >
+                          <Heart className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
+                        </button>
+                      )}
                     </div>
 
                     <div className="p-6 sm:p-7 flex flex-col justify-between flex-1 space-y-4">
@@ -621,7 +644,7 @@ export const RentPage: React.FC = () => {
                         </div>
 
                         <p className="text-xs text-slate-700 font-medium font-body line-clamp-2 mt-2 leading-relaxed">
-                          {listing.description}
+                          {getRentalDescription(listing.id, listing.description)}
                         </p>
                       </div>
 
@@ -651,6 +674,26 @@ export const RentPage: React.FC = () => {
               })}
             </div>
           </>
+        ) : catalogUnavailable && rentalListings.length === 0 ? (
+          <div className="bg-white rounded-3xl p-12 text-center border border-slate-100 shadow-md space-y-3">
+            <Building className="w-12 h-12 text-slate-300 mx-auto" />
+            <h3 className="font-display font-bold text-lg text-brand uppercase">
+              Listings Temporarily Unavailable
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 max-w-md mx-auto font-body">
+              Listings are temporarily unavailable. Please contact us on WhatsApp.
+            </p>
+            <div className="pt-2">
+              <a
+                href={getWhatsAppUrl('Assalam o Alaikum, I would like to inquire about available homes for rent.')}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-5 py-2.5 rounded-full bg-brand text-brand-contrast font-display text-xs uppercase tracking-wider font-semibold hover:bg-accent transition-colors"
+              >
+                Contact on WhatsApp
+              </a>
+            </div>
+          </div>
         ) : (
           <div className="bg-white rounded-3xl p-12 text-center border border-slate-100 shadow-md space-y-3">
             <Building className="w-12 h-12 text-slate-300 mx-auto" />
@@ -658,7 +701,10 @@ export const RentPage: React.FC = () => {
               No Homes Match Your Filters
             </h3>
             <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto font-body">
-              Try adjusting your city, property type, rent bracket, or furnishing parameters.
+              {t(
+                'Try adjusting your city, property type, rent bracket, or furnishing parameters.',
+                URGLISH_COPY.rentPage.emptyState
+              )}
             </p>
             <div className="pt-2">
               <button

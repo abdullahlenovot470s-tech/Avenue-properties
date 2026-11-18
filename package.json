@@ -6,10 +6,13 @@
   "scripts": {
     "dev": "tsx server.ts",
     "start": "NODE_ENV=production tsx server.ts",
+    "prebuild": "node scripts/generate-sitemap.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "sync:rules": "node scripts/sync-admin-email.mjs",
+    "optimize:images": "node scripts/optimize-images.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -35,6 +38,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "eslint": "^10.15.0",
+    "sharp": "^0.35.5",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2"
   }
