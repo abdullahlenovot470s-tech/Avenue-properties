@@ -33,19 +33,19 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onOpenConsulta
   return (
     <section
       id="services-section"
-      className="relative w-full py-6 sm:py-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
+      className="relative w-full py-5 md:py-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
     >
-      <div className="relative w-full bg-accent rounded-[1.75rem] sm:rounded-[2.25rem] overflow-hidden p-4 sm:p-10 md:p-12 text-accent-contrast shadow-2xl">
+      <div className="relative w-full bg-accent rounded-2xl md:rounded-[2.25rem] overflow-hidden p-5 md:p-12 text-accent-contrast shadow-2xl">
         <div className="absolute -top-32 -right-32 w-80 h-80 bg-white/5 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-brand/60 rounded-full blur-3xl pointer-events-none" />
 
         {/* Header Row */}
-        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-12 pb-6 sm:pb-10 border-b border-current/15 items-end">
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-12 pb-5 md:pb-10 border-b border-current/15 items-end">
           <div className="lg:col-span-6">
             <span className="text-[0.7rem] sm:text-[0.75rem] font-display uppercase tracking-widest text-accent-contrast/70 block mb-1.5 sm:mb-2 font-medium">
               {BRAND_CONFIG.copy.servicesSection.heading}
             </span>
-            <h2 className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl uppercase tracking-tight text-accent-contrast leading-tight">
+            <h2 className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-3xl lg:text-4xl uppercase tracking-tight text-accent-contrast leading-tight">
               {BRAND_CONFIG.copy.servicesSection.eyebrow}
             </h2>
           </div>

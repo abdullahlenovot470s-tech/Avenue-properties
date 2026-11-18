@@ -24,7 +24,7 @@ export const ContactFaqSection: React.FC = () => {
     <section
       id="faq"
       aria-labelledby="contact-faq-heading"
-      className="relative w-full bg-white rounded-[24px] sm:rounded-[32px] overflow-hidden p-6 sm:p-10 md:p-14 shadow-xl border border-slate-100"
+      className="relative w-full bg-white rounded-2xl md:rounded-[32px] overflow-hidden p-5 md:p-14 shadow-xl border border-slate-100"
     >
       <div className="absolute top-4 right-0 pointer-events-none select-none overflow-hidden max-w-full z-0">
         <span
@@ -35,7 +35,7 @@ export const ContactFaqSection: React.FC = () => {
         </span>
       </div>
 
-      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
+      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-5 md:gap-8 lg:gap-12 items-start">
         <div className="lg:col-span-4 space-y-3">
           <span className="text-[11px] font-display uppercase tracking-widest text-accent font-bold flex items-center gap-1.5">
             <HelpCircle className="w-3.5 h-3.5" />
@@ -43,7 +43,7 @@ export const ContactFaqSection: React.FC = () => {
           </span>
           <h2
             id="contact-faq-heading"
-            className="font-display font-extrabold text-2xl sm:text-3xl text-brand uppercase tracking-tight leading-tight"
+            className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-3xl text-brand uppercase tracking-tight leading-tight"
             style={{ textWrap: 'balance' }}
           >
             FREQUENTLY ASKED QUESTIONS

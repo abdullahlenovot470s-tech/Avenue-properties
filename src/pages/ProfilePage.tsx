@@ -177,7 +177,7 @@ export const ProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen pt-24 pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto">
+    <div className="min-h-[100svh] pt-20 md:pt-24 pb-6 md:pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto">
       {/* Profile Header Glass Card */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -185,7 +185,7 @@ export const ProfilePage: React.FC = () => {
         transition={{ duration: 0.6 }}
         onAnimationComplete={markCompleted}
         style={forceVisible ? { opacity: 1, transform: 'none' } : undefined}
-        className="relative bg-white rounded-[28px] sm:rounded-[36px] overflow-hidden p-6 sm:p-10 md:p-12 shadow-xl border border-slate-100 mb-10"
+        className="relative bg-white rounded-2xl md:rounded-[36px] overflow-hidden p-5 md:p-12 shadow-xl border border-slate-100 mb-6 md:mb-10"
       >
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-8 border-b border-slate-100">
           <div className="flex items-center gap-5">
@@ -225,7 +225,7 @@ export const ProfilePage: React.FC = () => {
                   </div>
                 )}
               </div>
-              <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-brand tracking-tight">
+              <h1 className="font-display font-bold md:font-extrabold text-[clamp(1.5rem,5.5vw,2rem)] md:text-3xl text-brand tracking-tight">
                 {currentUser.name}
               </h1>
               <p className="text-xs text-slate-500 font-body">
@@ -386,7 +386,7 @@ export const ProfilePage: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <Heart className="w-5 h-5 text-rose-500 fill-rose-500" />
-              <h2 className="font-display font-extrabold text-2xl text-brand uppercase tracking-tight">
+              <h2 className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-2xl text-brand uppercase tracking-tight">
                 SAVED RESIDENCES
               </h2>
             </div>
@@ -411,7 +411,7 @@ export const ProfilePage: React.FC = () => {
                 exit={{ opacity: 0, scale: 0.9 }}
                 onAnimationComplete={markCompleted}
                 style={forceVisible ? { opacity: 1, transform: 'none' } : undefined}
-                className="bg-white rounded-3xl overflow-hidden shadow-lg border border-slate-100 flex flex-col justify-between group hover:shadow-xl transition-all duration-300"
+                className="bg-white rounded-2xl md:rounded-3xl overflow-hidden shadow-lg border border-slate-100 flex flex-col justify-between group hover:shadow-xl transition-all duration-300"
               >
                 {/* Photo with category badge & Unsave Heart */}
                 <div className="relative aspect-[16/10] overflow-hidden">

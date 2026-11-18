@@ -21,12 +21,12 @@ export const PillButton: React.FC<PillButtonProps> = ({
   icon = true,
 }) => {
   const baseStyles =
-    'group inline-flex items-center justify-between font-display uppercase tracking-wider font-semibold rounded-full transition-all duration-300 whitespace-nowrap shrink-0 active:scale-95 cursor-pointer select-none';
+    'group inline-flex items-center justify-between font-display uppercase tracking-wider font-semibold rounded-full transition-all duration-300 max-w-full whitespace-normal md:whitespace-nowrap text-center md:text-left shrink-0 active:scale-95 cursor-pointer select-none';
 
   const sizeStyles = {
     sm: 'text-[10px] py-1.5 pl-4 pr-1.5 gap-2.5',
     md: 'text-[11px] py-2 pl-5 pr-2 gap-3',
-    lg: 'text-xs py-3 pl-7 pr-3 gap-4',
+    lg: 'text-xs py-3 pl-6 md:pl-7 pr-2.5 md:pr-3 gap-3 md:gap-4',
   }[size];
 
   const variantStyles = {
@@ -55,7 +55,7 @@ export const PillButton: React.FC<PillButtonProps> = ({
       onClick={onClick}
       className={`${baseStyles} ${sizeStyles} ${variantStyles} ${className}`}
     >
-      <span>{children}</span>
+      <span className="min-w-0 leading-snug">{children}</span>
       {icon && (
         <span
           className={`flex items-center justify-center rounded-full transition-transform duration-300 ${circleStyles} ${circleSize} shrink-0`}

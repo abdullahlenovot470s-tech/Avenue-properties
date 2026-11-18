@@ -25,9 +25,9 @@ export const Hero: React.FC<HeroProps> = ({ onOpenConsultation }) => {
   return (
     <section
       id="hero"
-      className="relative w-full pt-2 pb-5 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
+      className="relative w-full pt-2 pb-4 md:pb-5 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
     >
-      <div className="relative w-full min-h-[34rem] md:min-h-[85svh] max-h-[760px] rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-2xl flex flex-col justify-end p-5 sm:p-8 md:p-10 text-white bg-brand">
+      <div className="relative w-full min-h-[34rem] md:min-h-[85svh] max-h-[760px] rounded-2xl md:rounded-[32px] overflow-hidden shadow-2xl flex flex-col justify-end p-5 md:p-10 text-white bg-brand">
         {/* High-priority above-the-fold hero background image */}
         <img
           src={heroSrc}
@@ -77,12 +77,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenConsultation }) => {
             className="w-full lg:max-w-[45%]"
           >
             <h1
-              className="font-display font-bold uppercase tracking-tight text-white max-w-[560px]"
-              style={{
-                fontSize: 'clamp(1.5rem, 5.2vw, 2.75rem)',
-                lineHeight: 1.05,
-                letterSpacing: '-0.01em',
-              }}
+              className="font-display font-bold uppercase text-white max-w-[560px] text-[clamp(1.5rem,5.2vw,2rem)] md:text-[clamp(1.5rem,5.2vw,2.75rem)] leading-[1.05] tracking-[-0.01em]"
             >
               {`${BRAND_CONFIG.copy.hero.titleLine1} ${BRAND_CONFIG.copy.hero.titleLine2} ${BRAND_CONFIG.copy.hero.titleLine3}`}
             </h1>

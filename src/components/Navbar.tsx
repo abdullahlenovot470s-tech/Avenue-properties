@@ -6,9 +6,19 @@ import { useToast } from '../context/ToastContext';
 import { PillButton } from './common/PillButton';
 import { BRAND_CONFIG } from '../config/brand.config';
 
-export const Navbar: React.FC = () => {
+interface NavbarProps {
+  mobileMenuOpen?: boolean;
+  setMobileMenuOpen?: (open: boolean) => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({
+  mobileMenuOpen: controlledMobileMenuOpen,
+  setMobileMenuOpen: setControlledMobileMenuOpen,
+}) => {
   const [scrolled, setScrolled] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [uncontrolledMobileMenuOpen, setUncontrolledMobileMenuOpen] = useState(false);
+  const mobileMenuOpen = controlledMobileMenuOpen ?? uncontrolledMobileMenuOpen;
+  const setMobileMenuOpen = setControlledMobileMenuOpen ?? setUncontrolledMobileMenuOpen;
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -266,7 +276,7 @@ export const Navbar: React.FC = () => {
 
       {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden bg-accent text-accent-contrast flex flex-col justify-between p-6 sm:p-8 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 lg:hidden bg-accent text-accent-contrast flex flex-col justify-between p-5 sm:p-8 overflow-y-auto animate-in fade-in duration-200">
           <div className="flex items-center justify-between border-b border-current/15 pb-4">
             <Link
               to="/"

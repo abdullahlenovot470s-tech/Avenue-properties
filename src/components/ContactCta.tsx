@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { HERO_ASSETS } from '../data/realEstateData';
-import { SafeImage } from './common/SafeImage';
 import { CheckCircle2, Send, PhoneCall } from 'lucide-react';
 import { SITE_CONFIG, handleDemoContactClick, isValidContactPhone } from '../config/siteConfig';
 import { BRAND_CONFIG } from '../config/brand.config';
@@ -24,6 +22,7 @@ export const ContactCta: React.FC = () => {
   const { showToast } = useToast();
   const { t, isUrglish } = useLanguage();
   const { forceVisible, markCompleted } = useRevealFallback(1200);
+  const [ctaBgSrc, setCtaBgSrc] = useState<string>(BRAND_CONFIG.images.cta);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -120,22 +119,28 @@ export const ContactCta: React.FC = () => {
   return (
     <section
       id="contact"
-      className="relative w-full py-6 sm:py-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
+      className="relative w-full py-5 md:py-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
     >
-      <div className="relative w-full min-h-[28rem] sm:min-h-[32rem] rounded-[24px] sm:rounded-[32px] overflow-hidden p-6 sm:p-10 md:p-12 text-white shadow-2xl flex flex-col justify-center">
+      <div className="relative w-full min-h-[26rem] md:min-h-[32rem] rounded-2xl md:rounded-[32px] overflow-hidden p-5 md:p-12 text-white shadow-2xl flex flex-col justify-center bg-brand">
         <div className="absolute inset-0 z-0">
-          <SafeImage
-            src={HERO_ASSETS.ctaBackground}
-            fallbackSrc={HERO_ASSETS.heroImage}
+          <img
+            src={ctaBgSrc}
             alt="Luxury mountain residence at dusk"
-            sizes="100vw"
-            className="w-full h-full object-cover scale-105"
+            referrerPolicy="no-referrer"
+            loading="eager"
+            decoding="async"
+            onError={() => {
+              if (ctaBgSrc !== BRAND_CONFIG.images.hero) {
+                setCtaBgSrc(BRAND_CONFIG.images.hero);
+              }
+            }}
+            className="w-full h-full object-cover object-center md:scale-105"
           />
           <div className="absolute inset-0 bg-brand-dark/85 backdrop-blur-[2px]" />
           <div className="absolute inset-0 bg-gradient-to-r from-brand-deep/95 via-brand/70 to-brand-deep/85" />
         </div>
 
-        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 lg:gap-14 items-center">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={forceVisible ? { opacity: 1, y: 0 } : undefined}
@@ -144,13 +149,13 @@ export const ContactCta: React.FC = () => {
             transition={{ duration: 0.35, ease: 'easeOut' }}
             onAnimationComplete={markCompleted}
             style={forceVisible ? { opacity: 1, transform: 'none' } : undefined}
-            className="lg:col-span-6 w-full max-w-lg"
+            className="lg:col-span-6 w-full max-w-lg min-w-0"
           >
-            <div className="glass-panel rounded-3xl p-6 sm:p-8 md:p-10 text-white shadow-2xl border border-white/20">
+            <div className="max-md:bg-transparent max-md:backdrop-blur-none max-md:border-x-0 max-md:border-t-0 max-md:border-b max-md:border-white/20 max-md:rounded-none max-md:shadow-none max-md:p-0 max-md:pb-6 bg-white/10 backdrop-blur-xl rounded-3xl p-5 md:p-10 text-white shadow-2xl border border-white/20">
               <span className="text-[10px] font-display uppercase tracking-widest text-white/70 block mb-1">
                 {BRAND_CONFIG.copy.contactCta.eyebrow}
               </span>
-              <h3 className="font-display font-extrabold text-xl sm:text-2xl uppercase tracking-tight text-white mb-6">
+              <h3 className="font-display font-bold md:font-extrabold text-[clamp(1.05rem,3.6vw,1.25rem)] md:text-2xl uppercase tracking-tight text-white mb-4 md:mb-6">
                 {BRAND_CONFIG.copy.contactCta.heading}
               </h3>
 
@@ -310,15 +315,14 @@ export const ContactCta: React.FC = () => {
             </span>
 
             <h2
-              className="font-display font-black leading-[0.92] tracking-tighter text-white uppercase select-none"
-              style={{ fontSize: 'clamp(3.5rem, 6.5vw, 6.5rem)' }}
+              className="font-display font-bold md:font-black leading-[0.92] tracking-tighter text-white uppercase select-none text-[clamp(1.375rem,4.5vw,1.625rem)] md:text-[clamp(3.5rem,6.5vw,6.5rem)]"
             >
               LET&apos;S
               <br />
               TALK
             </h2>
 
-            <p className="mt-6 font-body text-xs sm:text-sm text-white/70 max-w-md leading-relaxed">
+            <p className="mt-4 md:mt-6 font-body text-xs sm:text-sm text-white/70 max-w-md leading-relaxed">
               {t(BRAND_CONFIG.copy.contactCta.intro, URGLISH_COPY.contactCta.intro)}
             </p>
 

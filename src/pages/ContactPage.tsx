@@ -182,9 +182,9 @@ export const ContactPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen pt-24 pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-6">
+    <div className="min-h-[100svh] pt-20 md:pt-24 pb-6 md:pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-4 md:space-y-6">
       {/* Header Card with Ghost Watermark */}
-      <section className="relative w-full bg-white rounded-[24px] sm:rounded-[32px] overflow-hidden p-6 sm:p-10 md:p-14 shadow-xl border border-slate-100">
+      <section className="relative w-full bg-white rounded-2xl md:rounded-[32px] overflow-hidden p-5 md:p-14 shadow-xl border border-slate-100">
         <div className="absolute top-4 right-0 pointer-events-none select-none overflow-hidden max-w-full z-0">
           <span
             className="font-display font-black leading-none uppercase tracking-tighter text-watermark/30 select-none"
@@ -194,11 +194,11 @@ export const ContactPage: React.FC = () => {
           </span>
         </div>
 
-        <div className="relative z-10 max-w-3xl space-y-4">
+        <div className="relative z-10 max-w-3xl space-y-3 md:space-y-4">
           <span className="text-[11px] font-display uppercase tracking-widest text-accent font-bold block">
             Direct Principal Access
           </span>
-          <h1 className="font-display font-extrabold text-2xl sm:text-4xl lg:text-5xl text-brand uppercase tracking-tight leading-none">
+          <h1 className="font-display font-bold md:font-extrabold text-[clamp(1.5rem,5.5vw,2rem)] md:text-4xl lg:text-5xl text-brand uppercase tracking-tight leading-none">
             CONNECT WITH {shortBrand.toUpperCase()} IN {BRAND_CONFIG.locale.country.toUpperCase()}.
           </h1>
           <p className="font-body text-sm sm:text-base text-brand/80 leading-relaxed font-light">
@@ -211,9 +211,9 @@ export const ContactPage: React.FC = () => {
       </section>
 
       {/* Regional Offices Showcase Grid */}
-      <section className="space-y-6">
+      <section className="space-y-4 md:space-y-6">
         <div className="px-2">
-          <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-brand uppercase tracking-tight">
+          <h2 className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-3xl text-brand uppercase tracking-tight">
             REGIONAL OFFICES & ADVISORY DESKS
           </h2>
           <p className="text-xs text-slate-500 font-body mt-1">
@@ -228,7 +228,7 @@ export const ContactPage: React.FC = () => {
           {REGIONAL_OFFICES.map((office) => (
             <div
               key={office.city}
-              className="relative bg-gradient-to-br from-brand to-accent rounded-3xl p-5 sm:p-6 text-brand-contrast overflow-hidden shadow-lg border border-white/10 flex flex-col justify-between group hover:shadow-2xl transition-all duration-300"
+              className="relative bg-gradient-to-br from-brand to-accent rounded-2xl md:rounded-3xl p-5 md:p-6 text-brand-contrast overflow-hidden shadow-lg border border-white/10 flex flex-col justify-between group hover:shadow-2xl transition-all duration-300"
             >
               {/* Faded watermark word of the city name */}
               <div className="absolute -bottom-3 -right-2 pointer-events-none select-none overflow-hidden max-w-full z-0 opacity-15">
@@ -251,7 +251,7 @@ export const ContactPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <h3 className="font-display font-bold text-lg sm:text-xl uppercase tracking-tight text-brand-contrast">
+                  <h3 className="font-display font-bold text-[clamp(1rem,3.6vw,1.25rem)] md:text-xl uppercase tracking-tight text-brand-contrast">
                     {office.city}
                   </h3>
                   <div className="text-[11px] text-brand-contrast/70 font-display uppercase tracking-wider mt-0.5">
@@ -330,7 +330,7 @@ export const ContactPage: React.FC = () => {
           fallback={
             <div
               aria-hidden="true"
-              className="w-full h-[360px] rounded-[24px] sm:rounded-[32px] bg-white/70 border border-slate-100"
+              className="w-full h-[300px] md:h-[360px] rounded-2xl md:rounded-[32px] bg-white/70 border border-slate-100"
             />
           }
         >
@@ -339,13 +339,13 @@ export const ContactPage: React.FC = () => {
       )}
 
       {/* Appointment & Inquiry Form Section */}
-      <section className="bg-brand rounded-[28px] sm:rounded-[36px] p-8 sm:p-14 md:p-16 text-brand-contrast shadow-2xl relative overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-          <div className="lg:col-span-5 space-y-5">
+      <section className="bg-brand rounded-2xl md:rounded-[36px] p-5 md:p-16 text-brand-contrast shadow-2xl relative overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 items-center">
+          <div className="lg:col-span-5 min-w-0 space-y-4 md:space-y-5">
             <span className="text-[10px] font-display uppercase tracking-widest text-brand-contrast/60 block">
               Confidential Representation
             </span>
-            <h2 className="font-display font-extrabold text-3xl sm:text-4xl uppercase tracking-tight">
+            <h2 className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-4xl uppercase tracking-tight">
               COMMENCE A PRIVATE DIALOGUE
             </h2>
             <p className="font-body text-xs sm:text-sm text-brand-contrast/80 leading-relaxed font-light">
@@ -355,9 +355,9 @@ export const ContactPage: React.FC = () => {
               )}
             </p>
 
-            <div className="p-4 rounded-2xl glass-card-subtle space-y-2 text-xs text-brand-contrast/90">
+            <div className="max-md:!bg-transparent max-md:!backdrop-blur-none max-md:!border-x-0 max-md:!border-b-0 max-md:!border-t max-md:!border-white/20 max-md:rounded-none max-md:p-0 max-md:pt-3 p-4 rounded-2xl glass-card-subtle space-y-2 text-xs text-brand-contrast/90">
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-emerald-400" />
+                <Clock className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span>
                   {t(
                     `Response window: Within 2 business hours (${BRAND_CONFIG.locale.timezoneLabel})`,
@@ -366,7 +366,7 @@ export const ContactPage: React.FC = () => {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span>
                   {t('Direct partner representation guaranteed', URGLISH_COPY.contactPage.directRep)}
                 </span>
@@ -382,21 +382,21 @@ export const ContactPage: React.FC = () => {
                   trackEvent('whatsapp_click', { location: 'contact_page' });
                   handleDemoContactClick(e, showToast);
                 }}
-                className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-display text-xs uppercase tracking-wider font-semibold transition-all shadow-md cursor-pointer"
+                className="inline-flex items-center justify-center gap-2.5 px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-display text-xs uppercase tracking-wider font-semibold transition-all shadow-md cursor-pointer max-w-full whitespace-normal text-center"
               >
                 <span>Chat via WhatsApp: {SITE_CONFIG.phone.whatsapp}</span>
               </a>
             </div>
           </div>
 
-          <div className="lg:col-span-7">
-            <div className="glass-panel rounded-3xl p-6 sm:p-10 border border-white/20 shadow-2xl">
+          <div className="lg:col-span-7 min-w-0">
+            <div className="max-md:!bg-transparent max-md:!backdrop-blur-none max-md:!border-x-0 max-md:!border-b-0 max-md:!border-t max-md:!border-white/20 max-md:rounded-none max-md:shadow-none max-md:p-0 max-md:pt-5 glass-panel rounded-3xl p-5 md:p-10 border border-white/20 shadow-2xl">
               {submitted ? (
                 <div className="py-12 text-center space-y-4">
                   <div className="w-16 h-16 bg-emerald-500/20 border border-emerald-400 rounded-full flex items-center justify-center mx-auto text-emerald-300">
                     <CheckCircle2 className="w-9 h-9" />
                   </div>
-                  <h3 className="font-display font-extrabold text-2xl uppercase tracking-tight text-white">
+                  <h3 className="font-display font-bold md:font-extrabold text-[clamp(1.05rem,3.6vw,1.25rem)] md:text-2xl uppercase tracking-tight text-white">
                     Inquiry Confirmed
                   </h3>
                   <p className="text-xs sm:text-sm text-white/80 max-w-md mx-auto leading-relaxed font-body">

@@ -111,9 +111,9 @@ export const RentDetailPage: React.FC = () => {
 
   if (!listing) {
     return (
-      <div className="min-h-screen pt-32 pb-20 px-6 text-center max-w-xl mx-auto flex flex-col items-center justify-center space-y-4">
+      <div className="min-h-[100svh] pt-28 md:pt-32 pb-12 md:pb-20 px-5 text-center max-w-xl mx-auto flex flex-col items-center justify-center space-y-4">
         <Building2 className="w-16 h-16 text-accent" />
-        <h2 className="font-display font-extrabold text-2xl uppercase tracking-tight text-brand">
+        <h2 className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-2xl uppercase tracking-tight text-brand">
           Rental Listing Not Found
         </h2>
         <p className="text-xs text-slate-500 font-body">
@@ -224,7 +224,7 @@ export const RentDetailPage: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen pt-24 pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-8">
+    <div className="min-h-[100svh] pt-20 md:pt-24 pb-6 md:pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-4 md:space-y-8">
       {/* Breadcrumb Navigation: Home / Rent / Title */}
       <nav aria-label="Breadcrumb" className="px-2">
         <ol className="flex items-center gap-2 text-xs font-display uppercase tracking-widest text-slate-500">
@@ -285,9 +285,9 @@ export const RentDetailPage: React.FC = () => {
       </div>
 
       {/* Gallery Showcase */}
-      <section className="bg-white rounded-[28px] sm:rounded-[36px] overflow-hidden p-3 sm:p-5 shadow-xl border border-slate-100 space-y-4">
+      <section className="bg-white rounded-2xl md:rounded-[36px] overflow-hidden p-5 shadow-xl border border-slate-100 space-y-4">
         {/* Main Stage Image */}
-        <div className="relative aspect-[16/9] md:aspect-[21/10] rounded-[22px] sm:rounded-[28px] overflow-hidden shadow-inner">
+        <div className="relative aspect-[16/9] md:aspect-[21/10] rounded-2xl md:rounded-[28px] overflow-hidden shadow-inner">
           <SafeImage
             src={currentImage}
             alt={`${listing.title} - Photo ${Math.min(activePhotoIdx + 1, images.length)}`}
@@ -343,11 +343,11 @@ export const RentDetailPage: React.FC = () => {
       </section>
 
       {/* Main Details & Booking Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 md:gap-8">
         {/* Left Column: Listing Overview & Specifications */}
-        <div className="lg:col-span-8 space-y-8">
+        <div className="lg:col-span-8 min-w-0 space-y-5 md:space-y-8">
           {/* Header Card */}
-          <div className="bg-white rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 shadow-xl border border-slate-100 space-y-6">
+          <div className="bg-white rounded-2xl md:rounded-[36px] p-5 md:p-10 shadow-xl border border-slate-100 space-y-5 md:space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -361,7 +361,7 @@ export const RentDetailPage: React.FC = () => {
                     </span>
                   )}
                 </div>
-                <h1 className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-brand uppercase tracking-tight">
+                <h1 className="font-display font-bold md:font-extrabold text-[clamp(1.5rem,5.5vw,2rem)] md:text-3xl lg:text-4xl text-brand uppercase tracking-tight">
                   {listing.title}
                 </h1>
               </div>
@@ -417,7 +417,7 @@ export const RentDetailPage: React.FC = () => {
 
             {/* Description */}
             <div className="space-y-3 pt-2">
-              <h2 className="font-display font-bold text-lg text-brand uppercase tracking-wide">
+              <h2 className="font-display font-bold text-[clamp(1.15rem,4.2vw,1.625rem)] md:text-lg text-brand uppercase tracking-wide">
                 Residence Overview
               </h2>
               <p className="font-body text-sm text-slate-600 leading-relaxed">
@@ -427,8 +427,8 @@ export const RentDetailPage: React.FC = () => {
           </div>
 
           {/* Tenancy Terms & Amenities Card */}
-          <div className="bg-white rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 shadow-xl border border-slate-100 space-y-6">
-            <h2 className="font-display font-bold text-lg text-brand uppercase tracking-wide">
+          <div className="bg-white rounded-2xl md:rounded-[36px] p-5 md:p-10 shadow-xl border border-slate-100 space-y-5 md:space-y-6">
+            <h2 className="font-display font-bold text-[clamp(1.15rem,4.2vw,1.625rem)] md:text-lg text-brand uppercase tracking-wide">
               Tenancy Terms & Utilities
             </h2>
 
@@ -479,8 +479,8 @@ export const RentDetailPage: React.FC = () => {
           </div>
 
           {BRAND_CONFIG.features.enableMaps && (
-            <div className="bg-white rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 shadow-xl border border-slate-100 space-y-4">
-              <h2 className="font-display font-bold text-lg text-brand uppercase tracking-wide">
+            <div className="bg-white rounded-2xl md:rounded-[36px] p-5 md:p-10 shadow-xl border border-slate-100 space-y-4">
+              <h2 className="font-display font-bold text-[clamp(1.15rem,4.2vw,1.625rem)] md:text-lg text-brand uppercase tracking-wide">
                 Neighborhood &amp; Location Map
               </h2>
               <LazyLocationMapEmbed
@@ -492,13 +492,13 @@ export const RentDetailPage: React.FC = () => {
         </div>
 
         {/* Right Column: Tenancy Inquiry & WhatsApp Contact */}
-        <div className="lg:col-span-4 space-y-6">
-          <div className="bg-white rounded-[28px] sm:rounded-[36px] p-6 sm:p-8 shadow-xl border border-slate-100 sticky top-28 space-y-6">
+        <div className="lg:col-span-4 min-w-0 space-y-5 md:space-y-6">
+          <div className="bg-white rounded-2xl md:rounded-[36px] p-5 md:p-8 shadow-xl border border-slate-100 sticky top-28 space-y-5 md:space-y-6">
             <div>
               <span className="text-[10px] font-display uppercase tracking-widest text-accent font-bold block mb-1">
                 Tenancy Concierge
               </span>
-              <h3 className="font-display font-extrabold text-xl text-brand uppercase tracking-tight">
+              <h3 className="font-display font-bold md:font-extrabold text-[clamp(1rem,3.6vw,1.25rem)] md:text-xl text-brand uppercase tracking-tight">
                 Schedule Private Viewing
               </h3>
               <p className="font-body text-xs text-slate-500 mt-1">

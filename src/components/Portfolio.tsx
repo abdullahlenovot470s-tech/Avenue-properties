@@ -49,9 +49,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject }) => {
   return (
     <section
       id="portfolio"
-      className="relative w-full py-6 sm:py-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
+      className="relative w-full py-5 md:py-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
     >
-      <div className="relative w-full bg-white rounded-[24px] sm:rounded-[32px] overflow-hidden p-4 sm:p-8 md:p-12 shadow-xl border border-slate-100">
+      <div className="relative w-full bg-white rounded-2xl md:rounded-[32px] overflow-hidden p-5 md:p-12 shadow-xl border border-slate-100">
         {/* Giant Watermark */}
         <div className="absolute top-6 -left-8 md:-left-12 z-0 pointer-events-none select-none overflow-hidden max-w-full">
           <span
@@ -87,9 +87,9 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject }) => {
                 <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/90 via-brand-dark/30 to-transparent" />
 
                 {/* Mobile Glass Overlay (< lg) */}
-                <div className="flex lg:hidden absolute inset-x-3 bottom-3 glass-panel rounded-xl p-3 text-white shadow-lg border border-white/25 items-end justify-between">
+                <div className="flex lg:hidden absolute inset-x-3 bottom-3 max-md:inset-x-4 max-md:bottom-4 glass-panel rounded-xl p-3 max-md:!bg-transparent max-md:!backdrop-blur-none max-md:!border-x-0 max-md:!border-b-0 max-md:!border-t max-md:!border-white/25 max-md:rounded-none max-md:shadow-none max-md:p-0 max-md:pt-3 text-white shadow-lg border border-white/25 items-end justify-between">
                   <div className="min-w-0 pr-2">
-                    <h3 className="font-display font-bold text-[0.95rem] uppercase tracking-tight text-white leading-tight truncate">
+                    <h3 className="font-display font-bold text-[clamp(0.95rem,3.6vw,1.25rem)] uppercase tracking-tight text-white leading-tight truncate">
                       {activeProject.title}
                     </h3>
                     <div className="flex items-center gap-2 text-[0.72rem] text-white/80 font-body mt-0.5">
@@ -158,10 +158,10 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject }) => {
           </div>
 
           {/* Right Column */}
-          <div className="lg:col-span-6 flex flex-col space-y-6 sm:space-y-8">
+          <div className="lg:col-span-6 flex flex-col space-y-4 md:space-y-8">
             <div className="flex flex-col space-y-3 sm:space-y-4">
               <div className="flex flex-row items-center justify-between gap-4">
-                <h2 className="font-display font-extrabold text-xl sm:text-3xl lg:text-4xl text-brand uppercase tracking-tight">
+                <h2 className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-3xl lg:text-4xl text-brand uppercase tracking-tight">
                   {BRAND_CONFIG.copy.portfolioSection.heading}
                 </h2>
               </div>

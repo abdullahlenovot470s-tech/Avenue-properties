@@ -125,7 +125,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="relative w-full max-w-2xl bg-brand border border-white/20 rounded-[28px] sm:rounded-[36px] overflow-hidden text-brand-contrast shadow-2xl p-6 sm:p-10"
+          className="relative w-full max-w-2xl bg-brand border border-white/20 rounded-2xl md:rounded-[36px] overflow-hidden text-brand-contrast shadow-2xl p-5 md:p-10"
         >
           <button
             onClick={onClose}
@@ -140,7 +140,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="w-16 h-16 bg-emerald-500/20 border border-emerald-400 rounded-full flex items-center justify-center mx-auto text-emerald-300">
                 <CheckCircle2 className="w-9 h-9" />
               </div>
-              <h3 className="font-display font-extrabold text-2xl uppercase tracking-tight text-white">
+              <h3 className="font-display font-bold md:font-extrabold text-[clamp(1.05rem,3.6vw,1.25rem)] md:text-2xl uppercase tracking-tight text-white">
                 Consultation Reserved
               </h3>
               <p className="text-sm text-white/80 max-w-md mx-auto leading-relaxed font-body">
@@ -170,7 +170,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
                   <span>Confidential Property Advisory</span>
                 </div>
-                <h3 className="font-display font-extrabold text-2xl sm:text-3xl uppercase tracking-tight text-white">
+                <h3 className="font-display font-bold md:font-extrabold text-[clamp(1.05rem,3.6vw,1.25rem)] md:text-3xl uppercase tracking-tight text-white">
                   BOOK A CONSULTATION
                 </h3>
                 <p className="text-xs text-white/70 mt-1 font-body">

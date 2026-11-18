@@ -156,7 +156,7 @@ export const ProjectsPage: React.FC = () => {
   });
 
   return (
-    <div className="min-h-screen pt-24 pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-6">
+    <div className="min-h-[100svh] pt-20 md:pt-24 pb-6 md:pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-4 md:space-y-6">
       {/* Breadcrumb Navigation: Home / Projects */}
       <nav aria-label="Breadcrumb" className="px-2">
         <ol className="flex items-center gap-2 text-xs font-display uppercase tracking-widest text-slate-500">
@@ -175,7 +175,7 @@ export const ProjectsPage: React.FC = () => {
       </nav>
 
       {/* Header Banner with Ghost Watermark "PROJECTS" */}
-      <section className="relative w-full bg-white rounded-[24px] sm:rounded-[32px] overflow-hidden p-4 sm:p-10 md:p-14 shadow-xl border border-slate-100">
+      <section className="relative w-full bg-white rounded-2xl md:rounded-[32px] overflow-hidden p-5 md:p-14 shadow-xl border border-slate-100">
         <div className="absolute top-4 right-0 pointer-events-none select-none overflow-hidden max-w-full z-0">
           <span
             className="font-display font-black leading-none uppercase tracking-tighter text-watermark/30 select-none"
@@ -185,11 +185,11 @@ export const ProjectsPage: React.FC = () => {
           </span>
         </div>
 
-        <div className="relative z-10 max-w-3xl space-y-4">
+        <div className="relative z-10 max-w-3xl space-y-3 md:space-y-4">
           <span className="text-[11px] font-display uppercase tracking-widest text-accent font-bold block">
             Signature Architectural Portfolio
           </span>
-          <h1 className="font-display font-extrabold text-2xl sm:text-4xl lg:text-5xl text-brand uppercase tracking-tight leading-none">
+          <h1 className="font-display font-bold md:font-extrabold text-[clamp(1.5rem,5.5vw,2rem)] md:text-4xl lg:text-5xl text-brand uppercase tracking-tight leading-none">
             SIGNATURE PROJECTS.
           </h1>
           <p className="font-body text-xs sm:text-base text-brand/80 leading-relaxed font-light">
@@ -278,7 +278,7 @@ export const ProjectsPage: React.FC = () => {
       {/* Mobile Filters Bottom Sheet */}
       {mobileFiltersOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:hidden bg-black/60 backdrop-blur-xs">
-          <div className="w-full bg-white rounded-t-3xl p-5 max-h-[85vh] overflow-y-auto space-y-4 animate-in slide-in-from-bottom duration-300">
+          <div className="w-full bg-white rounded-t-2xl p-5 max-h-[85svh] overflow-y-auto space-y-4 animate-in slide-in-from-bottom duration-300">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="font-display font-bold text-base text-brand uppercase tracking-tight">
                 Filter Projects
@@ -605,8 +605,8 @@ export const ProjectsPage: React.FC = () => {
             </div>
           </>
         ) : catalogUnavailable && allProjects.length === 0 ? (
-          <div className="bg-white rounded-3xl p-12 text-center border border-slate-100 shadow-md space-y-3">
-            <h3 className="font-display font-bold text-lg text-brand uppercase">
+          <div className="bg-white rounded-2xl md:rounded-3xl p-5 md:p-12 text-center border border-slate-100 shadow-md space-y-3">
+            <h3 className="font-display font-bold text-[clamp(1rem,3.6vw,1.25rem)] md:text-lg text-brand uppercase">
               Listings Temporarily Unavailable
             </h3>
             <p className="text-xs sm:text-sm text-slate-600 max-w-md mx-auto font-body">
@@ -616,14 +616,14 @@ export const ProjectsPage: React.FC = () => {
               href={getWhatsAppUrl('Assalam o Alaikum, I would like to inquire about your signature projects.')}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block mt-2 px-5 py-2.5 rounded-full bg-brand text-brand-contrast text-xs font-display uppercase tracking-wider font-semibold"
+              className="inline-block max-w-full whitespace-normal text-center mt-2 px-5 py-2.5 rounded-full bg-brand text-brand-contrast text-xs font-display uppercase tracking-wider font-semibold"
             >
               Contact on WhatsApp
             </a>
           </div>
         ) : (
-          <div className="bg-white rounded-3xl p-12 text-center border border-slate-100 shadow-md">
-            <h3 className="font-display font-bold text-lg text-brand uppercase">
+          <div className="bg-white rounded-2xl md:rounded-3xl p-5 md:p-12 text-center border border-slate-100 shadow-md">
+            <h3 className="font-display font-bold text-[clamp(1rem,3.6vw,1.25rem)] md:text-lg text-brand uppercase">
               No Residences Match Your Search
             </h3>
             <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto font-body mt-1">
@@ -634,7 +634,7 @@ export const ProjectsPage: React.FC = () => {
             </p>
             <button
               onClick={handleClearFilters}
-              className="mt-4 px-5 py-2.5 rounded-full bg-brand text-brand-contrast text-xs font-display uppercase tracking-wider font-semibold cursor-pointer"
+              className="mt-4 px-5 py-2.5 rounded-full bg-brand text-brand-contrast text-xs font-display uppercase tracking-wider font-semibold cursor-pointer max-w-full whitespace-normal text-center"
             >
               Reset Filters
             </button>

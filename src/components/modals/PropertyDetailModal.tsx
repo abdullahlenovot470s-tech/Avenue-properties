@@ -62,7 +62,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           onAnimationComplete={markCompleted}
           style={forceVisible ? { opacity: 1, transform: 'none' } : undefined}
-          className="relative w-full max-w-4xl bg-white rounded-[28px] sm:rounded-[36px] overflow-hidden text-brand shadow-2xl p-6 sm:p-10 border border-slate-100 max-h-[92vh] flex flex-col justify-between overflow-y-auto"
+          className="relative w-full max-w-4xl bg-white rounded-2xl md:rounded-[36px] overflow-hidden text-brand shadow-2xl p-5 md:p-10 border border-slate-100 max-h-[92svh] flex flex-col justify-between overflow-y-auto"
         >
           <button
             onClick={onClose}
@@ -108,7 +108,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                   <MapPin className="w-3.5 h-3.5" />
                   <span>{location}</span>
                 </div>
-                <h3 className="font-display font-extrabold text-2xl sm:text-3xl uppercase tracking-tight text-brand">
+                <h3 className="font-display font-bold md:font-extrabold text-[clamp(1.05rem,3.6vw,1.25rem)] md:text-3xl uppercase tracking-tight text-brand">
                   {name}
                 </h3>
               </div>

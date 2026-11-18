@@ -167,9 +167,9 @@ export const ProjectDetailPage: React.FC = () => {
 
   if (!project) {
     return (
-      <div className="min-h-screen pt-32 pb-20 px-6 text-center max-w-xl mx-auto flex flex-col items-center justify-center">
+      <div className="min-h-[100svh] pt-28 md:pt-32 pb-12 md:pb-20 px-5 md:px-6 text-center max-w-xl mx-auto flex flex-col items-center justify-center">
         <Building2 className="w-16 h-16 text-accent mb-4" />
-        <h2 className="font-display font-extrabold text-2xl uppercase tracking-tight text-brand">
+        <h2 className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-2xl uppercase tracking-tight text-brand">
           Residence Not Found
         </h2>
         <p className="text-xs text-slate-500 font-body mt-2 mb-6">
@@ -268,7 +268,7 @@ export const ProjectDetailPage: React.FC = () => {
   const isSold = project.status === 'Sold';
 
   return (
-    <div className="min-h-screen pt-24 pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-6">
+    <div className="min-h-[100svh] pt-20 md:pt-24 pb-6 md:pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-4 md:space-y-6">
       {/* Top Breadcrumbs & Actions Row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2">
         <nav aria-label="Breadcrumb">
@@ -337,8 +337,8 @@ export const ProjectDetailPage: React.FC = () => {
       </div>
 
       {/* Main Gallery Hero Card */}
-      <section className="bg-white rounded-[28px] sm:rounded-[36px] overflow-hidden p-4 sm:p-6 shadow-xl border border-slate-100">
-        <div className="relative aspect-[16/9] lg:aspect-[21/9] w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-lg border border-slate-200">
+      <section className="bg-white rounded-2xl md:rounded-[36px] overflow-hidden p-5 md:p-6 shadow-xl border border-slate-100">
+        <div className="relative aspect-[16/9] lg:aspect-[21/9] w-full rounded-2xl md:rounded-3xl overflow-hidden shadow-lg border border-slate-200">
           <SafeImage
             src={project.images[activePhotoIdx] || project.images[0]}
             alt={project.name}
@@ -389,12 +389,12 @@ export const ProjectDetailPage: React.FC = () => {
       </section>
 
       {/* Property Details Grid & Inquiry Sidebar */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 md:gap-8 items-start">
         {/* Left Column: Property Details */}
-        <div className="lg:col-span-8 space-y-8">
+        <div className="lg:col-span-8 min-w-0 space-y-5 md:space-y-8">
           {/* Headline & Specs Card */}
-          <div className="bg-white rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 shadow-xl border border-slate-100 space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-100 pb-6">
+          <div className="bg-white rounded-2xl md:rounded-[36px] p-5 md:p-10 shadow-xl border border-slate-100 space-y-5 md:space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-100 pb-5 md:pb-6">
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
                   <div className="flex items-center gap-2 text-xs font-semibold text-accent">
@@ -413,7 +413,7 @@ export const ProjectDetailPage: React.FC = () => {
                     </span>
                   )}
                 </div>
-                <h1 className="font-display font-extrabold text-3xl sm:text-4xl text-brand uppercase tracking-tight">
+                <h1 className="font-display font-bold md:font-extrabold text-[clamp(1.5rem,5.5vw,2rem)] md:text-3xl lg:text-4xl text-brand uppercase tracking-tight">
                   {project.name}
                 </h1>
                 <span className="text-xs font-display uppercase tracking-wider text-slate-500 mt-1 block">
@@ -489,13 +489,13 @@ export const ProjectDetailPage: React.FC = () => {
         </div>
 
         {/* Right Column: Private Viewing Booking Card */}
-        <div className="lg:col-span-4 sticky top-28">
-          <div className="bg-white rounded-[28px] sm:rounded-[36px] p-6 sm:p-8 shadow-xl border border-slate-100 space-y-5">
+        <div className="lg:col-span-4 min-w-0 sticky top-28">
+          <div className="bg-white rounded-2xl md:rounded-[36px] p-5 md:p-8 shadow-xl border border-slate-100 space-y-5">
             <div>
               <span className="text-[10px] font-display uppercase tracking-widest text-accent font-bold block mb-1">
                 Confidential Viewing
               </span>
-              <h3 className="font-display font-extrabold text-xl uppercase tracking-tight text-brand">
+              <h3 className="font-display font-bold md:font-extrabold text-[clamp(1rem,3.6vw,1.25rem)] md:text-xl uppercase tracking-tight text-brand">
                 SCHEDULE PRIVATE SITE VISIT
               </h3>
               <p className="text-xs text-slate-500 font-body mt-1">

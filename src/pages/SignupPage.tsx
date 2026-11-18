@@ -230,17 +230,17 @@ export const SignupPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen pt-28 pb-16 px-4 sm:px-6 flex items-center justify-center">
+    <div className="min-h-[100svh] pt-20 md:pt-28 pb-6 md:pb-16 px-3 sm:px-6 flex items-center justify-center">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
         onAnimationComplete={markCompleted}
         style={forceVisible ? { opacity: 1, transform: 'none' } : undefined}
-        className="w-full max-w-5xl bg-white rounded-[28px] sm:rounded-[36px] overflow-hidden shadow-2xl border border-slate-100 grid grid-cols-1 lg:grid-cols-12 min-h-[680px]"
+        className="w-full max-w-5xl bg-white rounded-2xl md:rounded-[36px] overflow-hidden shadow-2xl border border-slate-100 grid grid-cols-1 lg:grid-cols-12 min-h-[540px] md:min-h-[680px]"
       >
         {/* Left Half: Clean White Form / Verification Card */}
-        <div className="lg:col-span-6 p-8 sm:p-12 md:p-14 flex flex-col justify-center">
+        <div className="lg:col-span-6 p-5 md:p-14 flex flex-col justify-center">
           <div className="max-w-md mx-auto w-full">
             {step === 'form' ? (
               <>
@@ -248,7 +248,7 @@ export const SignupPage: React.FC = () => {
                   <span className="text-[10px] font-display uppercase tracking-widest text-accent font-bold block mb-1">
                     {BRAND_CONFIG.copy.auth.signupEyebrow}
                   </span>
-                  <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-brand uppercase tracking-tight">
+                  <h2 className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-3xl text-brand uppercase tracking-tight">
                     {BRAND_CONFIG.copy.auth.signupHeading}
                   </h2>
                   <p className="font-body text-xs sm:text-sm text-slate-500 mt-1">
@@ -475,7 +475,7 @@ export const SignupPage: React.FC = () => {
                   <span className="text-[10px] font-display uppercase tracking-widest text-emerald-700 font-bold block">
                     Verification Email Dispatched
                   </span>
-                  <h3 className="font-display font-extrabold text-2xl uppercase tracking-tight text-brand">
+                  <h3 className="font-display font-bold md:font-extrabold text-[clamp(1.05rem,3.6vw,1.25rem)] md:text-2xl uppercase tracking-tight text-brand">
                     Verify Your Email
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-600 font-body leading-relaxed max-w-sm mx-auto">

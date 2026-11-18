@@ -154,7 +154,7 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
           transition={{ duration: 0.25, ease: 'easeOut' }}
           onAnimationComplete={markCompleted}
           style={forceVisible ? { opacity: 1, transform: 'none' } : undefined}
-          className="relative w-full max-w-4xl bg-white rounded-[28px] sm:rounded-[36px] shadow-2xl overflow-hidden border border-slate-100 z-10 max-h-[92vh] flex flex-col"
+          className="relative w-full max-w-4xl bg-white rounded-2xl md:rounded-[36px] shadow-2xl overflow-hidden border border-slate-100 z-10 max-h-[92svh] flex flex-col"
         >
           <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
             <div className="flex items-center gap-2 text-xs font-display uppercase tracking-widest text-accent">
@@ -173,7 +173,7 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
             </button>
           </div>
 
-          <div className="overflow-y-auto p-6 sm:p-8 space-y-6 flex-1">
+          <div className="overflow-y-auto p-5 md:p-8 space-y-5 md:space-y-6 flex-1">
             <div className="space-y-3">
               <div className="relative aspect-[16/9] sm:aspect-[21/9] rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
                 <SafeImage
@@ -214,7 +214,7 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
                   <MapPin className="w-4 h-4" />
                   <span>{rental.areaSociety}</span>
                 </div>
-                <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-brand uppercase tracking-tight">
+                <h2 className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-3xl text-brand uppercase tracking-tight">
                   {rental.title}
                 </h2>
               </div>

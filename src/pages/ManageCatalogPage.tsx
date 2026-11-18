@@ -1537,7 +1537,7 @@ export const ManageCatalogPage: React.FC = () => {
     BRAND_CONFIG.features.enableReviews && (activeView === 'all' || activeView === 'reviews');
 
   return (
-    <div className="min-h-screen pt-24 pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-6">
+    <div className="min-h-[100svh] pt-20 md:pt-24 pb-6 md:pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-4 md:space-y-6">
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="px-2">
         <ol className="flex items-center gap-2 text-xs font-display uppercase tracking-widest text-slate-500">
@@ -1556,13 +1556,13 @@ export const ManageCatalogPage: React.FC = () => {
       </nav>
 
       {/* Centralized Inventory Overview & View Filter */}
-      <section className="bg-white rounded-[24px] sm:rounded-[32px] p-5 sm:p-10 shadow-xl border border-slate-100 space-y-6">
+      <section className="bg-white rounded-2xl md:rounded-[32px] p-5 md:p-10 shadow-xl border border-slate-100 space-y-5 md:space-y-6">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div className="space-y-2">
             <span className="text-[11px] font-display uppercase tracking-widest text-accent font-bold block">
               Centralized Property Manager
             </span>
-            <h1 className="font-display font-extrabold text-2xl sm:text-4xl text-brand uppercase tracking-tight leading-none">
+            <h1 className="font-display font-bold md:font-extrabold text-[clamp(1.5rem,5.5vw,2rem)] md:text-4xl text-brand uppercase tracking-tight leading-none">
               MANAGE DATA
             </h1>
             <p className="font-body text-xs sm:text-sm text-slate-600 max-w-2xl">

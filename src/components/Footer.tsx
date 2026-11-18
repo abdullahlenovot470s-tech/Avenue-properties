@@ -15,10 +15,10 @@ export const Footer: React.FC = () => {
   const { showToast } = useToast();
 
   return (
-    <footer className="relative w-full pt-4 pb-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto">
+    <footer className="relative w-full pt-2 md:pt-4 pb-20 md:pb-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto">
       {/* Dark Brand Rounded Block */}
-      <div className="relative w-full bg-brand rounded-[24px] sm:rounded-[32px] overflow-hidden p-6 sm:p-10 md:p-14 text-brand-contrast shadow-2xl flex flex-col justify-between">
-        <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12 pb-12 border-b border-white/10">
+      <div className="relative w-full bg-brand rounded-2xl md:rounded-[32px] overflow-hidden p-5 md:p-14 text-brand-contrast shadow-2xl flex flex-col justify-between">
+        <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-12 pb-8 md:pb-12 border-b border-white/10">
           {/* Brand & Mission */}
           <div className="md:col-span-5 space-y-4">
             <Link

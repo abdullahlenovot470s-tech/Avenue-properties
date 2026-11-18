@@ -44,10 +44,10 @@ export const ErrorFallbackPage: React.FC<ErrorFallbackProps> = ({
     <div
       role="alert"
       className={`w-full px-3 sm:px-6 md:px-8 flex items-center justify-center ${
-        fullViewport ? 'min-h-screen bg-surface text-brand py-10' : 'min-h-[65vh] py-8 sm:py-12'
+        fullViewport ? 'min-h-[100svh] bg-surface text-brand py-10' : 'min-h-[65svh] py-8 sm:py-12'
       }`}
     >
-      <div className="w-full max-w-2xl bg-white rounded-[24px] sm:rounded-[32px] p-6 sm:p-10 md:p-12 shadow-xl border border-slate-200/80 text-brand">
+      <div className="w-full max-w-2xl bg-white rounded-2xl md:rounded-[32px] p-5 md:p-12 shadow-xl border border-slate-200/80 text-brand">
         {/* Status Indicator + Monogram */}
         <div className="flex items-center justify-between gap-4 pb-6 border-b border-slate-200/80">
           <div className="flex items-center gap-3">
@@ -72,7 +72,7 @@ export const ErrorFallbackPage: React.FC<ErrorFallbackProps> = ({
         {/* Main Message */}
         <div className="pt-6 space-y-4">
           <h1
-            className="font-display font-extrabold text-2xl sm:text-3xl uppercase tracking-tight text-brand leading-tight"
+            className="font-display font-bold md:font-extrabold text-[clamp(1.5rem,5.5vw,2rem)] md:text-3xl uppercase tracking-tight text-brand leading-tight"
             style={{ textWrap: 'balance' }}
           >
             Something Went Wrong
@@ -116,9 +116,9 @@ export const ErrorFallbackPage: React.FC<ErrorFallbackProps> = ({
             <button
               type="button"
               onClick={onRetry}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-brand text-brand-contrast font-display font-semibold text-xs uppercase tracking-wider hover:bg-accent hover:text-accent-contrast transition-colors shadow-sm cursor-pointer whitespace-nowrap"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-brand text-brand-contrast font-display font-semibold text-xs uppercase tracking-wider hover:bg-accent hover:text-accent-contrast transition-colors shadow-sm cursor-pointer max-w-full whitespace-normal text-center md:whitespace-nowrap"
             >
-              <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+              <RefreshCw className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
               <span>Try Again</span>
             </button>
           )}
@@ -126,18 +126,18 @@ export const ErrorFallbackPage: React.FC<ErrorFallbackProps> = ({
           <button
             type="button"
             onClick={handleReload}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-brand/25 text-brand font-display font-semibold text-xs uppercase tracking-wider hover:bg-brand/5 transition-colors cursor-pointer whitespace-nowrap"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full border border-brand/25 text-brand font-display font-semibold text-xs uppercase tracking-wider hover:bg-brand/5 transition-colors cursor-pointer max-w-full whitespace-normal text-center md:whitespace-nowrap"
           >
-            <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+            <RefreshCw className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
             <span>Reload Page</span>
           </button>
 
           <button
             type="button"
             onClick={handleGoHome}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-brand/25 text-brand font-display font-semibold text-xs uppercase tracking-wider hover:bg-brand/5 transition-colors cursor-pointer whitespace-nowrap"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full border border-brand/25 text-brand font-display font-semibold text-xs uppercase tracking-wider hover:bg-brand/5 transition-colors cursor-pointer max-w-full whitespace-normal text-center md:whitespace-nowrap"
           >
-            <Home className="w-3.5 h-3.5" aria-hidden="true" />
+            <Home className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
             <span>Back to Home</span>
           </button>
 
@@ -145,17 +145,17 @@ export const ErrorFallbackPage: React.FC<ErrorFallbackProps> = ({
             href={whatsappHref}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-emerald-600/30 text-emerald-700 font-display font-semibold text-xs uppercase tracking-wider hover:bg-emerald-50 transition-colors cursor-pointer whitespace-nowrap"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full border border-emerald-600/30 text-emerald-700 font-display font-semibold text-xs uppercase tracking-wider hover:bg-emerald-50 transition-colors cursor-pointer max-w-full whitespace-normal text-center md:whitespace-nowrap"
           >
-            <MessageCircle className="w-3.5 h-3.5" aria-hidden="true" />
+            <MessageCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
             <span>WhatsApp Support</span>
           </a>
 
           <a
             href={`mailto:${supportEmail}`}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-accent font-display font-semibold text-xs uppercase tracking-wider hover:text-brand transition-colors cursor-pointer whitespace-nowrap"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-accent font-display font-semibold text-xs uppercase tracking-wider hover:text-brand transition-colors cursor-pointer max-w-full whitespace-normal text-center md:whitespace-nowrap"
           >
-            <Mail className="w-3.5 h-3.5" aria-hidden="true" />
+            <Mail className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
             <span>Email Developer</span>
           </a>
         </div>

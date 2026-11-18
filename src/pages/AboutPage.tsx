@@ -28,9 +28,9 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
   });
 
   return (
-    <div className="min-h-screen pt-24 pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-6">
+    <div className="min-h-[100svh] pt-20 md:pt-24 pb-6 md:pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-4 md:space-y-6">
       {/* Hero Narrative Card with Ghost Watermark */}
-      <section className="relative w-full bg-white rounded-[24px] sm:rounded-[32px] overflow-hidden p-6 sm:p-10 md:p-14 shadow-xl border border-slate-100">
+      <section className="relative w-full bg-white rounded-2xl md:rounded-[32px] overflow-hidden p-5 md:p-14 shadow-xl border border-slate-100">
         <div className="absolute top-4 right-0 pointer-events-none select-none overflow-hidden max-w-full z-0">
           <span
             className="font-display font-black leading-none uppercase tracking-tighter text-watermark/30 select-none"
@@ -40,11 +40,11 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
           </span>
         </div>
 
-        <div className="relative z-10 max-w-3xl space-y-4">
+        <div className="relative z-10 max-w-3xl space-y-3 md:space-y-4">
           <span className="text-[11px] font-display uppercase tracking-widest text-accent font-bold block">
             The {BRAND_CONFIG.identity.brandShortName} Manifesto
           </span>
-          <h1 className="font-display font-extrabold text-2xl sm:text-4xl lg:text-5xl text-brand uppercase tracking-tight leading-none">
+          <h1 className="font-display font-bold md:font-extrabold text-[clamp(1.5rem,5.5vw,2rem)] md:text-4xl lg:text-5xl text-brand uppercase tracking-tight leading-none">
             DEFINING ARCHITECTURAL EXCELLENCE IN {BRAND_CONFIG.locale.country.toUpperCase()}.
           </h1>
           <p className="font-body text-sm sm:text-base text-brand/80 leading-relaxed font-light">
@@ -75,13 +75,13 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
       </section>
 
       {/* Two-Column Story & Architectural Walkway Section */}
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-        <div className="lg:col-span-7 bg-brand text-brand-contrast rounded-[28px] sm:rounded-[36px] p-8 sm:p-12 md:p-14 shadow-xl flex flex-col justify-between">
-          <div className="space-y-6">
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8 items-stretch">
+        <div className="lg:col-span-7 min-w-0 w-full bg-brand text-brand-contrast rounded-2xl md:rounded-[36px] p-5 md:p-14 shadow-xl flex flex-col justify-between">
+          <div className="space-y-4 md:space-y-6">
             <span className="text-[10px] font-display uppercase tracking-widest text-brand-contrast/60 block">
               Core Principles
             </span>
-            <h2 className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl uppercase tracking-tight">
+            <h2 className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-3xl lg:text-4xl uppercase tracking-tight">
               PRECISION OVER VOLUME. INTEGRITY OVER SPEED.
             </h2>
             <p className="font-body text-xs sm:text-sm text-brand-contrast/80 leading-relaxed font-light">
@@ -143,16 +143,16 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
           </div>
         </div>
 
-        <div className="lg:col-span-5 relative aspect-[16/9] lg:aspect-auto rounded-[28px] sm:rounded-[36px] overflow-hidden shadow-xl min-h-[320px] group border border-slate-200">
+        <div className="lg:col-span-5 w-full min-w-0 relative aspect-[4/3] md:aspect-[16/9] lg:aspect-auto rounded-2xl md:rounded-[36px] overflow-hidden shadow-xl min-h-[220px] md:min-h-[320px] group border border-slate-200">
           <SafeImage
             src={HERO_ASSETS.approachWalkway}
             alt={`${BRAND_CONFIG.identity.brandShortName} Architecture Walkway`}
             width={1200}
             height={675}
-            className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
+            className="w-full h-full object-cover object-center md:group-hover:scale-105 transition-transform duration-700"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-brand/80 via-transparent to-transparent flex items-end p-8">
-            <div className="glass-panel p-5 rounded-2xl text-white w-full">
+          <div className="absolute inset-0 bg-gradient-to-t from-brand/80 via-transparent to-transparent flex items-end p-5 md:p-8">
+            <div className="max-md:!bg-transparent max-md:!backdrop-blur-none max-md:!border-x-0 max-md:!border-b-0 max-md:!border-t max-md:!border-white/25 max-md:rounded-none max-md:p-0 max-md:pt-3 glass-panel p-5 rounded-2xl text-white w-full">
               <span className="text-[10px] uppercase font-display tracking-widest text-white/70 block">
                 {BRAND_CONFIG.identity.brandShortName} Archive #094
               </span>
@@ -165,12 +165,12 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
       </section>
 
       {/* Leadership & Founding Partners */}
-      <section className="bg-white rounded-[28px] sm:rounded-[36px] p-8 sm:p-14 md:p-16 shadow-xl border border-slate-100">
-        <div className="mb-10">
+      <section className="bg-white rounded-2xl md:rounded-[36px] p-5 md:p-16 shadow-xl border border-slate-100">
+        <div className="mb-5 md:mb-10">
           <span className="text-[11px] font-display uppercase tracking-widest text-accent font-bold block mb-1">
             Executive Leadership
           </span>
-          <h2 className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-brand uppercase tracking-tight">
+          <h2 className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-3xl lg:text-4xl text-brand uppercase tracking-tight">
             PARTNERS & DIRECTORS
           </h2>
           <p className="text-xs sm:text-sm text-slate-700 font-medium font-body mt-1 max-w-xl">
@@ -181,47 +181,51 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
           </p>
         </div>
 
-        {/* 1. Mobile 2x2 Team Grid (< sm) */}
-        <div className="grid grid-cols-2 gap-3 sm:hidden">
-          {TEAM_MEMBERS.map((member) => (
-            <div
-              key={member.name}
-              className="bg-slate-50/80 rounded-2xl p-3 border border-slate-100 flex flex-col justify-between"
-            >
-              <div>
-                <div className="relative h-32 rounded-xl overflow-hidden mb-2 border border-slate-200/80 bg-brand shadow-xs">
-                  <AvatarPlaceholder
-                    variant={member.avatarVariant}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute top-1.5 right-1.5 glass-panel-dark px-2 py-0.5 rounded-full text-[9px] font-display uppercase tracking-wider text-white">
-                    {member.location}
+        {/* 1. Mobile 2x2 Team Grid (< md) */}
+        <div className="md:hidden space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            {TEAM_MEMBERS.map((member) => (
+              <div
+                key={member.name}
+                className="bg-slate-50/80 rounded-2xl p-3 border border-slate-100 flex flex-col gap-2.5 min-w-0"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="relative w-14 h-14 rounded-xl overflow-hidden border border-slate-200/80 bg-brand shadow-xs shrink-0">
+                    <AvatarPlaceholder
+                      variant={member.avatarVariant}
+                      className="w-full h-full object-cover"
+                    />
                   </div>
+                  <span className="glass-panel-dark px-2 py-0.5 rounded-full text-[9px] font-display uppercase tracking-wider text-white shrink-0">
+                    {member.location}
+                  </span>
                 </div>
 
-                <h3 className="font-display font-bold text-[0.88rem] text-brand uppercase tracking-tight truncate leading-tight">
-                  {member.name}
-                </h3>
-                <span className="text-[0.72rem] font-medium text-accent block truncate font-display">
-                  {member.role}
-                </span>
+                <div className="min-w-0 space-y-0.5">
+                  <h3 className="font-display font-bold text-[0.82rem] text-brand uppercase tracking-tight line-clamp-2 leading-tight">
+                    {member.name}
+                  </h3>
+                  <span className="text-[0.7rem] font-medium text-accent block line-clamp-2 leading-snug font-display">
+                    {member.role}
+                  </span>
+                </div>
               </div>
+            ))}
+          </div>
 
-              <div className="pt-2 mt-2 border-t border-slate-200/60">
-                <button
-                  onClick={() => onOpenConsultation(`Consultation with ${member.name}`)}
-                  className="text-[0.72rem] font-display uppercase tracking-wider text-brand hover:text-accent font-bold flex items-center gap-1 cursor-pointer"
-                >
-                  <span>Book Consultation</span>
-                  <span>→</span>
-                </button>
-              </div>
-            </div>
-          ))}
+          <div className="pt-1 flex justify-center">
+            <PillButton
+              variant="dark"
+              size="md"
+              onClick={() => onOpenConsultation('Executive Team Consultation')}
+            >
+              Book Consultation
+            </PillButton>
+          </div>
         </div>
 
-        {/* 2. Tablet & Desktop Team Grid (>= sm) */}
-        <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* 2. Tablet & Desktop Team Grid (>= md) */}
+        <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           {TEAM_MEMBERS.map((member) => (
             <div
               key={member.name}
@@ -265,9 +269,9 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
       </section>
 
       {/* CTA Block */}
-      <section className="bg-accent rounded-[28px] sm:rounded-[36px] p-8 sm:p-14 text-accent-contrast text-center shadow-xl relative overflow-hidden">
+      <section className="bg-accent rounded-2xl md:rounded-[36px] p-5 md:p-14 text-accent-contrast text-center shadow-xl relative overflow-hidden">
         <div className="relative z-10 max-w-2xl mx-auto space-y-4">
-          <h3 className="font-display font-black text-2xl sm:text-4xl uppercase tracking-tight">
+          <h3 className="font-display font-bold md:font-black text-[clamp(1.05rem,3.6vw,1.25rem)] md:text-4xl uppercase tracking-tight">
             DISCUSS AN ACQUISITION WITH {BRAND_CONFIG.identity.brandShortName.toUpperCase()}
           </h3>
           <p className="font-body text-xs sm:text-sm text-accent-contrast/80 leading-relaxed font-light">

@@ -73,9 +73,9 @@ export const ReviewsSection: React.FC = () => {
     <section
       id="reviews"
       aria-labelledby="reviews-heading"
-      className="relative w-full py-6 sm:py-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
+      className="relative w-full py-5 md:py-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
     >
-      <div className="relative w-full bg-white rounded-[24px] sm:rounded-[32px] overflow-hidden p-5 sm:p-8 md:p-12 shadow-xl border border-slate-100">
+      <div className="relative w-full bg-white rounded-2xl md:rounded-[32px] overflow-hidden p-5 md:p-12 shadow-xl border border-slate-100">
         {/* Background Watermark */}
         <div className="absolute top-5 -right-6 md:-right-10 z-0 pointer-events-none select-none overflow-hidden max-w-full">
           <span
@@ -87,14 +87,14 @@ export const ReviewsSection: React.FC = () => {
         </div>
 
         {/* Editorial Section Header */}
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-4 lg:gap-10 pb-6 sm:pb-8 border-b border-slate-200/80">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-4 lg:gap-10 pb-5 md:pb-8 border-b border-slate-200/80">
           <div className="max-w-2xl">
             <span className="text-[0.7rem] sm:text-xs font-display uppercase tracking-widest text-accent font-semibold block mb-1.5 sm:mb-2">
               {sectionCopy.eyebrow}
             </span>
             <h2
               id="reviews-heading"
-              className="font-display font-extrabold text-xl sm:text-3xl lg:text-4xl uppercase tracking-tight text-brand leading-tight"
+              className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-3xl lg:text-4xl uppercase tracking-tight text-brand leading-tight"
               style={{ textWrap: 'balance' }}
             >
               {sectionCopy.heading}

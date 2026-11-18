@@ -17,14 +17,14 @@ export const PrivacyPolicyPage: React.FC = () => {
   });
 
   return (
-    <div className="min-h-screen pt-28 pb-20 px-4 sm:px-6 md:px-8 max-w-4xl mx-auto">
-      <div className="bg-white rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 md:p-12 shadow-xl border border-slate-100 space-y-8">
-        <div className="border-b border-slate-200 pb-6 space-y-2">
+    <div className="min-h-[100svh] pt-20 md:pt-28 pb-6 md:pb-20 px-3 sm:px-6 md:px-8 max-w-4xl mx-auto">
+      <div className="bg-white rounded-2xl md:rounded-[36px] p-5 md:p-12 shadow-xl border border-slate-100 space-y-6 md:space-y-8">
+        <div className="border-b border-slate-200 pb-5 md:pb-6 space-y-2">
           <div className="inline-flex items-center gap-2 text-xs font-display uppercase tracking-widest text-accent font-semibold">
             <ShieldCheck className="w-4 h-4 text-emerald-600" aria-hidden="true" />
             <span>Legal &amp; Data Protection</span>
           </div>
-          <h1 className="font-display font-extrabold text-2xl sm:text-4xl uppercase tracking-tight text-brand">
+          <h1 className="font-display font-bold md:font-extrabold text-[clamp(1.5rem,5.5vw,2rem)] md:text-4xl uppercase tracking-tight text-brand">
             Privacy Policy
           </h1>
           <p className="font-body text-xs sm:text-sm text-slate-500">

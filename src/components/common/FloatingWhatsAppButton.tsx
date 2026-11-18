@@ -8,7 +8,11 @@ import { useToast } from '../../context/ToastContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { trackEvent } from '../../lib/analytics';
 
-export const FloatingWhatsAppButton: React.FC = () => {
+interface FloatingWhatsAppButtonProps {
+  hidden?: boolean;
+}
+
+export const FloatingWhatsAppButton: React.FC<FloatingWhatsAppButtonProps> = ({ hidden = false }) => {
   const location = useLocation();
   const { showToast } = useToast();
   const { isUrglish } = useLanguage();
@@ -40,7 +44,7 @@ export const FloatingWhatsAppButton: React.FC = () => {
     return '';
   }, [location.pathname, buyProperties, rentalListings, portfolioProjects, propertyListings]);
 
-  if (!BRAND_CONFIG.features.enableFloatingWhatsApp || hiddenPath) {
+  if (!BRAND_CONFIG.features.enableFloatingWhatsApp || hiddenPath || hidden) {
     return null;
   }
 
@@ -69,10 +73,10 @@ export const FloatingWhatsAppButton: React.FC = () => {
       rel="noopener noreferrer"
       onClick={handleClick}
       aria-label={`Chat with ${BRAND_CONFIG.identity.brandShortName} on WhatsApp`}
-      className="fixed z-40 bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] sm:bottom-6 sm:right-6 inline-flex items-center gap-2.5 px-4 py-3 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-2xl border border-white/20 transition-all hover:scale-105 active:scale-95 font-display text-xs uppercase tracking-wider font-bold"
+      className="fixed z-40 bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] md:bottom-6 md:right-6 inline-flex items-center justify-center gap-2.5 w-12 h-12 p-0 md:w-auto md:h-auto md:px-4 md:py-3 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-2xl border border-white/20 transition-all hover:scale-105 active:scale-95 font-display text-xs uppercase tracking-wider font-bold"
     >
       <MessageCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
-      <span className="hidden sm:inline">WhatsApp</span>
+      <span className="hidden md:inline">WhatsApp</span>
     </a>
   );
 };

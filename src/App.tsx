@@ -69,7 +69,7 @@ const NotFoundPage = lazy(() => loadNotFoundPage().then((m) => ({ default: m.Not
 // Lightweight fallback during rare un-prefetched chunk load
 function PageLoadingFallback() {
   return (
-    <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 space-y-4">
+    <div className="min-h-[60svh] flex flex-col items-center justify-center p-8 space-y-4">
       <div className="relative w-11 h-11 flex items-center justify-center">
         <div className="w-11 h-11 rounded-full border-2 border-brand/20 border-t-brand animate-spin" />
         <span className="absolute font-display font-black text-xs text-brand">
@@ -111,6 +111,7 @@ function AnimatedAppContent() {
     null
   );
   const [propertyModalOpen, setPropertyModalOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     initAnalytics();
@@ -156,11 +157,11 @@ function AnimatedAppContent() {
     BRAND_CONFIG.features.enableClientLogin || BRAND_CONFIG.features.enableAdminPanel;
 
   return (
-    <div className="min-h-screen bg-surface text-brand selection:bg-accent selection:text-accent-contrast antialiased flex flex-col justify-between">
+    <div className="min-h-[100svh] overflow-x-clip bg-surface text-brand selection:bg-accent selection:text-accent-contrast antialiased flex flex-col justify-between">
       <ScrollToTop />
 
       {/* Shared Persistent Navbar across all pages */}
-      <Navbar />
+      <Navbar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
 
       {/* Smooth non-blocking route transitions */}
       <main className="flex-1 w-full">
@@ -277,7 +278,7 @@ function AnimatedAppContent() {
       {/* Shared Footer across all pages */}
       <Footer />
 
-      <FloatingWhatsAppButton />
+      <FloatingWhatsAppButton hidden={mobileMenuOpen} />
 
       {/* Interactive Modals */}
       <ConsultationModal

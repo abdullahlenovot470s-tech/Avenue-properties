@@ -56,9 +56,9 @@ export const HomePage: React.FC<HomePageProps> = ({
           fallback={
             <div
               aria-hidden="true"
-              className="w-full py-6 sm:py-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
+              className="w-full py-5 md:py-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
             >
-              <div className="w-full h-[420px] rounded-[24px] sm:rounded-[32px] bg-white/70 border border-slate-100" />
+              <div className="w-full h-[360px] md:h-[420px] rounded-2xl md:rounded-[32px] bg-white/70 border border-slate-100" />
             </div>
           }
         >

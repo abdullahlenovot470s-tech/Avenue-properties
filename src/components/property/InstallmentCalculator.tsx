@@ -63,11 +63,11 @@ export const InstallmentCalculator: React.FC<InstallmentCalculatorProps> = ({
   const totalPayable = downPaymentAmount + monthlyInstallment * totalMonths;
 
   return (
-    <div className="bg-brand rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 text-brand-contrast shadow-xl space-y-6">
+    <div className="bg-brand rounded-2xl md:rounded-[36px] p-5 md:p-10 text-brand-contrast shadow-xl space-y-5 md:space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-contrast/10 pb-4">
-        <div className="flex items-center gap-2.5">
-          <Calculator className="w-5 h-5 text-amber-300" aria-hidden="true" />
-          <h3 className="font-display font-bold text-lg sm:text-xl uppercase tracking-tight text-brand-contrast">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Calculator className="w-5 h-5 text-amber-300 shrink-0" aria-hidden="true" />
+          <h3 className="font-display font-bold text-[clamp(1rem,3.6vw,1.25rem)] md:text-xl uppercase tracking-tight text-brand-contrast">
             HOME FINANCING &amp; INSTALLMENT CALCULATOR
           </h3>
         </div>
