@@ -50,7 +50,7 @@ Copy `.env.example` to `.env` for local development or configure these variables
    - **Build command**: `npm ci && npm run build`
    - **Start command**: `npm start` (runs `NODE_ENV=production tsx server.ts`)
 2. Set environment variables in Cloud Run (`MANAGEMENT_EMAIL`, `MANAGEMENT_PASSWORD`, `MANAGEMENT_TOKEN_SECRET`, `APP_URL`, email provider vars, and `VITE_ENQUIRY_*` at build time).
-3. For Firestore persistence on Cloud Run in the Firebase project, either provide `FIREBASE_SERVICE_ACCOUNT_JSON` or grant the Cloud Run service account **Cloud Datastore User** + **Firebase Authentication Viewer** roles on project `gen-lang-client-0156310830` and set `FIREBASE_USE_ADC=true`.
+3. For Firestore persistence on Cloud Run in the Firebase project, either provide `FIREBASE_SERVICE_ACCOUNT_JSON` or grant the Cloud Run service account **Cloud Datastore User** + **Firebase Authentication Viewer** roles on the project ID in `firebase-applet-config.json` and set `FIREBASE_USE_ADC=true`.
 4. Add your deployed `https://<service>-<hash>.run.app` domain to Firebase **Authorized domains** (see below).
 
 ### Option B: Render (Web Service)
@@ -63,7 +63,7 @@ Copy `.env.example` to `.env` for local development or configure these variables
 
 ## Firebase Authentication & Authorized Domains
 
-1. Open the [Firebase Console](https://console.firebase.google.com/) for project `gen-lang-client-0156310830`.
+1. Open the [Firebase Console](https://console.firebase.google.com/) for the project ID in `firebase-applet-config.json`.
 2. Navigate to **Authentication** > **Sign-in method** and ensure **Google** and **Email/Password** providers are enabled.
 3. Go to **Authentication** > **Settings** > **Authorized domains** and add every domain where the app is hosted (for example `localhost`, your `*.run.app` Cloud Run URL, `*.onrender.com` Render URL, or custom domain). Google Sign-In will fail with `auth/unauthorized-domain` until the active hostname is listed here.
 

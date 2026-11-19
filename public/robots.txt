@@ -6,4 +6,4 @@ Disallow: /profile
 Disallow: /login
 Disallow: /signup
 
-Sitemap: https://example.com/sitemap.xml
+Sitemap: https://avenue-properties.pages.dev/sitemap.xml

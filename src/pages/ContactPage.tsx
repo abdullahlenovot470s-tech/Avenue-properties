@@ -17,7 +17,6 @@ import {
   validateSpamCheckAndContent,
 } from '../lib/spamProtection';
 import { SpamChallengeField } from '../components/common/SpamChallengeField';
-import { LazyLocationMapEmbed } from '../components/common/LazyLocationMapEmbed';
 import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../services/enquiryWebhook';
 import { useCatalog } from '../context/CatalogContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -294,18 +293,7 @@ export const ContactPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="relative z-10 space-y-3 pt-4 mt-4 border-t border-white/15">
-                {BRAND_CONFIG.features.enableMaps && (
-                  <LazyLocationMapEmbed
-                    query={
-                      office.city === 'Overseas Desk'
-                        ? BRAND_CONFIG.contact.offices[0]?.address || office.city
-                        : `${office.address}, ${office.city}`
-                    }
-                    title={`${office.city} Office Location`}
-                    className="!bg-white/95"
-                  />
-                )}
+              <div className="relative z-10 pt-4 mt-4 border-t border-white/15">
                 <div className="flex items-center justify-between">
                   <a
                     href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(office.address)}`}

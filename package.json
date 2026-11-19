@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "start": "NODE_ENV=production tsx server.ts",
-    "prebuild": "node scripts/generate-sitemap.mjs",
+    "prebuild": "node scripts/sync-admin-email.mjs && node scripts/check-setup.mjs && node scripts/generate-sitemap.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",

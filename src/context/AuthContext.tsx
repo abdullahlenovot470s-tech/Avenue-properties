@@ -270,6 +270,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [managementToken, setManagementToken] = useState<string | null>(() => {
+    if (IS_STATIC_MODE) return null;
     const stored = getStoredToken(MANAGEMENT_TOKEN_KEY);
     return isManagementTokenValid(stored) ? stored : null;
   });
@@ -505,6 +506,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fbUser: FirebaseUser,
     force = false
   ): Promise<{ isManagement: boolean }> => {
+    if (IS_STATIC_MODE) {
+      const fbMgmtValid = await checkFirebaseMgmtSessionValid(fbUser);
+      setFirebaseMgmtSessionValid(fbMgmtValid);
+      setManagementToken(null);
+      setCurrentUser((prev) =>
+        prev && prev.id === fbUser.uid
+          ? { ...prev, role: fbMgmtValid ? 'management' : 'client' }
+          : prev
+      );
+      return { isManagement: fbMgmtValid };
+    }
+
     if (
       !force &&
       Date.now() - getRecentSyncTimestamp(GOOGLE_SYNC_TS_PREFIX, fbUser.uid) < GOOGLE_SYNC_TTL_MS
@@ -677,9 +690,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   setGuestSavedIds([]);
                 }
 
-                const storedMgmtToken = getStoredToken(MANAGEMENT_TOKEN_KEY);
+                const storedMgmtToken = IS_STATIC_MODE ? null : getStoredToken(MANAGEMENT_TOKEN_KEY);
                 const hasMatchingMgmtToken = Boolean(
-                  storedMgmtToken && isManagementTokenValid(storedMgmtToken, fbUser.email)
+                  !IS_STATIC_MODE &&
+                    storedMgmtToken &&
+                    isManagementTokenValid(storedMgmtToken, fbUser.email)
                 );
                 const isFbMgmt = isVerifiedFirebaseManagementUser(fbUser);
                 const fbMgmtValid = isFbMgmt ? await checkFirebaseMgmtSessionValid(fbUser) : false;
@@ -729,6 +744,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   await syncGoogleUserWithBackend(fbUser);
                 }
               }
+            } else if (IS_STATIC_MODE) {
+              setFirebaseMgmtSessionValid(false);
+              setManagementToken(null);
+              setCurrentUser(null);
             } else {
               // Restore verified email session if present
               const savedEmailSession = getStoredToken(EMAIL_SESSION_KEY);
@@ -857,11 +876,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sessionStorage.removeItem(EMAIL_SESSION_KEY);
       localStorage.removeItem(USER_TOKEN_KEY);
       sessionStorage.removeItem(USER_TOKEN_KEY);
-      const cachedMgmt = getStoredToken(MANAGEMENT_TOKEN_KEY);
-      if (cachedMgmt && !isManagementTokenValid(cachedMgmt, fbUser.email)) {
-        localStorage.removeItem(MANAGEMENT_TOKEN_KEY);
-        sessionStorage.removeItem(MANAGEMENT_TOKEN_KEY);
+      if (IS_STATIC_MODE) {
         setManagementToken(null);
+      } else {
+        const cachedMgmt = getStoredToken(MANAGEMENT_TOKEN_KEY);
+        if (cachedMgmt && !isManagementTokenValid(cachedMgmt, fbUser.email)) {
+          localStorage.removeItem(MANAGEMENT_TOKEN_KEY);
+          sessionStorage.removeItem(MANAGEMENT_TOKEN_KEY);
+          setManagementToken(null);
+        }
       }
 
       const [firestoreSynced, syncResult] = await Promise.all([
@@ -1575,14 +1598,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const verifyMgmtSessionNotExpired = async () => {
-      if (managementToken && currentUser?.email && !isManagementTokenValid(managementToken, currentUser.email)) {
+      if (
+        !IS_STATIC_MODE &&
+        managementToken &&
+        currentUser?.email &&
+        !isManagementTokenValid(managementToken, currentUser.email)
+      ) {
         await logout();
         return;
       }
       if (firebaseUser && isVerifiedFirebaseManagementUser(firebaseUser)) {
         const valid = await checkFirebaseMgmtSessionValid(firebaseUser);
         setFirebaseMgmtSessionValid(valid);
-        if (!valid && !isManagementTokenValid(managementToken, firebaseUser.email)) {
+        if (!valid && (IS_STATIC_MODE || !isManagementTokenValid(managementToken, firebaseUser.email))) {
           await logout();
         }
       }
@@ -1662,8 +1690,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isManagement = Boolean(
     currentUser &&
       currentUser.role === 'management' &&
-      (isManagementTokenValid(managementToken, currentUser.email) ||
-        (isVerifiedFirebaseManagementUser(firebaseUser) && firebaseMgmtSessionValid))
+      (IS_STATIC_MODE
+        ? isVerifiedFirebaseManagementUser(firebaseUser) && firebaseMgmtSessionValid
+        : isManagementTokenValid(managementToken, currentUser.email) ||
+          (isVerifiedFirebaseManagementUser(firebaseUser) && firebaseMgmtSessionValid))
   );
 
   return (

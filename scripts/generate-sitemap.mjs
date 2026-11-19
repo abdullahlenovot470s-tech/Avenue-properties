@@ -14,7 +14,7 @@ function readSiteUrl(brandConfigText) {
   const envUrl = String(process.env.VITE_SITE_URL || '').trim();
   if (envUrl) return envUrl.replace(/\/+$/, '');
   const match = brandConfigText.match(/siteUrl\s*:\s*['"`]([^'"`]+)['"`]/);
-  return (match?.[1] || 'https://example.com').trim().replace(/\/+$/, '');
+  return (match?.[1] || 'https://avenue-properties.pages.dev').trim().replace(/\/+$/, '');
 }
 
 function readTierVisibility() {

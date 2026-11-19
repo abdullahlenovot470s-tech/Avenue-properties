@@ -154,7 +154,7 @@ export const BRAND_CONFIG = {
     watermarkText: 'AVENUE',
     legalName: 'Avenue',
     foundedYear: 2025,
-    siteUrl: 'https://example.com',
+    siteUrl: 'https://avenue-properties.pages.dev',
     logoText: 'Avenue',
     logoImagePath: '/brand/logo.svg',
     faviconPath: '/brand/favicon.png',
