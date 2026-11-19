@@ -76,7 +76,7 @@ export const SignupPage: React.FC = () => {
   usePageSeo({
     title: `Create Account | ${BRAND_CONFIG.identity.brandName}`,
     description: `Create a ${BRAND_CONFIG.identity.brandName} client account to save property shortlists and book private viewings.`,
-    path: '/#/signup',
+    path: '/signup',
     noindex: true,
   });
 

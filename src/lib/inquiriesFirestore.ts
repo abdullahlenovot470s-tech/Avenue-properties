@@ -1,17 +1,6 @@
 import {
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  setDoc,
-  updateDoc,
-} from 'firebase/firestore';
-import {
-  db,
   formatFirestoreQuotaMessage,
+  getDbAsync,
   handleFirestoreError,
   isFirestoreQuotaError,
   OperationType,
@@ -111,6 +100,10 @@ export async function createInquiryFirestore(
 
   const docPath = `inquiries/${id}`;
   try {
+    const [db, { doc, setDoc }] = await Promise.all([
+      getDbAsync(),
+      import('firebase/firestore'),
+    ]);
     await setDoc(doc(db, 'inquiries', id), firestoreDoc);
     return { success: true, inquiry: record };
   } catch (err) {
@@ -139,6 +132,10 @@ export async function listInquiriesFirestore(): Promise<{
 }> {
   const path = 'inquiries';
   try {
+    const [db, { collection, getDocs, limit, orderBy, query }] = await Promise.all([
+      getDbAsync(),
+      import('firebase/firestore'),
+    ]);
     const q = query(collection(db, path), orderBy('createdAt', 'desc'), limit(300));
     const snap = await getDocs(q);
     const inquiries: ContactInquiryRecord[] = snap.docs.map((docSnap) => {
@@ -190,6 +187,10 @@ export async function updateInquiryStatusFirestore(
 ): Promise<{ success: boolean; error?: string }> {
   const path = `inquiries/${id}`;
   try {
+    const [db, { doc, updateDoc }] = await Promise.all([
+      getDbAsync(),
+      import('firebase/firestore'),
+    ]);
     await updateDoc(doc(db, 'inquiries', id), { status });
     return { success: true };
   } catch (err) {
@@ -213,6 +214,10 @@ export async function deleteInquiryFirestore(
 ): Promise<{ success: boolean; error?: string }> {
   const path = `inquiries/${id}`;
   try {
+    const [db, { deleteDoc, doc }] = await Promise.all([
+      getDbAsync(),
+      import('firebase/firestore'),
+    ]);
     await deleteDoc(doc(db, 'inquiries', id));
     return { success: true };
   } catch (err) {

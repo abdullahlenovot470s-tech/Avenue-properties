@@ -36,6 +36,7 @@ export const ProfilePage: React.FC = () => {
     currentUser,
     isAuthenticated,
     isManagement,
+    loading: authLoading,
     logout,
     savedPropertyIds,
     toggleSaveProperty,
@@ -52,7 +53,7 @@ export const ProfilePage: React.FC = () => {
   usePageSeo({
     title: `Client Profile & Shortlist | ${BRAND_CONFIG.identity.brandName}`,
     description: `Manage your saved property shortlist and contact preferences on ${BRAND_CONFIG.identity.brandName}.`,
-    path: '/#/profile',
+    path: '/profile',
     noindex: true,
   });
 
@@ -61,6 +62,17 @@ export const ProfilePage: React.FC = () => {
       setPhoneInput(currentUser.phone);
     }
   }, [currentUser?.phone]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-[60svh] flex flex-col items-center justify-center p-8 space-y-4">
+        <div className="w-10 h-10 rounded-full border-2 border-brand/20 border-t-brand animate-spin" />
+        <span className="font-display uppercase tracking-widest text-xs font-semibold text-accent">
+          Loading Profile...
+        </span>
+      </div>
+    );
+  }
 
   // Protected route check
   if (!isAuthenticated || !currentUser) {

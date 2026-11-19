@@ -1,4 +1,4 @@
-import { auth, getStorageLazy } from './firebase';
+import { getAuthAsync, getStorageLazy } from './firebase';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { BRAND_CONFIG } from '../config/brand.config';
 import { IS_STATIC_MODE } from './http';
@@ -258,6 +258,7 @@ async function uploadToCloudinarySigned(
 ): Promise<string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   let fbToken = '';
+  const auth = await getAuthAsync();
   if (auth?.currentUser) {
     try {
       fbToken = await auth.currentUser.getIdToken();
@@ -363,8 +364,8 @@ async function uploadToFirebaseStorage(
   originalName: string,
   folder: string
 ): Promise<string> {
+  const [auth, lazyStorage] = await Promise.all([getAuthAsync(), getStorageLazy()]);
   const userEmail = String(auth?.currentUser?.email || '').trim().toLowerCase();
-  const lazyStorage = await getStorageLazy();
   if (!lazyStorage || !auth?.currentUser || !auth.currentUser.emailVerified || userEmail !== MANAGEMENT_GOOGLE_EMAIL) {
     throw new Error(
       `Firebase Storage uploads require Google Sign-In with ${MANAGEMENT_GOOGLE_EMAIL}. Sign in with Google, or configure Cloudinary for direct preset uploads.`

@@ -17,7 +17,7 @@ interface PortfolioProps {
 
 export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject }) => {
   const navigate = useNavigate();
-  const { portfolioProjects } = useCatalog();
+  const { portfolioProjects, loading } = useCatalog();
   const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -26,6 +26,35 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onSelectProject }) => {
       setCurrentIndex(0);
     }
   }, [portfolioProjects.length, currentIndex]);
+
+  if (loading) {
+    return (
+      <section
+        id="portfolio"
+        aria-hidden="true"
+        className="relative w-full py-5 md:py-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
+      >
+        <div className="relative w-full bg-white rounded-2xl md:rounded-[32px] overflow-hidden p-5 md:p-12 shadow-xl border border-slate-100 animate-pulse">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-center">
+            <div className="lg:col-span-6">
+              <div className="w-full aspect-[4/3] max-h-[14rem] sm:max-h-none rounded-2xl sm:rounded-3xl bg-slate-200" />
+            </div>
+            <div className="lg:col-span-6 flex flex-col space-y-4 md:space-y-8">
+              <div className="space-y-3">
+                <div className="h-8 w-2/3 rounded-xl bg-slate-200" />
+                <div className="h-5 w-1/3 rounded-lg bg-slate-100" />
+              </div>
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-6">
+                <div className="aspect-[4/3] max-h-[10rem] sm:max-h-none rounded-xl sm:rounded-3xl bg-slate-200" />
+                <div className="aspect-[4/3] max-h-[10rem] sm:max-h-none rounded-xl sm:rounded-3xl bg-slate-200" />
+              </div>
+              <div className="h-16 rounded-2xl bg-slate-100" />
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (portfolioProjects.length === 0) {
     return null;

@@ -87,7 +87,7 @@ export const RentDetailPage: React.FC = () => {
     description: listing
       ? `${listing.title} for rent in ${listing.areaSociety}, ${listing.city} at ${formatRent(listing.monthlyRent)}/month. ${listing.description}`
       : `Explore verified rental residences in ${BRAND_CONFIG.locale.country} with ${BRAND_CONFIG.identity.brandName}.`,
-    path: listing ? `/#/rent/${listing.id}` : '/#/rent',
+    path: listing ? `/rent/${listing.id}` : '/rent',
     image: listing?.image,
     type: listing ? 'product' : 'website',
     noindex: !listing,
@@ -95,7 +95,7 @@ export const RentDetailPage: React.FC = () => {
       ? buildPropertyListingJsonLd({
           name: listing.title,
           description: listing.description,
-          path: `/#/rent/${listing.id}`,
+          path: `/rent/${listing.id}`,
           images: [listing.image, ...(listing.gallery || [])],
           priceNumeric: listing.monthlyRent,
           availability: listing.status === 'Rented' ? 'SoldOut' : 'InStock',

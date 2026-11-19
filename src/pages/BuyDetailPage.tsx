@@ -85,7 +85,7 @@ export const BuyDetailPage: React.FC = () => {
     description: property
       ? `${property.title} in ${property.location} (${property.area}) for ${property.price}. ${property.description}`
       : `Explore verified properties for sale in ${BRAND_CONFIG.locale.country} with ${BRAND_CONFIG.identity.brandName}.`,
-    path: property ? `/#/buy/${property.id}` : '/#/buy',
+    path: property ? `/buy/${property.id}` : '/buy',
     image: property?.image,
     type: property ? 'product' : 'website',
     noindex: !property,
@@ -93,7 +93,7 @@ export const BuyDetailPage: React.FC = () => {
       ? buildPropertyListingJsonLd({
           name: property.title,
           description: property.description,
-          path: `/#/buy/${property.id}`,
+          path: `/buy/${property.id}`,
           images: [property.image, ...(property.gallery || [])],
           priceNumeric: property.numericPrice,
           availability: property.status === 'Sold' ? 'SoldOut' : 'InStock',

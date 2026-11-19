@@ -63,7 +63,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onOpenConsulta
           onScroll={handleCarouselScroll}
           className="relative z-10 pt-4 flex lg:hidden overflow-x-auto snap-x snap-mandatory no-scrollbar gap-3 pb-2 -mx-1 px-1"
         >
-          {cards.map((card) => (
+          {cards.map((card, idx) => (
             <div
               key={card.number}
               onClick={() => onOpenConsultation(card.title)}
@@ -73,6 +73,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onOpenConsulta
                 <SafeImage
                   src={card.image}
                   alt={card.title}
+                  priority={idx < 3}
                   sizes="(max-width: 1024px) 84vw, 33vw"
                   className="w-full h-full object-cover object-center select-none"
                 />
@@ -145,6 +146,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onOpenConsulta
                   <SafeImage
                     src={card.image}
                     alt={card.title}
+                    priority={idx < 3}
                     sizes="(max-width: 1024px) 84vw, 33vw"
                     className="w-full h-full object-cover object-center select-none transition-transform duration-500 ease-out group-hover:scale-105"
                   />

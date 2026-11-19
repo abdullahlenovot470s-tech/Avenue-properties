@@ -23,11 +23,11 @@ import {
   Download,
   AlertCircle,
 } from 'lucide-react';
-import { collection, getDocs, deleteDoc, doc, limit, query } from 'firebase/firestore';
 import {
-  auth,
-  db,
   formatFirestoreQuotaMessage,
+  getAuthAsync,
+  getCurrentFirebaseUser,
+  getDbAsync,
   handleFirestoreError,
   isFirestoreQuotaError,
   OperationType,
@@ -214,7 +214,7 @@ export const ClientRecordsPage: React.FC = () => {
   usePageSeo({
     title: `Client Records & Accounts | ${BRAND_CONFIG.identity.brandName}`,
     description: `Management view of client inquiries and registered accounts for ${BRAND_CONFIG.identity.brandName}.`,
-    path: '/#/client-records',
+    path: '/records',
     noindex: true,
   });
 
@@ -235,7 +235,8 @@ export const ClientRecordsPage: React.FC = () => {
       }
 
       const headers = await buildMgmtHeaders(false);
-      if (!headers && !auth?.currentUser?.emailVerified) {
+      const activeFb = getCurrentFirebaseUser() || (await getAuthAsync())?.currentUser || firebaseUser;
+      if (!headers && !activeFb?.emailVerified) {
         setLoading(false);
         return;
       }
@@ -312,7 +313,7 @@ export const ClientRecordsPage: React.FC = () => {
           setBackendOnline(false);
         }
 
-        if (!backendLoaded && auth?.currentUser?.emailVerified) {
+        if (!backendLoaded && activeFb?.emailVerified) {
           const fsInquiries = await listInquiriesFirestore();
           if (fsInquiries.success) {
             loadedInquiries = fsInquiries.inquiries;
@@ -333,11 +334,15 @@ export const ClientRecordsPage: React.FC = () => {
         }
 
         // Also read verified client profiles persisted directly in Firestore /users
-        if (auth?.currentUser?.emailVerified) {
+        if (activeFb?.emailVerified) {
           try {
+            const [db, { collection, getDocs, limit, query }] = await Promise.all([
+              getDbAsync(),
+              import('firebase/firestore'),
+            ]);
             const snap = await getDocs(query(collection(db, 'users'), limit(300)));
             firestoreUsersLoaded = true;
-            const currentAdminEmail = (auth?.currentUser?.email || '').toLowerCase();
+            const currentAdminEmail = (activeFb.email || '').toLowerCase();
             snap.docs.forEach((docSnap) => {
               const data = docSnap.data() as Record<string, unknown>;
               const email = String(data.email || '').trim().toLowerCase();
@@ -407,7 +412,7 @@ export const ClientRecordsPage: React.FC = () => {
         setRefreshing(false);
       }
     },
-    [buildMgmtHeaders, logout, showToast]
+    [buildMgmtHeaders, firebaseUser, logout, showToast]
   );
 
   useEffect(() => {
@@ -559,7 +564,8 @@ export const ClientRecordsPage: React.FC = () => {
     newStatus: 'new' | 'contacted' | 'resolved'
   ) => {
     const headers = await buildMgmtHeaders(true);
-    if (!headers && !auth?.currentUser?.emailVerified) return;
+    const activeFb = getCurrentFirebaseUser() || firebaseUser;
+    if (!headers && !activeFb?.emailVerified) return;
     setUpdatingInquiryId(id);
     try {
       let useFirestoreFallback = IS_STATIC_MODE || !headers || !backendOnline;
@@ -588,7 +594,7 @@ export const ClientRecordsPage: React.FC = () => {
         }
       }
 
-      if (useFirestoreFallback && auth?.currentUser?.emailVerified) {
+      if (useFirestoreFallback && activeFb?.emailVerified) {
         const fsRes = await updateInquiryStatusFirestore(id, newStatus);
         if (fsRes.success) {
           applyInquiryStatusUpdate(id, newStatus);
@@ -600,7 +606,7 @@ export const ClientRecordsPage: React.FC = () => {
         showToast(SERVER_UNREACHABLE_MESSAGE, 'error');
       }
     } catch {
-      if (auth?.currentUser?.emailVerified) {
+      if (activeFb?.emailVerified) {
         const fsRes = await updateInquiryStatusFirestore(id, newStatus);
         if (fsRes.success) {
           applyInquiryStatusUpdate(id, newStatus);
@@ -616,7 +622,8 @@ export const ClientRecordsPage: React.FC = () => {
 
   const handleDeleteInquiry = async (id: string, name: string) => {
     const headers = await buildMgmtHeaders(false);
-    if (!headers && !auth?.currentUser?.emailVerified) return;
+    const activeFb = getCurrentFirebaseUser() || firebaseUser;
+    if (!headers && !activeFb?.emailVerified) return;
     try {
       let useFirestoreFallback = IS_STATIC_MODE || !headers || !backendOnline;
 
@@ -645,7 +652,7 @@ export const ClientRecordsPage: React.FC = () => {
       }
 
       setConfirmDeleteInquiryId(null);
-      if (useFirestoreFallback && auth?.currentUser?.emailVerified) {
+      if (useFirestoreFallback && activeFb?.emailVerified) {
         const fsRes = await deleteInquiryFirestore(id);
         if (fsRes.success) {
           applyInquiryRemoval(id);
@@ -661,7 +668,7 @@ export const ClientRecordsPage: React.FC = () => {
       }
     } catch {
       setConfirmDeleteInquiryId(null);
-      if (auth?.currentUser?.emailVerified) {
+      if (activeFb?.emailVerified) {
         const fsRes = await deleteInquiryFirestore(id);
         if (fsRes.success) {
           applyInquiryRemoval(id);
@@ -678,7 +685,8 @@ export const ClientRecordsPage: React.FC = () => {
 
   const handleDeleteAccount = async (id: string, email: string) => {
     const headers = await buildMgmtHeaders(false);
-    if (!headers && !auth?.currentUser?.emailVerified) return;
+    const activeFb = getCurrentFirebaseUser() || firebaseUser;
+    if (!headers && !activeFb?.emailVerified) return;
     try {
       const res =
         !IS_STATIC_MODE && headers
@@ -690,8 +698,12 @@ export const ClientRecordsPage: React.FC = () => {
       const parsed = res ? await parseApiResponse<{ success?: boolean; error?: string }>(res) : null;
 
       let deletedFromFirestore = false;
-      if (auth?.currentUser?.emailVerified) {
+      if (activeFb?.emailVerified) {
         try {
+          const [db, { deleteDoc, doc }] = await Promise.all([
+            getDbAsync(),
+            import('firebase/firestore'),
+          ]);
           await deleteDoc(doc(db, 'users', id));
           deletedFromFirestore = true;
         } catch (err) {

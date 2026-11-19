@@ -5,6 +5,8 @@
     "": {
       "name": "react-example",
       "dependencies": {
+        "@fontsource/manrope": "^5.3.0",
+        "@fontsource/unbounded": "^5.3.0",
         "@tailwindcss/vite": "^4.3.3",
         "@types/nodemailer": "^8.0.2",
         "@vitejs/plugin-react": "^6.1.1",
@@ -204,6 +206,10 @@
     "@firebase/util": ["@firebase/util@1.15.3", "", { "dependencies": { "tslib": "^2.1.0" }, "hasInstallScript": true }, "sha512-c/z/gaIlaaLZEuGbE6sLUuJ61tskg1JghvhcNQzW948ASBinbVBBRnZTC4b4yt4LaEtJQkYlyzqLHcutFwEIvA=="],
 
     "@firebase/webchannel-wrapper": ["@firebase/webchannel-wrapper@1.0.7", "", {}, "sha512-phBFwieDLvkZGYN9CE9ZFNEIoBVksprzsnCzQejCmCHtgwCXReeuRpoEGN9C4EbhONztv8NRV1tau6Rb9pONwQ=="],
+
+    "@fontsource/manrope": ["@fontsource/manrope@5.3.0", "", {}, "sha512-obJ1Dv3+uCA6HlHgW8u4BGYxJR9In2HW7gjJhlflEvkrj1X1iSEwu0fToL+JYGC/FEKFfIz1sBuPduvcL2gIAA=="],
+
+    "@fontsource/unbounded": ["@fontsource/unbounded@5.3.0", "", {}, "sha512-pPD6hsTnjoQRr6pCsqMHbHBfauB4LZygCNQEUJHu+CO2wzDFHqELEFSG7sTwo5Z5Gr4q3OK0fIILOXBJDv6lcw=="],
 
     "@google-cloud/firestore": ["@google-cloud/firestore@9.4.1", "", { "dependencies": { "@google-cloud/firestore-api": "^0.7.0", "@opentelemetry/api": "^1.9.0", "fast-deep-equal": "^3.1.3", "functional-red-black-tree": "^1.0.1", "google-gax": "^6.12.1", "protobufjs": "^7.5.3" } }, "sha512-arD6dY7H8G1647OqxHmgxb3m1IYAAoVDm9ev/MW1meQRl1XuaNP8j/aGT5HPHTeaV/8AHZVGeXwOGTovWvIKIA=="],
 

@@ -1,22 +1,18 @@
 import {
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  setDoc,
-  writeBatch,
-} from 'firebase/firestore';
-import {
-  db,
   formatFirestoreQuotaMessage,
+  getDbAsync,
   handleFirestoreError,
   isFirestoreQuotaError,
   OperationType,
 } from './firebase';
+import { getDefaultFaqs, getDefaultReviews } from './catalogDefaults';
+
+export { getDefaultFaqs, getDefaultReviews };
+
+async function fsDeps() {
+  const [db, fs] = await Promise.all([getDbAsync(), import('firebase/firestore')]);
+  return { db, ...fs };
+}
 import { PORTFOLIO_PROJECTS, PROPERTY_LISTINGS } from '../data/realEstateData';
 import { BUY_PROPERTIES, computeAreaCategory, type BuyProperty } from '../data/buyPropertiesData';
 import { RENTAL_LISTINGS } from '../data/rentalsData';
@@ -59,29 +55,6 @@ const ALLOWED_PROJECT_STATUSES: readonly ProjectStatus[] = ['Available', 'Under 
 const ALLOWED_BUY_STATUSES: readonly BuyStatus[] = ['Available', 'Under Offer', 'Sold'];
 const ALLOWED_RENT_STATUSES: readonly RentStatus[] = ['Available', 'Rented'];
 
-const DEFAULT_FAQ_CATEGORIES = ['Title & Legal', 'Overseas Buyers', 'Pricing & Taxes'];
-
-export function getDefaultFaqs(): FaqItem[] {
-  return BRAND_CONFIG.copy.faqs.map((faq, idx) => ({
-    id: `faq-${idx + 1}`,
-    question: faq.question,
-    answer: faq.answer,
-    category: DEFAULT_FAQ_CATEGORIES[idx] || 'General Advisory',
-  }));
-}
-
-export function getDefaultReviews(): ClientReview[] {
-  return BRAND_CONFIG.copy.testimonials.map((review) => ({
-    id: review.id,
-    quote: review.quote,
-    author: review.author,
-    role: review.role,
-    location: review.location,
-    propertyContext: review.propertyContext,
-    rating: review.rating,
-    date: review.date,
-  }));
-}
 
 let catalogSnapshotCache: CatalogStoreData | null = null;
 let clientSeededConfirmed = false;
@@ -120,6 +93,20 @@ function getEmptyCatalog(): CatalogStoreData {
     faqs: [],
     reviews: [],
   };
+}
+
+function hasPropertyCatalogEntries(catalog: {
+  projects?: unknown[];
+  listings?: unknown[];
+  buy?: unknown[];
+  rent?: unknown[];
+}): boolean {
+  return (
+    (Array.isArray(catalog.projects) ? catalog.projects.length : 0) > 0 ||
+    (Array.isArray(catalog.listings) ? catalog.listings.length : 0) > 0 ||
+    (Array.isArray(catalog.buy) ? catalog.buy.length : 0) > 0 ||
+    (Array.isArray(catalog.rent) ? catalog.rent.length : 0) > 0
+  );
 }
 
 const LEGACY_REPLACEMENTS: Record<string, string> = {
@@ -632,6 +619,7 @@ function mapProjectToPropertyListing(
 
 async function readOrderedCollection<T extends { id: string }>(collectionName: string): Promise<T[]> {
   try {
+    const { db, collection, query, orderBy, limit, getDocs } = await fsDeps();
     const q = query(
       collection(db, collectionName),
       orderBy('_sortOrder', 'desc'),
@@ -652,6 +640,7 @@ async function seedSectionBatch(
   collectionName: string,
   items: Array<{ id: string }>
 ): Promise<void> {
+  const { db, writeBatch, doc } = await fsDeps();
   const baseOrder = Date.now();
   const batch = writeBatch(db);
   items.forEach((item, index) => {
@@ -670,6 +659,7 @@ async function seedSectionBatch(
 
 async function clearCollectionBatch(collectionName: string): Promise<void> {
   try {
+    const { db, getDocs, query, collection, limit, writeBatch } = await fsDeps();
     const snap = await getDocs(query(collection(db, collectionName), limit(MAX_CATALOG_READ_LIMIT)));
     if (snap.empty) return;
     const batch = writeBatch(db);
@@ -683,6 +673,7 @@ async function clearCollectionBatch(collectionName: string): Promise<void> {
 async function ensureCatalogSeededClient(): Promise<void> {
   if (clientSeededConfirmed) return;
 
+  const { db, doc, getDoc, setDoc } = await fsDeps();
   const metaRef = doc(db, 'catalog_meta', 'state');
   try {
     const metaSnap = await getDoc(metaRef);
@@ -728,6 +719,7 @@ async function ensureFaqsSeededClient(): Promise<void> {
   await ensureCatalogSeededClient();
   if (clientFaqsSeededConfirmed) return;
 
+  const { db, doc, getDoc, setDoc } = await fsDeps();
   const metaRef = doc(db, 'catalog_meta', 'state');
   try {
     const metaSnap = await getDoc(metaRef);
@@ -760,6 +752,7 @@ async function ensureReviewsSeededClient(): Promise<void> {
   await ensureCatalogSeededClient();
   if (clientReviewsSeededConfirmed) return;
 
+  const { db, doc, getDoc, setDoc } = await fsDeps();
   const metaRef = doc(db, 'catalog_meta', 'state');
   try {
     const metaSnap = await getDoc(metaRef);
@@ -789,6 +782,7 @@ async function ensureReviewsSeededClient(): Promise<void> {
 
 async function writePublicSnapshotDoc(catalog: CatalogStoreData): Promise<boolean> {
   try {
+    const { db, doc, setDoc } = await fsDeps();
     const clean = JSON.parse(
       JSON.stringify({
         id: 'public',
@@ -828,9 +822,14 @@ async function writePublicSnapshotDoc(catalog: CatalogStoreData): Promise<boolea
 export async function publishPublicCatalogSnapshotFirestore(): Promise<{
   published: boolean;
   snapshotWriteFailed?: boolean;
+  catalog?: CatalogStoreData;
   error?: string;
 }> {
   try {
+    await ensureCatalogSeededClient();
+    await ensureFaqsSeededClient();
+    await ensureReviewsSeededClient();
+
     const [projects, listings, buy, rent, faqs, reviews] = await Promise.all([
       readOrderedCollection<PortfolioProject>('catalog_projects'),
       readOrderedCollection<PropertyListing>('catalog_listings'),
@@ -855,6 +854,7 @@ export async function publishPublicCatalogSnapshotFirestore(): Promise<{
     return {
       published: ok,
       snapshotWriteFailed: !ok,
+      catalog: normalized,
       ...(ok
         ? {}
         : {
@@ -887,6 +887,7 @@ export async function fetchCatalogFromFirestore(): Promise<{
 
   inFlightCatalogFetch = (async () => {
     try {
+      const { db, doc, getDoc } = await fsDeps();
       // 1-Read Optimization: try consolidated /catalog_snapshot/public document first
       const snapshotSnap = await getDoc(doc(db, 'catalog_snapshot', 'public'));
       if (snapshotSnap.exists()) {
@@ -902,28 +903,32 @@ export async function fetchCatalogFromFirestore(): Promise<{
               ? snapData.reviews
               : getDefaultReviews(),
         });
-        publicSnapshotExists = true;
-        lastSnapshotWriteFailed = false;
-        clientSeededConfirmed = true;
-        clientFaqsSeededConfirmed = true;
-        clientReviewsSeededConfirmed = true;
-        catalogSnapshotCache = normalized;
-        return {
-          catalog: normalized,
-          fromFirestore: true,
-          fromSnapshot: true,
-          snapshotWriteFailed: false,
-        };
+
+        if (hasPropertyCatalogEntries(normalized)) {
+          publicSnapshotExists = true;
+          lastSnapshotWriteFailed = false;
+          clientSeededConfirmed = true;
+          clientFaqsSeededConfirmed = true;
+          clientReviewsSeededConfirmed = true;
+          catalogSnapshotCache = normalized;
+          return {
+            catalog: normalized,
+            fromFirestore: true,
+            fromSnapshot: true,
+            snapshotWriteFailed: false,
+          };
+        }
       }
 
       publicSnapshotExists = false;
 
-      // Fallback when catalog_snapshot/public has not been published yet
+      // Fallback when catalog_snapshot/public has not been published yet or contains 0 property entries
       const metaSnap = await getDoc(doc(db, 'catalog_meta', 'state'));
       if (!metaSnap.exists()) {
         clientSeededConfirmed = false;
         clientFaqsSeededConfirmed = false;
         clientReviewsSeededConfirmed = false;
+        catalogSnapshotCache = null;
         return {
           catalog: BRAND_CONFIG.features.showSampleDataOnError
             ? getDefaultCatalog()
@@ -1027,6 +1032,7 @@ export async function addProjectFirestore(
   const path = `catalog_projects/${built.item.id}`;
   try {
     await ensureCatalogSeededClient();
+    const { db, doc, setDoc } = await fsDeps();
     await setDoc(doc(db, 'catalog_projects', built.item.id), {
       ...stripUndefined(built.item as unknown as Record<string, unknown>),
       _sortOrder: Date.now(),
@@ -1055,6 +1061,7 @@ export async function updateProjectFirestore(
 
   try {
     await ensureCatalogSeededClient();
+    const { db, doc, getDoc, setDoc } = await fsDeps();
     const projRef = doc(db, 'catalog_projects', id);
     const projSnap = await getDoc(projRef);
     if (projSnap.exists()) {
@@ -1098,6 +1105,7 @@ export async function updateProjectFirestore(
 export async function removeProjectFirestore(id: string): Promise<CatalogMutationResult> {
   try {
     await ensureCatalogSeededClient();
+    const { db, doc, getDoc, deleteDoc } = await fsDeps();
     const projRef = doc(db, 'catalog_projects', id);
     const listRef = doc(db, 'catalog_listings', id);
     const [projSnap, listSnap] = await Promise.all([getDoc(projRef), getDoc(listRef)]);
@@ -1128,6 +1136,7 @@ export async function addBuyFirestore(
   const path = `catalog_buy/${built.item.id}`;
   try {
     await ensureCatalogSeededClient();
+    const { db, doc, setDoc } = await fsDeps();
     await setDoc(doc(db, 'catalog_buy', built.item.id), {
       ...stripUndefined(built.item as unknown as Record<string, unknown>),
       _sortOrder: Date.now(),
@@ -1157,6 +1166,7 @@ export async function updateBuyFirestore(
   const path = `catalog_buy/${id}`;
   try {
     await ensureCatalogSeededClient();
+    const { db, doc, getDoc, setDoc } = await fsDeps();
     const ref = doc(db, 'catalog_buy', id);
     const snap = await getDoc(ref);
     if (!snap.exists()) {
@@ -1188,6 +1198,7 @@ export async function removeBuyFirestore(id: string): Promise<CatalogMutationRes
   const path = `catalog_buy/${id}`;
   try {
     await ensureCatalogSeededClient();
+    const { db, doc, getDoc, deleteDoc } = await fsDeps();
     const ref = doc(db, 'catalog_buy', id);
     const snap = await getDoc(ref);
     if (!snap.exists()) {
@@ -1218,6 +1229,7 @@ export async function addRentFirestore(
   const path = `catalog_rent/${built.item.id}`;
   try {
     await ensureCatalogSeededClient();
+    const { db, doc, setDoc } = await fsDeps();
     await setDoc(doc(db, 'catalog_rent', built.item.id), {
       ...stripUndefined(built.item as unknown as Record<string, unknown>),
       _sortOrder: Date.now(),
@@ -1247,6 +1259,7 @@ export async function updateRentFirestore(
   const path = `catalog_rent/${id}`;
   try {
     await ensureCatalogSeededClient();
+    const { db, doc, getDoc, setDoc } = await fsDeps();
     const ref = doc(db, 'catalog_rent', id);
     const snap = await getDoc(ref);
     if (!snap.exists()) {
@@ -1278,6 +1291,7 @@ export async function removeRentFirestore(id: string): Promise<CatalogMutationRe
   const path = `catalog_rent/${id}`;
   try {
     await ensureCatalogSeededClient();
+    const { db, doc, getDoc, deleteDoc } = await fsDeps();
     const ref = doc(db, 'catalog_rent', id);
     const snap = await getDoc(ref);
     if (!snap.exists()) {
@@ -1308,6 +1322,7 @@ export async function addFaqFirestore(
   const path = `catalog_faqs/${built.item.id}`;
   try {
     await ensureFaqsSeededClient();
+    const { db, doc, setDoc } = await fsDeps();
     await setDoc(doc(db, 'catalog_faqs', built.item.id), {
       ...stripUndefined(built.item as unknown as Record<string, unknown>),
       _sortOrder: Date.now(),
@@ -1337,6 +1352,7 @@ export async function updateFaqFirestore(
   const path = `catalog_faqs/${id}`;
   try {
     await ensureFaqsSeededClient();
+    const { db, doc, getDoc, setDoc } = await fsDeps();
     const ref = doc(db, 'catalog_faqs', id);
     const snap = await getDoc(ref);
     if (!snap.exists()) {
@@ -1368,6 +1384,7 @@ export async function removeFaqFirestore(id: string): Promise<CatalogMutationRes
   const path = `catalog_faqs/${id}`;
   try {
     await ensureFaqsSeededClient();
+    const { db, doc, getDoc, deleteDoc } = await fsDeps();
     const ref = doc(db, 'catalog_faqs', id);
     const snap = await getDoc(ref);
     if (!snap.exists()) {
@@ -1398,6 +1415,7 @@ export async function addReviewFirestore(
   const path = `catalog_reviews/${built.item.id}`;
   try {
     await ensureReviewsSeededClient();
+    const { db, doc, setDoc } = await fsDeps();
     await setDoc(doc(db, 'catalog_reviews', built.item.id), {
       ...stripUndefined(built.item as unknown as Record<string, unknown>),
       _sortOrder: Date.now(),
@@ -1427,6 +1445,7 @@ export async function updateReviewFirestore(
   const path = `catalog_reviews/${id}`;
   try {
     await ensureReviewsSeededClient();
+    const { db, doc, getDoc, setDoc } = await fsDeps();
     const ref = doc(db, 'catalog_reviews', id);
     const snap = await getDoc(ref);
     if (!snap.exists()) {
@@ -1458,6 +1477,7 @@ export async function removeReviewFirestore(id: string): Promise<CatalogMutation
   const path = `catalog_reviews/${id}`;
   try {
     await ensureReviewsSeededClient();
+    const { db, doc, getDoc, deleteDoc } = await fsDeps();
     const ref = doc(db, 'catalog_reviews', id);
     const snap = await getDoc(ref);
     if (!snap.exists()) {
@@ -1484,6 +1504,7 @@ export async function resetCatalogFirestore(
 ): Promise<CatalogMutationResult> {
   try {
     const defaults = getDefaultCatalog();
+    const { db, doc, setDoc } = await fsDeps();
     const metaRef = doc(db, 'catalog_meta', 'state');
 
     if (section === 'projects') {

@@ -1,5 +1,4 @@
 import { IS_STATIC_MODE, parseApiResponse, SERVER_UNREACHABLE_MESSAGE } from './http';
-import { createInquiryFirestore } from './inquiriesFirestore';
 import { isEnquiryWebhookConfigured } from '../services/enquiryWebhook';
 import {
   checkClientSubmissionRateLimit,
@@ -52,6 +51,11 @@ export interface RegisteredAccountRecord {
   lastLoginAt?: string;
 }
 
+async function submitInquiryViaFirestore(payload: InquiryPayload) {
+  const { createInquiryFirestore } = await import('./inquiriesFirestore');
+  return createInquiryFirestore(payload);
+}
+
 export async function submitInquiry(
   payload: InquiryPayload
 ): Promise<{
@@ -97,7 +101,7 @@ export async function submitInquiry(
   }
 
   if (IS_STATIC_MODE) {
-    const fsResult = await createInquiryFirestore(payload);
+    const fsResult = await submitInquiryViaFirestore(payload);
     if (fsResult.success) {
       recordClientSubmissionSuccess(fingerprint);
       trackEvent('enquiry_submit', { source: payload.source, mode: 'firestore' });
@@ -130,7 +134,7 @@ export async function submitInquiry(
     }>(res);
 
     if (parsed.unreachable || !parsed.data) {
-      const fsResult = await createInquiryFirestore(payload);
+      const fsResult = await submitInquiryViaFirestore(payload);
       if (fsResult.success) {
         recordClientSubmissionSuccess(fingerprint);
         trackEvent('enquiry_submit', { source: payload.source, mode: 'firestore' });
@@ -157,7 +161,7 @@ export async function submitInquiry(
     trackEvent('enquiry_submit', { source: payload.source, mode: 'backend' });
     return { success: true, inquiry: parsed.data.inquiry, storageMode: 'backend' };
   } catch {
-    const fsResult = await createInquiryFirestore(payload);
+    const fsResult = await submitInquiryViaFirestore(payload);
     if (fsResult.success) {
       recordClientSubmissionSuccess(fingerprint);
       trackEvent('enquiry_submit', { source: payload.source, mode: 'firestore' });

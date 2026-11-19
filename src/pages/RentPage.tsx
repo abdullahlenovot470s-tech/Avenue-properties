@@ -36,7 +36,7 @@ export const RentPage: React.FC = () => {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const { isPropertySaved, toggleSaveProperty } = useAuth();
-  const { rentalListings, catalogUnavailable } = useCatalog();
+  const { rentalListings, catalogUnavailable, loading } = useCatalog();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const { t, getRentalDescription } = useLanguage();
@@ -44,7 +44,7 @@ export const RentPage: React.FC = () => {
   usePageSeo({
     title: `Homes For Rent | ${BRAND_CONFIG.identity.brandName}`,
     description: `Verified houses, executive apartments, and upper/lower portions for rent in ${BRAND_CONFIG.locale.mainCities.join(', ')} from ${BRAND_CONFIG.identity.brandName}.`,
-    path: '/#/rent',
+    path: '/rent',
     image: BRAND_CONFIG.images.rent1,
     structuredData: {
       '@context': 'https://schema.org',
@@ -459,11 +459,64 @@ export const RentPage: React.FC = () => {
           </span>
         </div>
 
-        {filteredListings.length > 0 ? (
+        {loading ? (
+          <>
+            <div aria-hidden="true" className="space-y-3 sm:hidden">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="flex bg-white rounded-2xl p-2.5 border border-slate-100 shadow-sm gap-3 items-center animate-pulse"
+                >
+                  <div className="w-[38%] shrink-0 aspect-[4/3] rounded-xl bg-slate-200" />
+                  <div className="flex-1 min-w-0 space-y-2 py-1">
+                    <div className="h-4 w-24 rounded bg-slate-200" />
+                    <div className="h-3.5 w-full rounded bg-slate-100" />
+                    <div className="h-3 w-2/3 rounded bg-slate-100" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div aria-hidden="true" className="hidden sm:grid lg:hidden grid-cols-2 gap-4">
+              {[0, 1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm flex flex-col justify-between animate-pulse"
+                >
+                  <div className="w-full aspect-[4/3] max-h-[12rem] bg-slate-200" />
+                  <div className="p-3.5 space-y-2.5">
+                    <div className="h-5 w-1/2 rounded bg-slate-200" />
+                    <div className="h-4 w-4/5 rounded bg-slate-100" />
+                    <div className="h-3 w-3/5 rounded bg-slate-100" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div aria-hidden="true" className="hidden lg:grid grid-cols-3 gap-8">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <div
+                  key={i}
+                  className="bg-white rounded-[28px] sm:rounded-3xl overflow-hidden shadow-lg border border-slate-100 flex flex-col justify-between animate-pulse"
+                >
+                  <div className="w-full aspect-[4/3] bg-slate-200" />
+                  <div className="p-6 sm:p-7 space-y-4">
+                    <div className="space-y-2">
+                      <div className="h-3.5 w-1/2 rounded bg-slate-100" />
+                      <div className="h-6 w-4/5 rounded bg-slate-200" />
+                      <div className="h-5 w-1/3 rounded bg-slate-200" />
+                      <div className="h-8 w-full rounded bg-slate-100" />
+                    </div>
+                    <div className="h-10 rounded-xl bg-slate-100" />
+                    <div className="h-11 rounded-full bg-slate-200" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : filteredListings.length > 0 ? (
           <>
             {/* 1. Mobile Compact Horizontal Row Cards (screens under 640px) */}
             <div className="space-y-3 sm:hidden">
-              {filteredListings.map((listing) => {
+              {filteredListings.map((listing, idx) => {
                 const saved = isPropertySaved(listing.id);
                 return (
                   <div
@@ -476,6 +529,7 @@ export const RentPage: React.FC = () => {
                       <SafeImage
                         src={listing.image}
                         alt={listing.title}
+                        priority={idx < 3}
                         width={300}
                         height={225}
                         className="w-full h-full object-cover"
@@ -523,7 +577,7 @@ export const RentPage: React.FC = () => {
 
             {/* 2. Tablet 2-Column Grid (640px to 1023px) */}
             <div className="hidden sm:grid lg:hidden grid-cols-2 gap-4">
-              {filteredListings.map((listing) => {
+              {filteredListings.map((listing, idx) => {
                 const saved = isPropertySaved(listing.id);
                 return (
                   <div
@@ -531,10 +585,11 @@ export const RentPage: React.FC = () => {
                     onClick={() => navigate(`/rent/${listing.id}`)}
                     className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm flex flex-col justify-between group hover:shadow-md transition-all cursor-pointer"
                   >
-                    <div className="relative aspect-[4/3] max-h-[12rem] overflow-hidden">
+                    <div className="relative w-full aspect-[4/3] max-h-[12rem] overflow-hidden">
                       <SafeImage
                         src={listing.image}
                         alt={listing.title}
+                        priority={idx < 3}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                       <div className="absolute top-2.5 left-2.5 right-12 flex flex-wrap gap-1.5">
@@ -576,7 +631,7 @@ export const RentPage: React.FC = () => {
 
             {/* 3. Desktop 3-Column Grid (1024px and up) */}
             <div className="hidden lg:grid grid-cols-3 gap-8">
-              {filteredListings.map((listing) => {
+              {filteredListings.map((listing, idx) => {
                 const saved = isPropertySaved(listing.id);
 
                 return (
@@ -585,10 +640,11 @@ export const RentPage: React.FC = () => {
                     onClick={() => navigate(`/rent/${listing.id}`)}
                     className="bg-white rounded-[28px] sm:rounded-3xl overflow-hidden shadow-lg border border-slate-100 flex flex-col justify-between group hover:shadow-2xl transition-all duration-300 cursor-pointer"
                   >
-                    <div className="relative aspect-[4/3] overflow-hidden">
+                    <div className="relative w-full aspect-[4/3] overflow-hidden">
                       <SafeImage
                         src={listing.image}
                         alt={listing.title}
+                        priority={idx < 3}
                         width={800}
                         height={600}
                         className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"

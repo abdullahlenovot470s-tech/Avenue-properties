@@ -186,7 +186,7 @@ export function usePageMeta(options: PageMetaOptions): void {
     const cleanTitle = title.trim();
     const cleanDesc = description.trim().slice(0, 320);
     const canonicalUrl = resolveAbsoluteUrl(
-      path || (typeof window !== 'undefined' ? window.location.pathname + window.location.hash : '/')
+      path || (typeof window !== 'undefined' ? window.location.pathname || '/' : '/')
     );
     const imageUrl = resolveShareImageUrl(image);
 

@@ -29,7 +29,27 @@ import {
   validateSpamCheckAndContent,
 } from './src/lib/spamProtection.ts';
 
-const PORT = Number(process.env.PORT) || 3000;
+function resolveServerPort(): number {
+  const args = process.argv.slice(2);
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg.startsWith('--port=')) {
+      const parsed = Number(arg.slice('--port='.length));
+      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    } else if (arg === '--port' && i + 1 < args.length) {
+      const parsed = Number(args[i + 1]);
+      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
+  }
+  const envPort = Number(process.env.PORT);
+  const nginxPort = Number(process.env.NGINX_PORT);
+  if (Number.isFinite(nginxPort) && nginxPort > 0 && envPort === nginxPort) {
+    return Number(process.env.DEFAULT_APP_PORT) || 3000;
+  }
+  return Number.isFinite(envPort) && envPort > 0 ? envPort : 3000;
+}
+
+const PORT = resolveServerPort();
 const MANAGEMENT_EMAIL = (process.env.MANAGEMENT_EMAIL || '').trim().toLowerCase();
 const MANAGEMENT_PASSWORD = process.env.MANAGEMENT_PASSWORD || '';
 const DEFAULT_MANAGEMENT_GOOGLE_EMAIL = BRAND_CONFIG.contact.managementGoogleEmail.toLowerCase();
@@ -747,11 +767,18 @@ async function getCatalog(forceRefresh = false): Promise<CatalogStore> {
             ? snapData.reviews
             : getDefaultReviews(),
       });
-      catalogSeedConfirmed = true;
-      faqsSeedConfirmed = true;
-      reviewsSeedConfirmed = true;
-      serverCatalogCache = { data: normalized, fetchedAt: Date.now() };
-      return normalized;
+      const hasAnyProperties =
+        normalized.projects.length > 0 ||
+        normalized.listings.length > 0 ||
+        normalized.buy.length > 0 ||
+        normalized.rent.length > 0;
+      if (hasAnyProperties) {
+        catalogSeedConfirmed = true;
+        faqsSeedConfirmed = true;
+        reviewsSeedConfirmed = true;
+        serverCatalogCache = { data: normalized, fetchedAt: Date.now() };
+        return normalized;
+      }
     }
 
     await ensureCatalogSeeded();
@@ -4053,8 +4080,12 @@ async function startServer() {
   // Mount Vite middleware in dev or serve static dist in production
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
+    const disableHmr = process.env.DISABLE_HMR === 'true';
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        ...(disableHmr ? { hmr: false, ws: false } : {}),
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

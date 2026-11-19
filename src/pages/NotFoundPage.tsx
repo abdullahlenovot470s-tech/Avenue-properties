@@ -8,7 +8,7 @@ export const NotFoundPage: React.FC = () => {
   usePageMeta({
     title: `Page Not Found | ${BRAND_CONFIG.identity.brandName}`,
     description: `The requested page could not be found on ${BRAND_CONFIG.identity.brandName}.`,
-    path: '/#/404',
+    path: '/404',
     noindex: true,
   });
 

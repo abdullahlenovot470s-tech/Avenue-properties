@@ -119,7 +119,7 @@ export const ContactCta: React.FC = () => {
   return (
     <section
       id="contact"
-      className="relative w-full py-5 md:py-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
+      className="below-fold-section relative w-full py-5 md:py-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
     >
       <div className="relative w-full min-h-[26rem] md:min-h-[32rem] rounded-2xl md:rounded-[32px] overflow-hidden p-5 md:p-12 text-white shadow-2xl flex flex-col justify-center bg-brand">
         <div className="absolute inset-0 z-0">
@@ -127,7 +127,7 @@ export const ContactCta: React.FC = () => {
             src={ctaBgSrc}
             alt="Luxury mountain residence at dusk"
             referrerPolicy="no-referrer"
-            loading="eager"
+            loading="lazy"
             decoding="async"
             onError={() => {
               if (ctaBgSrc !== BRAND_CONFIG.images.hero) {

@@ -67,7 +67,7 @@ export const ContactPage: React.FC = () => {
   usePageMeta({
     title: `Offices & Contact | ${BRAND_CONFIG.identity.brandName}`,
     description: `Contact ${BRAND_CONFIG.identity.brandName} regional offices in ${BRAND_CONFIG.locale.mainCities.slice(0, 3).join(', ')} or our Overseas Desk.`,
-    path: '/#/contact',
+    path: '/contact',
     image: BRAND_CONFIG.images.office1,
     structuredData:
       BRAND_CONFIG.features.enableFaqs && faqs.length > 0
@@ -211,7 +211,7 @@ export const ContactPage: React.FC = () => {
       </section>
 
       {/* Regional Offices Showcase Grid */}
-      <section className="space-y-4 md:space-y-6">
+      <section className="below-fold-section space-y-4 md:space-y-6">
         <div className="px-2">
           <h2 className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-3xl text-brand uppercase tracking-tight">
             REGIONAL OFFICES & ADVISORY DESKS

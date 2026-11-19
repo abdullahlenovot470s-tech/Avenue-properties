@@ -13,7 +13,7 @@ export const PrivacyPolicyPage: React.FC = () => {
   usePageMeta({
     title: `Privacy Policy | ${businessName}`,
     description: `Privacy policy explaining how ${businessName} collects, stores, and processes personal information and enquiry data.`,
-    path: '/#/privacy',
+    path: '/privacy',
   });
 
   return (

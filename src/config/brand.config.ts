@@ -53,6 +53,7 @@ export interface BrandFeatures {
   enableMaps: boolean;
   enableAnalytics: boolean;
   enableUrglishToggle: boolean;
+  instantCatalogRender: boolean;
 }
 
 const DEFAULT_FEATURES: BrandFeatures = {
@@ -75,6 +76,7 @@ const DEFAULT_FEATURES: BrandFeatures = {
   enableMaps: true,
   enableAnalytics: true,
   enableUrglishToggle: true,
+  instantCatalogRender: true,
 };
 
 export const TIER_PRESETS: Record<'plot' | 'villa' | 'estate', BrandFeatures> = {
@@ -191,8 +193,7 @@ export const BRAND_CONFIG = {
   fonts: {
     displayFont: 'Unbounded',
     bodyFont: 'Manrope',
-    googleFontsUrl:
-      'https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&family=Unbounded:wght@600;700;800&display=swap',
+    googleFontsUrl: '',
   },
 
   // --------------------------------------------------------------------------
@@ -615,7 +616,7 @@ export const BRAND_CONFIG = {
       watermark: 'REVIEWS',
       eyebrow: 'CLIENT REVIEWS',
       heading: 'TRUSTED BY HOMEOWNERS & INVESTORS',
-      summary: '4.9 / 5 client rating across verified residential transfers, luxury rentals, and overseas advisory.',
+      summary: '4.5 / 5 client rating across verified residential transfers, luxury rentals, and overseas advisory.',
     },
     testimonials: [
       {

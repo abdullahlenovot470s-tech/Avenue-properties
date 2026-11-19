@@ -24,7 +24,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
   usePageSeo({
     title: `Services & Advisory | ${BRAND_CONFIG.identity.brandName}`,
     description: `Residential acquisition, overseas property management, corporate leasing, and FBR/title investment advisory by ${BRAND_CONFIG.identity.brandName} in ${primaryCities}.`,
-    path: '/#/services',
+    path: '/services',
     image: BRAND_CONFIG.images.serviceVilla,
     structuredData: buildRealEstateAgentJsonLd(),
   });

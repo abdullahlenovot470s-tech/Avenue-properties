@@ -73,6 +73,11 @@
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid var(--glass-card-border);
   }
+
+  .below-fold-section {
+    content-visibility: auto;
+    contain-intrinsic-size: 1px 600px;
+  }
 }
 
 @keyframes routeFadeIn {

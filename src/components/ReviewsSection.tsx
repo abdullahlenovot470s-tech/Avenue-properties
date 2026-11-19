@@ -1,8 +1,43 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 import { Star, ArrowLeft, ArrowRight, Quote } from 'lucide-react';
 import { BRAND_CONFIG } from '../config/brand.config';
 import { useCatalog } from '../context/CatalogContext';
 import type { ClientReview } from '../types';
+
+const STAR_PATH =
+  'M12 2.25l2.92 5.92 6.53.95-4.72 4.6 1.11 6.5L12 17.15l-5.84 3.07 1.11-6.5-4.72-4.6 6.53-.95L12 2.25z';
+
+// Vertical y cut across STAR_PATH from bottom (20.22) up to top (2.25) matching exact filled area fraction (0.0 -> 1.0)
+const STAR_AREA_TO_Y: readonly [number, number][] = [
+  [0.0, 20.22],
+  [0.1, 17.32],
+  [0.2, 15.93],
+  [0.3, 14.47],
+  [0.4, 13.01],
+  [0.5, 11.81],
+  [0.6, 10.8],
+  [0.7, 9.91],
+  [0.8, 9.11],
+  [0.9, 7.67],
+  [0.95, 6.08],
+  [0.98, 4.67],
+  [1.0, 2.25],
+];
+
+function getAreaProportionalStarClipY(ratio: number): number {
+  const clamped = Math.min(1, Math.max(0, ratio));
+  if (clamped <= 0) return 24;
+  if (clamped >= 1) return 0;
+  for (let i = 1; i < STAR_AREA_TO_Y.length; i += 1) {
+    const [r0, y0] = STAR_AREA_TO_Y[i - 1];
+    const [r1, y1] = STAR_AREA_TO_Y[i];
+    if (clamped <= r1) {
+      const t = (clamped - r0) / (r1 - r0 || 1);
+      return Number((y0 + t * (y1 - y0)).toFixed(2));
+    }
+  }
+  return 0;
+}
 
 const GeneralUserDp: React.FC = () => (
   <div
@@ -34,6 +69,19 @@ export const ReviewsSection: React.FC = () => {
   const [page, setPage] = useState(0);
   const [activeMobileSlide, setActiveMobileSlide] = useState(0);
   const mobileTrackRef = useRef<HTMLDivElement>(null);
+  const rawId = useId();
+  const starClipId = `reviews-star-clip-${rawId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
+
+  const ratingMatch = sectionCopy.summary.match(/(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/);
+  const averageReviewRating =
+    reviews.length > 0
+      ? reviews.reduce((sum, r) => sum + (typeof r.rating === 'number' ? r.rating : 5), 0) /
+        reviews.length
+      : 5;
+  const ratingValue = ratingMatch ? Number(ratingMatch[1]) : Number(averageReviewRating.toFixed(1));
+  const ratingMax = ratingMatch ? Number(ratingMatch[2]) : 5;
+  const ratingRatio = Math.min(1, Math.max(0, ratingMax > 0 ? ratingValue / ratingMax : 1));
+  const starClipY = getAreaProportionalStarClipY(ratingRatio);
 
   useEffect(() => {
     if (page >= totalPages) {
@@ -73,7 +121,7 @@ export const ReviewsSection: React.FC = () => {
     <section
       id="reviews"
       aria-labelledby="reviews-heading"
-      className="relative w-full py-5 md:py-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
+      className="below-fold-section relative w-full py-5 md:py-10 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto"
     >
       <div className="relative w-full bg-white rounded-2xl md:rounded-[32px] overflow-hidden p-5 md:p-12 shadow-xl border border-slate-100">
         {/* Background Watermark */}
@@ -102,9 +150,46 @@ export const ReviewsSection: React.FC = () => {
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between lg:justify-end gap-4 shrink-0">
-            <p className="font-body text-xs sm:text-sm text-text-muted max-w-xs leading-relaxed">
-              {sectionCopy.summary}
-            </p>
+            <div
+              className="inline-flex items-center gap-2.5"
+              aria-label={`Rated ${ratingValue} out of ${ratingMax}`}
+              title={sectionCopy.summary}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="w-8 h-8 sm:w-9 sm:h-9 shrink-0"
+                aria-hidden="true"
+              >
+                <defs>
+                  <clipPath id={starClipId}>
+                    <rect x="0" y={starClipY} width="24" height={Math.max(0, 24 - starClipY)} />
+                  </clipPath>
+                </defs>
+                <path
+                  d={STAR_PATH}
+                  fill="#E2E8F0"
+                  stroke="#94A3B8"
+                  strokeWidth="1.1"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d={STAR_PATH}
+                  fill="#F59E0B"
+                  stroke="#D97706"
+                  strokeWidth="0.9"
+                  strokeLinejoin="round"
+                  clipPath={`url(#${starClipId})`}
+                />
+              </svg>
+              <div className="flex items-baseline gap-1 font-display leading-none">
+                <span className="text-lg sm:text-xl font-bold text-brand tabular-nums">
+                  {ratingValue}
+                </span>
+                <span className="text-xs sm:text-sm font-semibold text-text-muted tabular-nums">
+                  / {ratingMax}
+                </span>
+              </div>
+            </div>
 
             {totalPages > 1 && (
               <div className="hidden lg:flex items-center gap-3 shrink-0">

@@ -85,31 +85,31 @@ function main() {
 
   const entries = [
     { path: '/', priority: '1.0', changefreq: 'weekly' },
-    { path: '/#/about', priority: '0.7', changefreq: 'monthly' },
-    { path: '/#/services', priority: '0.7', changefreq: 'monthly' },
-    { path: '/#/contact', priority: '0.8', changefreq: 'monthly' },
-    { path: '/#/privacy', priority: '0.3', changefreq: 'yearly' },
-    { path: '/#/terms', priority: '0.3', changefreq: 'yearly' },
+    { path: '/about', priority: '0.7', changefreq: 'monthly' },
+    { path: '/services', priority: '0.7', changefreq: 'monthly' },
+    { path: '/contact', priority: '0.8', changefreq: 'monthly' },
+    { path: '/privacy', priority: '0.3', changefreq: 'yearly' },
+    { path: '/terms', priority: '0.3', changefreq: 'yearly' },
   ];
 
   if (visibility.showProjectsPage) {
-    entries.push({ path: '/#/projects', priority: '0.9', changefreq: 'weekly' });
+    entries.push({ path: '/projects', priority: '0.9', changefreq: 'weekly' });
     for (const id of new Set(projectIds)) {
-      entries.push({ path: `/#/projects/${encodeURIComponent(id)}`, priority: '0.8', changefreq: 'weekly' });
+      entries.push({ path: `/projects/${encodeURIComponent(id)}`, priority: '0.8', changefreq: 'weekly' });
     }
   }
 
   if (visibility.showBuyPage) {
-    entries.push({ path: '/#/buy', priority: '0.9', changefreq: 'daily' });
+    entries.push({ path: '/buy', priority: '0.9', changefreq: 'daily' });
     for (const id of new Set(buyIds)) {
-      entries.push({ path: `/#/buy/${encodeURIComponent(id)}`, priority: '0.8', changefreq: 'weekly' });
+      entries.push({ path: `/buy/${encodeURIComponent(id)}`, priority: '0.8', changefreq: 'weekly' });
     }
   }
 
   if (visibility.showRentPage) {
-    entries.push({ path: '/#/rent', priority: '0.9', changefreq: 'daily' });
+    entries.push({ path: '/rent', priority: '0.9', changefreq: 'daily' });
     for (const id of new Set(rentIds)) {
-      entries.push({ path: `/#/rent/${encodeURIComponent(id)}`, priority: '0.8', changefreq: 'weekly' });
+      entries.push({ path: `/rent/${encodeURIComponent(id)}`, priority: '0.8', changefreq: 'weekly' });
     }
   }
 

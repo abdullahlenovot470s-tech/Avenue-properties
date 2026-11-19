@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CatalogProvider } from './context/CatalogContext';
 import { ToastProvider } from './context/ToastContext';
@@ -300,7 +300,7 @@ function AnimatedAppContent() {
 export default function App() {
   return (
     <ErrorBoundary fullViewport>
-      <HashRouter>
+      <BrowserRouter>
         <LanguageProvider>
           <AuthProvider>
             <CatalogProvider>
@@ -310,7 +310,7 @@ export default function App() {
             </CatalogProvider>
           </AuthProvider>
         </LanguageProvider>
-      </HashRouter>
+      </BrowserRouter>
     </ErrorBoundary>
   );
 }

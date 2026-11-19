@@ -88,7 +88,7 @@ export const LoginPage: React.FC = () => {
   usePageSeo({
     title: `Client Login | ${BRAND_CONFIG.identity.brandName}`,
     description: `Sign in to your ${BRAND_CONFIG.identity.brandName} account to view shortlisted residences and inquiries.`,
-    path: '/#/login',
+    path: '/login',
     noindex: true,
   });
 

@@ -30,7 +30,6 @@ import {
 } from 'lucide-react';
 import { useCatalog, CityOption } from '../context/CatalogContext';
 import { useAuth } from '../context/AuthContext';
-import { auth } from '../lib/firebase';
 import { useToast } from '../context/ToastContext';
 import { SafeImage } from '../components/common/SafeImage';
 import { formatRent } from '../data/rentalsData';
@@ -753,7 +752,7 @@ export const ManageCatalogPage: React.FC = () => {
     removeReview,
     resetCatalog,
   } = useCatalog();
-  const { isManagement } = useAuth();
+  const { isManagement, firebaseUser } = useAuth();
   const { showToast } = useToast();
 
   // Independent search & confirmation states per section
@@ -831,7 +830,7 @@ export const ManageCatalogPage: React.FC = () => {
   usePageSeo({
     title: `Manage Data | ${BRAND_CONFIG.identity.brandName}`,
     description: `Management portal for ${BRAND_CONFIG.identity.brandName} catalog listings, FAQs, and client reviews.`,
-    path: '/#/manage-catalog',
+    path: '/manage',
     noindex: true,
   });
 
@@ -842,12 +841,12 @@ export const ManageCatalogPage: React.FC = () => {
       !autoPublishedRef.current &&
       snapshotSynced === false &&
       isManagement &&
-      auth?.currentUser?.emailVerified
+      firebaseUser?.emailVerified
     ) {
       autoPublishedRef.current = true;
       void publishSnapshot();
     }
-  }, [snapshotSynced, isManagement, publishSnapshot]);
+  }, [snapshotSynced, isManagement, firebaseUser, publishSnapshot]);
 
   useEffect(() => {
     const paramTab = searchParams.get('tab') as FilterView;
@@ -1691,7 +1690,7 @@ export const ManageCatalogPage: React.FC = () => {
         )}
 
         {!backendReachable && (
-          isManagement && auth?.currentUser?.emailVerified ? (
+          isManagement && firebaseUser?.emailVerified ? (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900 font-body flex flex-wrap items-center justify-between gap-2">
               <span>
                 Connected directly to Firebase Firestore &amp; Cloud Media ({storageMode === 'firestore' ? (snapshotSynced ? '1-read public snapshot active · cached 30 min in browser' : 'Firestore catalog cached 30 min in browser') : 'built-in defaults ready — your first edit syncs automatically'}).

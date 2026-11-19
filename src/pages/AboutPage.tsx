@@ -22,7 +22,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
   usePageSeo({
     title: `About ${BRAND_CONFIG.identity.brandShortName} | ${BRAND_CONFIG.identity.brandName}`,
     description: `Learn about ${BRAND_CONFIG.identity.brandName}, our leadership team, NOC/fard title verification process, and dedicated Overseas Desk across ${BRAND_CONFIG.locale.country}.`,
-    path: '/#/about',
+    path: '/about',
     image: BRAND_CONFIG.images.about,
     structuredData: buildRealEstateAgentJsonLd(),
   });

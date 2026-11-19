@@ -24,7 +24,7 @@ export const ContactFaqSection: React.FC = () => {
     <section
       id="faq"
       aria-labelledby="contact-faq-heading"
-      className="relative w-full bg-white rounded-2xl md:rounded-[32px] overflow-hidden p-5 md:p-14 shadow-xl border border-slate-100"
+      className="below-fold-section relative w-full bg-white rounded-2xl md:rounded-[32px] overflow-hidden p-5 md:p-14 shadow-xl border border-slate-100"
     >
       <div className="absolute top-4 right-0 pointer-events-none select-none overflow-hidden max-w-full z-0">
         <span

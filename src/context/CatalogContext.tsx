@@ -13,41 +13,16 @@ import {
   ClientReview,
 } from '../types';
 import { useAuth } from './AuthContext';
-import { auth } from '../lib/firebase';
 import { BRAND_CONFIG } from '../config/brand.config';
 import { IS_STATIC_MODE, parseApiResponse, SERVER_UNREACHABLE_MESSAGE } from '../lib/http';
-import {
-  addBuyFirestore,
-  addFaqFirestore,
-  addProjectFirestore,
-  addRentFirestore,
-  addReviewFirestore,
-  CatalogMutationResult,
-  CatalogStoreData,
-  fetchCatalogFromFirestore,
-  getDefaultFaqs,
-  getDefaultReviews,
-  hasPublicCatalogSnapshot,
-  hasSnapshotWriteFailed,
-  hydrateCatalogFirestoreSnapshot,
-  publishPublicCatalogSnapshotFirestore,
-  removeBuyFirestore,
-  removeFaqFirestore,
-  removeProjectFirestore,
-  removeRentFirestore,
-  removeReviewFirestore,
-  resetCatalogFirestore,
-  updateBuyFirestore,
-  updateFaqFirestore,
-  updateProjectFirestore,
-  updateRentFirestore,
-  updateReviewFirestore,
-} from '../lib/catalogFirestore';
+import { getDefaultFaqs, getDefaultReviews } from '../lib/catalogDefaults';
+import type { CatalogMutationResult, CatalogStoreData } from '../lib/catalogFirestore';
 
 export type CityOption = string;
 export type CatalogStorageMode = 'backend' | 'firestore' | 'defaults';
 
-const CATALOG_CACHE_KEY = `${BRAND_CONFIG.identity.storageKeyPrefix}_catalog_cache_v2`;
+const CATALOG_CACHE_KEY = `${BRAND_CONFIG.identity.storageKeyPrefix}_catalog_cache_v3`;
+const LEGACY_CATALOG_CACHE_KEY = `${BRAND_CONFIG.identity.storageKeyPrefix}_catalog_cache_v2`;
 const QUOTA_COOLDOWN_KEY = `${BRAND_CONFIG.identity.storageKeyPrefix}_fs_quota_cooldown_until`;
 const BACKEND_OFFLINE_SESSION_KEY = `${BRAND_CONFIG.identity.storageKeyPrefix}_backend_unreachable_session`;
 
@@ -75,7 +50,23 @@ function isValidCatalogData(candidate: unknown): candidate is CatalogStoreData {
   );
 }
 
+function hasAnyPropertyCatalogItems(catalog: CatalogStoreData): boolean {
+  return (
+    catalog.projects.length > 0 ||
+    catalog.listings.length > 0 ||
+    catalog.buy.length > 0 ||
+    catalog.rent.length > 0
+  );
+}
+
 function readBrowserCatalogCache(allowExpired = false): BrowserCatalogCache | null {
+  try {
+    localStorage.removeItem(LEGACY_CATALOG_CACHE_KEY);
+    sessionStorage.removeItem(LEGACY_CATALOG_CACHE_KEY);
+  } catch {
+    // Ignore storage access errors
+  }
+
   const now = Date.now();
   if (
     memoryCatalogCache &&
@@ -94,14 +85,19 @@ function readBrowserCatalogCache(allowExpired = false): BrowserCatalogCache | nu
       sessionStorage.removeItem(CATALOG_CACHE_KEY);
       return null;
     }
-    const isFresh = now - parsed.cachedAt < CATALOG_CACHE_TTL_MS;
-    if (!isFresh && !allowExpired) {
-      return null;
-    }
     const mode: CatalogStorageMode =
       parsed.storageMode === 'backend' || parsed.storageMode === 'firestore'
         ? parsed.storageMode
         : 'defaults';
+    if (!hasAnyPropertyCatalogItems(parsed.catalog)) {
+      localStorage.removeItem(CATALOG_CACHE_KEY);
+      sessionStorage.removeItem(CATALOG_CACHE_KEY);
+      return null;
+    }
+    const isFresh = now - parsed.cachedAt < CATALOG_CACHE_TTL_MS;
+    if (!isFresh && !allowExpired) {
+      return null;
+    }
     const valid: BrowserCatalogCache = {
       cachedAt: parsed.cachedAt,
       storageMode: mode,
@@ -114,11 +110,48 @@ function readBrowserCatalogCache(allowExpired = false): BrowserCatalogCache | nu
   }
 }
 
+function reconcileById<T extends { id: string }>(prev: T[], next: T[]): T[] {
+  if (prev === next) return prev;
+  if (prev.length === next.length) {
+    const serializedPrev = new Map<string, string>();
+    const prevById = new Map<string, T>();
+    for (const item of prev) {
+      prevById.set(item.id, item);
+      serializedPrev.set(item.id, JSON.stringify(item));
+    }
+    let anyChanged = false;
+    const merged = next.map((item, idx) => {
+      const prevAtIdx = prev[idx];
+      if (prevAtIdx && prevAtIdx.id === item.id && serializedPrev.get(item.id) === JSON.stringify(item)) {
+        return prevAtIdx;
+      }
+      anyChanged = true;
+      const existing = prevById.get(item.id);
+      if (existing && serializedPrev.get(item.id) === JSON.stringify(item)) {
+        return existing;
+      }
+      return item;
+    });
+    return anyChanged ? merged : prev;
+  }
+
+  const prevById = new Map<string, { item: T; raw: string }>();
+  for (const item of prev) {
+    prevById.set(item.id, { item, raw: JSON.stringify(item) });
+  }
+  return next.map((item) => {
+    const match = prevById.get(item.id);
+    if (match && match.raw === JSON.stringify(item)) {
+      return match.item;
+    }
+    return item;
+  });
+}
+
 function writeBrowserCatalogCache(catalog: CatalogStoreData, mode: CatalogStorageMode): number {
   const cachedAt = Date.now();
   const entry: BrowserCatalogCache = { cachedAt, storageMode: mode, catalog };
   memoryCatalogCache = entry;
-  hydrateCatalogFirestoreSnapshot(catalog);
 
   try {
     const serialized = JSON.stringify(entry);
@@ -308,10 +341,8 @@ const CatalogContext = createContext<CatalogContextType | undefined>(undefined);
 
 export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const adminPanelEnabled = BRAND_CONFIG.features.enableAdminPanel;
-  const initialCache = adminPanelEnabled ? readBrowserCatalogCache() : null;
-  if (initialCache) {
-    hydrateCatalogFirestoreSnapshot(initialCache.catalog);
-  }
+  const instantRender = BRAND_CONFIG.features.instantCatalogRender;
+  const initialCache = adminPanelEnabled ? readBrowserCatalogCache(instantRender) : null;
 
   const [portfolioProjects, setPortfolioProjects] = useState<PortfolioProject[]>(
     initialCache?.catalog.projects || PORTFOLIO_PROJECTS
@@ -329,7 +360,9 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [clientReviews, setClientReviews] = useState<ClientReview[]>(
     () => initialCache?.catalog.reviews || getDefaultReviews()
   );
-  const [loading, setLoading] = useState<boolean>(adminPanelEnabled ? !initialCache : false);
+  const [loading, setLoading] = useState<boolean>(
+    instantRender ? false : adminPanelEnabled ? !initialCache : false
+  );
   const [backendReachable, setBackendReachable] = useState<boolean>(
     adminPanelEnabled && initialCache ? initialCache.storageMode === 'backend' : !adminPanelEnabled ? false : true
   );
@@ -340,12 +373,8 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     initialCache?.cachedAt || null
   );
   const [quotaError, setQuotaError] = useState<string | null>(null);
-  const [snapshotSynced, setSnapshotSynced] = useState<boolean | null>(() =>
-    adminPanelEnabled ? hasPublicCatalogSnapshot() : null
-  );
-  const [snapshotWriteFailed, setSnapshotWriteFailed] = useState<boolean>(() =>
-    adminPanelEnabled ? hasSnapshotWriteFailed() : false
-  );
+  const [snapshotSynced, setSnapshotSynced] = useState<boolean | null>(null);
+  const [snapshotWriteFailed, setSnapshotWriteFailed] = useState<boolean>(false);
   const [catalogUnavailable, setCatalogUnavailable] = useState<boolean>(false);
   const inFlightRefreshRef = useRef<Promise<void> | null>(null);
   const { isManagement, managementToken, firebaseUser, logout } = useAuth();
@@ -377,12 +406,24 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const applyCatalogPayload = useCallback((catalog: any, mode?: CatalogStorageMode) => {
     if (!catalog) return;
-    if (Array.isArray(catalog.projects)) setPortfolioProjects(catalog.projects);
-    if (Array.isArray(catalog.listings)) setPropertyListings(catalog.listings);
-    if (Array.isArray(catalog.buy)) setBuyProperties(catalog.buy);
-    if (Array.isArray(catalog.rent)) setRentalListings(catalog.rent);
-    if (Array.isArray(catalog.faqs)) setFaqs(catalog.faqs);
-    if (Array.isArray(catalog.reviews)) setClientReviews(catalog.reviews);
+    if (Array.isArray(catalog.projects)) {
+      setPortfolioProjects((prev) => reconcileById(prev, catalog.projects));
+    }
+    if (Array.isArray(catalog.listings)) {
+      setPropertyListings((prev) => reconcileById(prev, catalog.listings));
+    }
+    if (Array.isArray(catalog.buy)) {
+      setBuyProperties((prev) => reconcileById(prev, catalog.buy));
+    }
+    if (Array.isArray(catalog.rent)) {
+      setRentalListings((prev) => reconcileById(prev, catalog.rent));
+    }
+    if (Array.isArray(catalog.faqs)) {
+      setFaqs((prev) => reconcileById(prev, catalog.faqs));
+    }
+    if (Array.isArray(catalog.reviews)) {
+      setClientReviews((prev) => reconcileById(prev, catalog.reviews));
+    }
 
     if (mode && isValidCatalogData(catalog)) {
       const updatedTs = writeBrowserCatalogCache(catalog, mode);
@@ -451,10 +492,15 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
         }
 
-        const fsRes = await fetchCatalogFromFirestore();
-        setSnapshotSynced(fsRes.fromSnapshot ?? hasPublicCatalogSnapshot());
+        const fsMod = await import('../lib/catalogFirestore');
+        const staleOrCurrent = readBrowserCatalogCache(true);
+        if (staleOrCurrent) {
+          fsMod.hydrateCatalogFirestoreSnapshot(staleOrCurrent.catalog);
+        }
+        const fsRes = await fsMod.fetchCatalogFromFirestore();
+        setSnapshotSynced(fsRes.fromSnapshot ?? fsMod.hasPublicCatalogSnapshot());
         setSnapshotWriteFailed(
-          Boolean(fsRes.snapshotWriteFailed ?? hasSnapshotWriteFailed())
+          Boolean(fsRes.snapshotWriteFailed ?? fsMod.hasSnapshotWriteFailed())
         );
 
         if (fsRes.quotaExceeded && fsRes.error) {
@@ -483,7 +529,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setCatalogUnavailable(false);
         const mode: CatalogStorageMode = fsRes.fromFirestore ? 'firestore' : 'defaults';
         setStorageMode(mode);
-        applyCatalogPayload(fsRes.catalog, mode);
+        applyCatalogPayload(fsRes.catalog, fsRes.fromFirestore ? mode : undefined);
       })().finally(() => {
         setLoading(false);
         inFlightRefreshRef.current = null;
@@ -496,29 +542,73 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   const publishSnapshot = useCallback(async () => {
-    const res = await publishPublicCatalogSnapshotFirestore();
+    const fsMod = await import('../lib/catalogFirestore');
+    const res = await fsMod.publishPublicCatalogSnapshotFirestore();
     if (res.published) {
       setSnapshotSynced(true);
       setSnapshotWriteFailed(false);
+      if (res.catalog) {
+        setQuotaError(null);
+        setCatalogUnavailable(false);
+        setStorageMode('firestore');
+        applyCatalogPayload(res.catalog, 'firestore');
+      }
     } else {
       setSnapshotSynced(false);
-      setSnapshotWriteFailed(Boolean(res.snapshotWriteFailed ?? hasSnapshotWriteFailed()));
+      setSnapshotWriteFailed(Boolean(res.snapshotWriteFailed ?? fsMod.hasSnapshotWriteFailed()));
     }
     return res;
-  }, []);
+  }, [applyCatalogPayload]);
 
+  // Defer catalog background fetch until right after first paint
   useEffect(() => {
-    void refreshCatalog(false);
-  }, [refreshCatalog]);
+    if (!adminPanelEnabled) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    let rafId = 0;
+    let idleId: number | null = null;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+
+    const startFetch = () => {
+      if (cancelled) return;
+      void refreshCatalog(false);
+    };
+
+    rafId = window.requestAnimationFrame(() => {
+      if (cancelled) return;
+      if (typeof window.requestIdleCallback === 'function') {
+        idleId = window.requestIdleCallback(startFetch, { timeout: 1000 });
+      } else {
+        timerId = globalThis.setTimeout(startFetch, 0);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      if (rafId) window.cancelAnimationFrame(rafId);
+      if (idleId !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timerId !== null) globalThis.clearTimeout(timerId);
+    };
+  }, [adminPanelEnabled, refreshCatalog]);
 
   const runFirestoreFallback = async (
-    firestoreFn: () => Promise<CatalogMutationResult>,
+    firestoreFn: (fsMod: typeof import('../lib/catalogFirestore')) => Promise<CatalogMutationResult>,
     fallbackError: string
   ): Promise<ActionResult> => {
     if (!BRAND_CONFIG.features.enableAdminPanel) {
       return { success: false, error: 'Catalog management is disabled.' };
     }
-    if (!isManagement || !auth?.currentUser?.emailVerified) {
+    const [{ getCurrentFirebaseUser, getAuthAsync }, fsMod] = await Promise.all([
+      import('../lib/firebase'),
+      import('../lib/catalogFirestore'),
+    ]);
+    const activeFbUser = getCurrentFirebaseUser() || (await getAuthAsync())?.currentUser;
+    if (!isManagement || !activeFbUser?.emailVerified) {
       return {
         success: false,
         error:
@@ -526,15 +616,15 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       };
     }
 
-    const fsRes = await firestoreFn();
+    const fsRes = await firestoreFn(fsMod);
     if (fsRes.success && fsRes.catalog) {
       setQuotaError(null);
       setCatalogUnavailable(false);
       if (typeof fsRes.snapshotPublished === 'boolean') {
         setSnapshotSynced(fsRes.snapshotPublished);
-        setSnapshotWriteFailed(!fsRes.snapshotPublished || hasSnapshotWriteFailed());
+        setSnapshotWriteFailed(!fsRes.snapshotPublished || fsMod.hasSnapshotWriteFailed());
       } else {
-        setSnapshotWriteFailed(hasSnapshotWriteFailed());
+        setSnapshotWriteFailed(fsMod.hasSnapshotWriteFailed());
       }
       setStorageMode('firestore');
       applyCatalogPayload(fsRes.catalog, 'firestore');
@@ -548,7 +638,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     method: 'POST' | 'PUT' | 'DELETE',
     bodyPayload: unknown,
     fallbackError: string,
-    firestoreFn: () => Promise<CatalogMutationResult>
+    firestoreFn: (fsMod: typeof import('../lib/catalogFirestore')) => Promise<CatalogMutationResult>
   ): Promise<ActionResult> => {
     if (IS_STATIC_MODE) {
       setBackendReachable(false);
@@ -601,7 +691,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'POST',
       input,
       'Could not add project.',
-      () => addProjectFirestore(input as unknown as Record<string, unknown>)
+      (fs) => fs.addProjectFirestore(input as unknown as Record<string, unknown>)
     );
 
   const updateProject = (id: string, input: NewProjectInput) =>
@@ -610,7 +700,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'PUT',
       input,
       'Could not update project.',
-      () => updateProjectFirestore(id, input as unknown as Record<string, unknown>)
+      (fs) => fs.updateProjectFirestore(id, input as unknown as Record<string, unknown>)
     );
 
   const removeProject = (id: string) =>
@@ -619,7 +709,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'DELETE',
       undefined,
       'Could not remove project.',
-      () => removeProjectFirestore(id)
+      (fs) => fs.removeProjectFirestore(id)
     );
 
   const addBuyProperty = (input: NewBuyInput) =>
@@ -628,7 +718,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'POST',
       input,
       'Could not add property.',
-      () => addBuyFirestore(input as unknown as Record<string, unknown>)
+      (fs) => fs.addBuyFirestore(input as unknown as Record<string, unknown>)
     );
 
   const updateBuy = (id: string, input: NewBuyInput) =>
@@ -637,7 +727,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'PUT',
       input,
       'Could not update property.',
-      () => updateBuyFirestore(id, input as unknown as Record<string, unknown>)
+      (fs) => fs.updateBuyFirestore(id, input as unknown as Record<string, unknown>)
     );
 
   const removeBuyProperty = (id: string) =>
@@ -646,7 +736,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'DELETE',
       undefined,
       'Could not remove property.',
-      () => removeBuyFirestore(id)
+      (fs) => fs.removeBuyFirestore(id)
     );
 
   const addRentalListing = (input: NewRentInput) =>
@@ -655,7 +745,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'POST',
       input,
       'Could not add rental listing.',
-      () => addRentFirestore(input as unknown as Record<string, unknown>)
+      (fs) => fs.addRentFirestore(input as unknown as Record<string, unknown>)
     );
 
   const updateRental = (id: string, input: NewRentInput) =>
@@ -664,7 +754,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'PUT',
       input,
       'Could not update rental listing.',
-      () => updateRentFirestore(id, input as unknown as Record<string, unknown>)
+      (fs) => fs.updateRentFirestore(id, input as unknown as Record<string, unknown>)
     );
 
   const removeRentalListing = (id: string) =>
@@ -673,7 +763,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'DELETE',
       undefined,
       'Could not remove rental listing.',
-      () => removeRentFirestore(id)
+      (fs) => fs.removeRentFirestore(id)
     );
 
   const addFaq = (input: NewFaqInput) =>
@@ -682,7 +772,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'POST',
       input,
       'Could not add FAQ.',
-      () => addFaqFirestore(input as unknown as Record<string, unknown>)
+      (fs) => fs.addFaqFirestore(input as unknown as Record<string, unknown>)
     );
 
   const updateFaq = (id: string, input: NewFaqInput) =>
@@ -691,7 +781,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'PUT',
       input,
       'Could not update FAQ.',
-      () => updateFaqFirestore(id, input as unknown as Record<string, unknown>)
+      (fs) => fs.updateFaqFirestore(id, input as unknown as Record<string, unknown>)
     );
 
   const removeFaq = (id: string) =>
@@ -700,7 +790,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'DELETE',
       undefined,
       'Could not remove FAQ.',
-      () => removeFaqFirestore(id)
+      (fs) => fs.removeFaqFirestore(id)
     );
 
   const addReview = (input: NewReviewInput) =>
@@ -709,7 +799,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'POST',
       input,
       'Could not add review.',
-      () => addReviewFirestore(input as unknown as Record<string, unknown>)
+      (fs) => fs.addReviewFirestore(input as unknown as Record<string, unknown>)
     );
 
   const updateReview = (id: string, input: NewReviewInput) =>
@@ -718,7 +808,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'PUT',
       input,
       'Could not update review.',
-      () => updateReviewFirestore(id, input as unknown as Record<string, unknown>)
+      (fs) => fs.updateReviewFirestore(id, input as unknown as Record<string, unknown>)
     );
 
   const removeReview = (id: string) =>
@@ -727,7 +817,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'DELETE',
       undefined,
       'Could not remove review.',
-      () => removeReviewFirestore(id)
+      (fs) => fs.removeReviewFirestore(id)
     );
 
   const resetCatalog = (
@@ -738,7 +828,7 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       'POST',
       { section },
       'Could not restore defaults.',
-      () => resetCatalogFirestore(section)
+      (fs) => fs.resetCatalogFirestore(section)
     );
 
   return (

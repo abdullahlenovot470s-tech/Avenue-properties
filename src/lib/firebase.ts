@@ -1,96 +1,163 @@
-import { initializeApp } from 'firebase/app';
-import {
-  initializeAppCheck,
-  ReCaptchaV3Provider,
-  type AppCheck,
-} from 'firebase/app-check';
-import { getAuth, GoogleAuthProvider, type Auth } from 'firebase/auth';
-import {
-  getFirestore,
-  initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-  doc,
-  getDocFromServer,
-  type Firestore,
-} from 'firebase/firestore';
+import type { FirebaseApp } from 'firebase/app';
+import type { AppCheck } from 'firebase/app-check';
+import type { Auth, GoogleAuthProvider, User as FirebaseUser } from 'firebase/auth';
+import type { Firestore } from 'firebase/firestore';
 import type { FirebaseStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { BRAND_CONFIG } from '../config/brand.config';
-
-export const app = initializeApp(firebaseConfig);
 
 const needAuth =
   BRAND_CONFIG.features.enableClientLogin || BRAND_CONFIG.features.enableAdminPanel;
 const needStorage = BRAND_CONFIG.features.enableAdminPanel;
 
-let appCheckInstance: AppCheck | null = null;
 const recaptchaSiteKey = String(import.meta.env.VITE_RECAPTCHA_SITE_KEY || '').trim();
 const appCheckDebugToken = String(import.meta.env.VITE_APPCHECK_DEBUG_TOKEN || '').trim();
 
-if (typeof window !== 'undefined') {
-  if (appCheckDebugToken && typeof self !== 'undefined') {
-    (
-      self as unknown as { FIREBASE_APPCHECK_DEBUG_TOKEN?: string | boolean }
-    ).FIREBASE_APPCHECK_DEBUG_TOKEN =
-      appCheckDebugToken === 'true' ? true : appCheckDebugToken;
-  }
+let appPromise: Promise<FirebaseApp> | null = null;
+let appCheckPromise: Promise<AppCheck | null> | null = null;
+let appCheckInstance: AppCheck | null = null;
+let authPromise: Promise<Auth | null> | null = null;
+let authInstance: Auth | null = null;
+let googleProviderPromise: Promise<GoogleAuthProvider | null> | null = null;
+let dbPromise: Promise<Firestore> | null = null;
+let storagePromise: Promise<FirebaseStorage | null> | null = null;
+let connectionTested = false;
 
-  if (recaptchaSiteKey) {
-    try {
-      appCheckInstance = initializeAppCheck(app, {
-        provider: new ReCaptchaV3Provider(recaptchaSiteKey),
-        isTokenAutoRefreshEnabled: true,
-      });
-    } catch (err) {
-      console.warn('[Firebase App Check] Initialization skipped:', err);
-    }
-  } else {
-    console.info(
-      '[Firebase App Check] VITE_RECAPTCHA_SITE_KEY is not set; skipping App Check initialization.'
+export async function getFirebaseAppAsync(): Promise<FirebaseApp> {
+  if (!appPromise) {
+    appPromise = import('firebase/app').then(({ initializeApp, getApps, getApp }) =>
+      getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
     );
   }
+  return appPromise;
 }
 
-export const appCheck: AppCheck | null = appCheckInstance;
-export const auth: Auth | null = needAuth ? getAuth(app) : null;
+export async function initAppCheckAsync(): Promise<AppCheck | null> {
+  if (typeof window === 'undefined') return null;
+  if (appCheckInstance) return appCheckInstance;
+  if (!appCheckPromise) {
+    appCheckPromise = (async () => {
+      if (appCheckDebugToken && typeof self !== 'undefined') {
+        (
+          self as unknown as { FIREBASE_APPCHECK_DEBUG_TOKEN?: string | boolean }
+        ).FIREBASE_APPCHECK_DEBUG_TOKEN =
+          appCheckDebugToken === 'true' ? true : appCheckDebugToken;
+      }
 
-let firestoreInstance: Firestore;
-try {
-  firestoreInstance = initializeFirestore(
-    app,
-    {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-      }),
-    },
-    firebaseConfig.firestoreDatabaseId
-  );
-} catch {
-  firestoreInstance = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+      if (!recaptchaSiteKey) {
+        return null;
+      }
+
+      try {
+        const [app, { initializeAppCheck, ReCaptchaV3Provider }] = await Promise.all([
+          getFirebaseAppAsync(),
+          import('firebase/app-check'),
+        ]);
+        appCheckInstance = initializeAppCheck(app, {
+          provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+          isTokenAutoRefreshEnabled: true,
+        });
+        return appCheckInstance;
+      } catch (err) {
+        console.warn('[Firebase App Check] Initialization skipped:', err);
+        return null;
+      }
+    })();
+  }
+  return appCheckPromise;
 }
 
-export const db: Firestore = firestoreInstance;
+export function isAppCheckInitialized(): boolean {
+  return Boolean(appCheckInstance);
+}
 
-let storagePromise: Promise<FirebaseStorage | null> | null = null;
+export async function getAuthAsync(): Promise<Auth | null> {
+  if (!needAuth) return null;
+  if (authInstance) return authInstance;
+  if (!authPromise) {
+    authPromise = (async () => {
+      const [app, { getAuth }] = await Promise.all([
+        getFirebaseAppAsync(),
+        import('firebase/auth'),
+        initAppCheckAsync(),
+      ]);
+      authInstance = getAuth(app);
+      return authInstance;
+    })();
+  }
+  return authPromise;
+}
+
+export function getCurrentFirebaseUser(): FirebaseUser | null {
+  return authInstance?.currentUser ?? null;
+}
+
+export async function getGoogleProviderAsync(): Promise<GoogleAuthProvider | null> {
+  if (!needAuth || !BRAND_CONFIG.features.enableGoogleLogin) return null;
+  if (!googleProviderPromise) {
+    googleProviderPromise = import('firebase/auth').then(({ GoogleAuthProvider }) => {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      return provider;
+    });
+  }
+  return googleProviderPromise;
+}
+
+export async function getDbAsync(): Promise<Firestore> {
+  if (!dbPromise) {
+    dbPromise = (async () => {
+      const [app, firestoreMod] = await Promise.all([
+        getFirebaseAppAsync(),
+        import('firebase/firestore'),
+        initAppCheckAsync(),
+      ]);
+
+      let firestoreInstance: Firestore;
+      try {
+        firestoreInstance = firestoreMod.initializeFirestore(
+          app,
+          {
+            localCache: firestoreMod.persistentLocalCache({
+              tabManager: firestoreMod.persistentMultipleTabManager(),
+            }),
+          },
+          firebaseConfig.firestoreDatabaseId
+        );
+      } catch {
+        firestoreInstance = firestoreMod.getFirestore(app, firebaseConfig.firestoreDatabaseId);
+      }
+
+      if (BRAND_CONFIG.features.enableAdminPanel && !connectionTested && typeof window !== 'undefined') {
+        connectionTested = true;
+        void firestoreMod
+          .getDocFromServer(firestoreMod.doc(firestoreInstance, 'test', 'connection'))
+          .catch((error) => {
+            if (isFirestoreQuotaError(error)) {
+              console.warn(formatFirestoreQuotaMessage(error));
+              return;
+            }
+            if (error instanceof Error && error.message.includes('the client is offline')) {
+              console.error('Please check your Firebase configuration.');
+            }
+          });
+      }
+
+      return firestoreInstance;
+    })();
+  }
+  return dbPromise;
+}
 
 export async function getStorageLazy(): Promise<FirebaseStorage | null> {
   if (!needStorage) return null;
   if (!storagePromise) {
-    storagePromise = Promise.all([import('firebase/storage'), import('./firebase')]).then(
-      ([{ getStorage }, { app: firebaseApp }]) => getStorage(firebaseApp)
+    storagePromise = Promise.all([getFirebaseAppAsync(), import('firebase/storage')]).then(
+      ([firebaseApp, { getStorage }]) => getStorage(firebaseApp)
     );
   }
   return storagePromise;
 }
-export const googleProvider: GoogleAuthProvider | null =
-  needAuth && BRAND_CONFIG.features.enableGoogleLogin
-    ? (() => {
-        const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' });
-        return provider;
-      })()
-    : null;
 
 export function isFirestoreQuotaError(error: unknown): boolean {
   const code =
@@ -147,7 +214,7 @@ export function handleFirestoreError(
   if (isFirestoreQuotaError(error)) {
     console.warn('Firestore Quota Notice:', formatFirestoreQuotaMessage(error));
   }
-  const currentUser = auth?.currentUser;
+  const currentUser = authInstance?.currentUser;
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -167,23 +234,4 @@ export function handleFirestoreError(
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
-}
-
-async function testConnection(): Promise<void> {
-  if (typeof window === 'undefined') return;
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (isFirestoreQuotaError(error)) {
-      console.warn(formatFirestoreQuotaMessage(error));
-      return;
-    }
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
-    }
-  }
-}
-
-if (BRAND_CONFIG.features.enableAdminPanel) {
-  void testConnection();
 }

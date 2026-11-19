@@ -27,8 +27,7 @@ export const ErrorFallbackPage: React.FC<ErrorFallbackProps> = ({
       return;
     }
     if (typeof window !== 'undefined') {
-      window.location.hash = '#/';
-      window.location.reload();
+      window.location.assign('/');
     }
   };
 

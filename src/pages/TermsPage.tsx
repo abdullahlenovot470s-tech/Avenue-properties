@@ -13,7 +13,7 @@ export const TermsPage: React.FC = () => {
   usePageMeta({
     title: `Terms of Use | ${businessName}`,
     description: `Terms and conditions governing website access, property information, enquiries, and advisory disclaimers for ${businessName}.`,
-    path: '/#/terms',
+    path: '/terms',
   });
 
   return (

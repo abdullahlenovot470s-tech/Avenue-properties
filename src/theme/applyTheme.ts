@@ -110,13 +110,6 @@ export function applyTheme(config = BRAND_CONFIG): void {
     root.style.setProperty(key, value);
   }
 
-  // Sync Google Fonts stylesheet if changed from static HTML build
-  const fontLink = document.getElementById('brand-google-fonts') as HTMLLinkElement | null;
-  if (fontLink && fonts.googleFontsUrl && fontLink.href !== fonts.googleFontsUrl) {
-    fontLink.href = fonts.googleFontsUrl;
-    fontLink.rel = 'stylesheet';
-  }
-
   // Sync favicon
   let faviconLink = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
   if (!faviconLink) {

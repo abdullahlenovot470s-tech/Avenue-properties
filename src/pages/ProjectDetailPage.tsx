@@ -144,7 +144,7 @@ export const ProjectDetailPage: React.FC = () => {
     description: project
       ? `${project.name} in ${project.location} (${project.sqft}) — ${project.price}. ${project.description}`
       : `Discover signature architectural projects curated by ${BRAND_CONFIG.identity.brandName}.`,
-    path: project ? `/#/projects/${project.id}` : '/#/projects',
+    path: project ? `/projects/${project.id}` : '/projects',
     image: project?.images[0],
     type: project ? 'product' : 'website',
     noindex: !project,
@@ -152,7 +152,7 @@ export const ProjectDetailPage: React.FC = () => {
       ? buildPropertyListingJsonLd({
           name: project.name,
           description: project.description,
-          path: `/#/projects/${project.id}`,
+          path: `/projects/${project.id}`,
           images: project.images,
           priceNumeric: project.numericPrice,
           availability: project.status === 'Sold' ? 'SoldOut' : 'InStock',
