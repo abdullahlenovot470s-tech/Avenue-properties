@@ -77,6 +77,7 @@ export const ContactCta: React.FC = () => {
       return;
     }
 
+    const isWebhookOnly = BRAND_CONFIG.features.enquiryDelivery === 'webhook';
     setLoading(true);
     try {
       const res = await submitInquiry({
@@ -90,8 +91,8 @@ export const ContactCta: React.FC = () => {
         spamCheck,
       });
 
-      if (res.success || (res.unreachable && isEnquiryWebhookConfigured())) {
-        void sendEnquiryToWebhook({
+      if (res.success || (!isWebhookOnly && res.unreachable && isEnquiryWebhookConfigured())) {
+        const webhookPayload = {
           name: formData.name.trim(),
           email: formData.email.trim(),
           phone: formData.phone.trim(),
@@ -99,9 +100,29 @@ export const ContactCta: React.FC = () => {
           interest: 'Homepage Quick Question',
           budget: '',
           message: 'Submitted via homepage quick contact form.',
-          source: "Let's Talk",
+          source: "Let's Talk" as const,
           website: '',
-        });
+        };
+        if (isWebhookOnly) {
+          const webhookRes = await sendEnquiryToWebhook(webhookPayload);
+          if (webhookRes.skipped) {
+            setError(
+              'Online enquiry delivery is not configured right now. Please contact us via WhatsApp or telephone.'
+            );
+            return;
+          }
+          setSubmitted(true);
+          setSpamChallenge(createSpamChallenge());
+          setChallengeAnswer('');
+          showToast(
+            webhookRes.queued
+              ? 'You appear offline — inquiry queued and will send automatically once connected.'
+              : 'Inquiry submitted! Our partner will connect shortly.',
+            webhookRes.queued ? 'info' : 'success'
+          );
+          return;
+        }
+        void sendEnquiryToWebhook(webhookPayload);
         setSubmitted(true);
         setSpamChallenge(createSpamChallenge());
         setChallengeAnswer('');

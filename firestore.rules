@@ -506,9 +506,9 @@ service cloud.firestore {
     match /inquiries/{inquiryId} {
       allow get: if isValidId(inquiryId) && isAdmin();
       allow list: if isAdmin();
-      allow create: if isValidId(inquiryId) &&
-        isValidInquiry(incoming(), inquiryId) &&
-        incoming().status == 'new';
+      // [BEGIN INQUIRIES_CREATE_RULE]
+      allow create: if isValidId(inquiryId) && isValidInquiry(incoming(), inquiryId) && incoming().status == 'new';
+      // [END INQUIRIES_CREATE_RULE]
       allow update: if isValidId(inquiryId) &&
         isAdmin() &&
         isValidInquiry(incoming(), inquiryId) &&

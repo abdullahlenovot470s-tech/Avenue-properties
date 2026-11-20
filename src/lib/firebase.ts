@@ -6,6 +6,10 @@ import type { FirebaseStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { BRAND_CONFIG } from '../config/brand.config';
 
+const FIREBASE_ENABLED =
+  BRAND_CONFIG.features.enableClientLogin ||
+  BRAND_CONFIG.features.enableAdminPanel ||
+  BRAND_CONFIG.features.enableEnquiriesDashboard;
 const needAuth =
   BRAND_CONFIG.features.enableClientLogin || BRAND_CONFIG.features.enableAdminPanel;
 const needStorage = BRAND_CONFIG.features.enableAdminPanel;
@@ -24,6 +28,9 @@ let storagePromise: Promise<FirebaseStorage | null> | null = null;
 let connectionTested = false;
 
 export async function getFirebaseAppAsync(): Promise<FirebaseApp> {
+  if (!FIREBASE_ENABLED) {
+    return Promise.reject(new Error('Firebase is disabled by feature flags.'));
+  }
   if (!appPromise) {
     appPromise = import('firebase/app').then(({ initializeApp, getApps, getApp }) =>
       getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
@@ -33,7 +40,7 @@ export async function getFirebaseAppAsync(): Promise<FirebaseApp> {
 }
 
 export async function initAppCheckAsync(): Promise<AppCheck | null> {
-  if (typeof window === 'undefined') return null;
+  if (!FIREBASE_ENABLED || typeof window === 'undefined') return null;
   if (appCheckInstance) return appCheckInstance;
   if (!appCheckPromise) {
     appCheckPromise = (async () => {
@@ -72,7 +79,7 @@ export function isAppCheckInitialized(): boolean {
 }
 
 export async function getAuthAsync(): Promise<Auth | null> {
-  if (!needAuth) return null;
+  if (!FIREBASE_ENABLED || !needAuth) return null;
   if (authInstance) return authInstance;
   if (!authPromise) {
     authPromise = (async () => {
@@ -89,11 +96,12 @@ export async function getAuthAsync(): Promise<Auth | null> {
 }
 
 export function getCurrentFirebaseUser(): FirebaseUser | null {
+  if (!FIREBASE_ENABLED || !needAuth) return null;
   return authInstance?.currentUser ?? null;
 }
 
 export async function getGoogleProviderAsync(): Promise<GoogleAuthProvider | null> {
-  if (!needAuth || !BRAND_CONFIG.features.enableGoogleLogin) return null;
+  if (!FIREBASE_ENABLED || !needAuth || !BRAND_CONFIG.features.enableGoogleLogin) return null;
   if (!googleProviderPromise) {
     googleProviderPromise = import('firebase/auth').then(({ GoogleAuthProvider }) => {
       const provider = new GoogleAuthProvider();
@@ -105,6 +113,9 @@ export async function getGoogleProviderAsync(): Promise<GoogleAuthProvider | nul
 }
 
 export async function getDbAsync(): Promise<Firestore> {
+  if (!FIREBASE_ENABLED) {
+    return Promise.reject(new Error('Firebase is disabled by feature flags.'));
+  }
   if (!dbPromise) {
     dbPromise = (async () => {
       const [app, firestoreMod] = await Promise.all([
@@ -150,7 +161,7 @@ export async function getDbAsync(): Promise<Firestore> {
 }
 
 export async function getStorageLazy(): Promise<FirebaseStorage | null> {
-  if (!needStorage) return null;
+  if (!FIREBASE_ENABLED || !needStorage) return null;
   if (!storagePromise) {
     storagePromise = Promise.all([getFirebaseAppAsync(), import('firebase/storage')]).then(
       ([firebaseApp, { getStorage }]) => getStorage(firebaseApp)

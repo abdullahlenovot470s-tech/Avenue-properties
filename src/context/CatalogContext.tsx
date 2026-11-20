@@ -542,6 +542,9 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   const publishSnapshot = useCallback(async () => {
+    if (!BRAND_CONFIG.features.enableAdminPanel) {
+      return { published: false, error: 'Catalog management is disabled.' };
+    }
     const fsMod = await import('../lib/catalogFirestore');
     const res = await fsMod.publishPublicCatalogSnapshotFirestore();
     if (res.published) {
@@ -640,6 +643,9 @@ export const CatalogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     fallbackError: string,
     firestoreFn: (fsMod: typeof import('../lib/catalogFirestore')) => Promise<CatalogMutationResult>
   ): Promise<ActionResult> => {
+    if (!BRAND_CONFIG.features.enableAdminPanel) {
+      return { success: false, error: 'Catalog management is disabled.' };
+    }
     if (IS_STATIC_MODE) {
       setBackendReachable(false);
       return runFirestoreFallback(firestoreFn, fallbackError);

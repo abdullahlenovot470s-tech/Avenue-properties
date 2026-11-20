@@ -21,50 +21,79 @@ import { PropertyListing, PortfolioProject } from './types';
 import { BRAND_CONFIG } from './config/brand.config';
 import { initAnalytics } from './lib/analytics';
 
+const SHOW_PROJECTS_PAGE = BRAND_CONFIG.features.showProjectsPage;
+const SHOW_BUY_PAGE = BRAND_CONFIG.features.showBuyPage;
+const SHOW_RENT_PAGE = BRAND_CONFIG.features.showRentPage;
+const ENABLE_CLIENT_LOGIN = BRAND_CONFIG.features.enableClientLogin;
+const ENABLE_ADMIN_PANEL = BRAND_CONFIG.features.enableAdminPanel;
+const ENABLE_LOGIN_PAGE = ENABLE_CLIENT_LOGIN || ENABLE_ADMIN_PANEL;
+const ENABLE_ENQUIRIES_DASHBOARD =
+  ENABLE_ADMIN_PANEL && BRAND_CONFIG.features.enableEnquiriesDashboard;
+
 // Prefetchable lazy route loaders for instant subsequent page transitions
 const loadAboutPage = () => import('./pages/AboutPage');
 const loadServicesPage = () => import('./pages/ServicesPage');
-const loadProjectsPage = () => import('./pages/ProjectsPage');
-const loadProjectDetailPage = () => import('./pages/ProjectDetailPage');
-const loadBuyPage = () => import('./pages/BuyPage');
-const loadBuyDetailPage = () => import('./pages/BuyDetailPage');
-const loadRentPage = () => import('./pages/RentPage');
-const loadRentDetailPage = () => import('./pages/RentDetailPage');
+const loadProjectsPage = SHOW_PROJECTS_PAGE ? () => import('./pages/ProjectsPage') : null;
+const loadProjectDetailPage = SHOW_PROJECTS_PAGE
+  ? () => import('./pages/ProjectDetailPage')
+  : null;
+const loadBuyPage = SHOW_BUY_PAGE ? () => import('./pages/BuyPage') : null;
+const loadBuyDetailPage = SHOW_BUY_PAGE ? () => import('./pages/BuyDetailPage') : null;
+const loadRentPage = SHOW_RENT_PAGE ? () => import('./pages/RentPage') : null;
+const loadRentDetailPage = SHOW_RENT_PAGE ? () => import('./pages/RentDetailPage') : null;
 const loadContactPage = () => import('./pages/ContactPage');
-const loadLoginPage = () => import('./pages/LoginPage');
-const loadSignupPage = () => import('./pages/SignupPage');
-const loadProfilePage = () => import('./pages/ProfilePage');
-const loadManageCatalogPage = () => import('./pages/ManageCatalogPage');
-const loadClientRecordsPage = () => import('./pages/ClientRecordsPage');
+const loadLoginPage = ENABLE_LOGIN_PAGE ? () => import('./pages/LoginPage') : null;
+const loadSignupPage = ENABLE_CLIENT_LOGIN ? () => import('./pages/SignupPage') : null;
+const loadProfilePage = ENABLE_CLIENT_LOGIN ? () => import('./pages/ProfilePage') : null;
+const loadManageCatalogPage = ENABLE_ADMIN_PANEL ? () => import('./pages/ManageCatalogPage') : null;
+const loadClientRecordsPage = ENABLE_ENQUIRIES_DASHBOARD
+  ? () => import('./pages/ClientRecordsPage')
+  : null;
 const loadPrivacyPolicyPage = () => import('./pages/PrivacyPolicyPage');
 const loadTermsPage = () => import('./pages/TermsPage');
 const loadNotFoundPage = () => import('./pages/NotFoundPage');
 
+const NotFoundPage = lazy(() => loadNotFoundPage().then((m) => ({ default: m.NotFoundPage })));
 const AboutPage = lazy(() => loadAboutPage().then((m) => ({ default: m.AboutPage })));
 const ServicesPage = lazy(() => loadServicesPage().then((m) => ({ default: m.ServicesPage })));
-const ProjectsPage = lazy(() => loadProjectsPage().then((m) => ({ default: m.ProjectsPage })));
-const ProjectDetailPage = lazy(() =>
-  loadProjectDetailPage().then((m) => ({ default: m.ProjectDetailPage }))
-);
-const BuyPage = lazy(() => loadBuyPage().then((m) => ({ default: m.BuyPage })));
-const BuyDetailPage = lazy(() => loadBuyDetailPage().then((m) => ({ default: m.BuyDetailPage })));
-const RentPage = lazy(() => loadRentPage().then((m) => ({ default: m.RentPage })));
-const RentDetailPage = lazy(() => loadRentDetailPage().then((m) => ({ default: m.RentDetailPage })));
+const ProjectsPage = loadProjectsPage
+  ? lazy(() => loadProjectsPage().then((m) => ({ default: m.ProjectsPage })))
+  : NotFoundPage;
+const ProjectDetailPage = loadProjectDetailPage
+  ? lazy(() => loadProjectDetailPage().then((m) => ({ default: m.ProjectDetailPage })))
+  : NotFoundPage;
+const BuyPage = loadBuyPage
+  ? lazy(() => loadBuyPage().then((m) => ({ default: m.BuyPage })))
+  : NotFoundPage;
+const BuyDetailPage = loadBuyDetailPage
+  ? lazy(() => loadBuyDetailPage().then((m) => ({ default: m.BuyDetailPage })))
+  : NotFoundPage;
+const RentPage = loadRentPage
+  ? lazy(() => loadRentPage().then((m) => ({ default: m.RentPage })))
+  : NotFoundPage;
+const RentDetailPage = loadRentDetailPage
+  ? lazy(() => loadRentDetailPage().then((m) => ({ default: m.RentDetailPage })))
+  : NotFoundPage;
 const ContactPage = lazy(() => loadContactPage().then((m) => ({ default: m.ContactPage })));
-const LoginPage = lazy(() => loadLoginPage().then((m) => ({ default: m.LoginPage })));
-const SignupPage = lazy(() => loadSignupPage().then((m) => ({ default: m.SignupPage })));
-const ProfilePage = lazy(() => loadProfilePage().then((m) => ({ default: m.ProfilePage })));
-const ManageCatalogPage = lazy(() =>
-  loadManageCatalogPage().then((m) => ({ default: m.ManageCatalogPage }))
-);
-const ClientRecordsPage = lazy(() =>
-  loadClientRecordsPage().then((m) => ({ default: m.ClientRecordsPage }))
-);
+const LoginPage = loadLoginPage
+  ? lazy(() => loadLoginPage().then((m) => ({ default: m.LoginPage })))
+  : NotFoundPage;
+const SignupPage = loadSignupPage
+  ? lazy(() => loadSignupPage().then((m) => ({ default: m.SignupPage })))
+  : NotFoundPage;
+const ProfilePage = loadProfilePage
+  ? lazy(() => loadProfilePage().then((m) => ({ default: m.ProfilePage })))
+  : NotFoundPage;
+const ManageCatalogPage = loadManageCatalogPage
+  ? lazy(() => loadManageCatalogPage().then((m) => ({ default: m.ManageCatalogPage })))
+  : NotFoundPage;
+const ClientRecordsPage = loadClientRecordsPage
+  ? lazy(() => loadClientRecordsPage().then((m) => ({ default: m.ClientRecordsPage })))
+  : NotFoundPage;
 const PrivacyPolicyPage = lazy(() =>
   loadPrivacyPolicyPage().then((m) => ({ default: m.PrivacyPolicyPage }))
 );
 const TermsPage = lazy(() => loadTermsPage().then((m) => ({ default: m.TermsPage })));
-const NotFoundPage = lazy(() => loadNotFoundPage().then((m) => ({ default: m.NotFoundPage })));
 
 // Lightweight fallback during rare un-prefetched chunk load
 function PageLoadingFallback() {
@@ -120,9 +149,9 @@ function AnimatedAppContent() {
   // Idle background prefetch of primary navigation routes after initial paint
   useEffect(() => {
     const prefetch = () => {
-      if (BRAND_CONFIG.features.showProjectsPage) void loadProjectsPage();
-      if (BRAND_CONFIG.features.showBuyPage) void loadBuyPage();
-      if (BRAND_CONFIG.features.showRentPage) void loadRentPage();
+      if (loadProjectsPage) void loadProjectsPage();
+      if (loadBuyPage) void loadBuyPage();
+      if (loadRentPage) void loadRentPage();
       void loadAboutPage();
       void loadServicesPage();
       void loadContactPage();
@@ -153,8 +182,7 @@ function AnimatedAppContent() {
     setConsultationOpen(true);
   };
 
-  const loginRouteEnabled =
-    BRAND_CONFIG.features.enableClientLogin || BRAND_CONFIG.features.enableAdminPanel;
+  const loginRouteEnabled = ENABLE_LOGIN_PAGE;
 
   return (
     <div className="min-h-[100svh] overflow-x-clip bg-surface text-brand selection:bg-accent selection:text-accent-contrast antialiased flex flex-col justify-between">
@@ -188,41 +216,29 @@ function AnimatedAppContent() {
                 />
                 <Route
                   path="/projects"
-                  element={
-                    BRAND_CONFIG.features.showProjectsPage ? <ProjectsPage /> : <NotFoundPage />
-                  }
+                  element={SHOW_PROJECTS_PAGE ? <ProjectsPage /> : <NotFoundPage />}
                 />
                 <Route
                   path="/projects/:id"
-                  element={
-                    BRAND_CONFIG.features.showProjectsPage ? (
-                      <ProjectDetailPage />
-                    ) : (
-                      <NotFoundPage />
-                    )
-                  }
+                  element={SHOW_PROJECTS_PAGE ? <ProjectDetailPage /> : <NotFoundPage />}
                 />
 
                 <Route
                   path="/buy"
-                  element={BRAND_CONFIG.features.showBuyPage ? <BuyPage /> : <NotFoundPage />}
+                  element={SHOW_BUY_PAGE ? <BuyPage /> : <NotFoundPage />}
                 />
                 <Route
                   path="/buy/:id"
-                  element={
-                    BRAND_CONFIG.features.showBuyPage ? <BuyDetailPage /> : <NotFoundPage />
-                  }
+                  element={SHOW_BUY_PAGE ? <BuyDetailPage /> : <NotFoundPage />}
                 />
 
                 <Route
                   path="/rent"
-                  element={BRAND_CONFIG.features.showRentPage ? <RentPage /> : <NotFoundPage />}
+                  element={SHOW_RENT_PAGE ? <RentPage /> : <NotFoundPage />}
                 />
                 <Route
                   path="/rent/:id"
-                  element={
-                    BRAND_CONFIG.features.showRentPage ? <RentDetailPage /> : <NotFoundPage />
-                  }
+                  element={SHOW_RENT_PAGE ? <RentDetailPage /> : <NotFoundPage />}
                 />
                 <Route path="/contact" element={<ContactPage />} />
                 <Route path="/privacy" element={<PrivacyPolicyPage />} />
@@ -233,20 +249,16 @@ function AnimatedAppContent() {
                 />
                 <Route
                   path="/signup"
-                  element={
-                    BRAND_CONFIG.features.enableClientLogin ? <SignupPage /> : <NotFoundPage />
-                  }
+                  element={ENABLE_CLIENT_LOGIN ? <SignupPage /> : <NotFoundPage />}
                 />
                 <Route
                   path="/profile"
-                  element={
-                    BRAND_CONFIG.features.enableClientLogin ? <ProfilePage /> : <NotFoundPage />
-                  }
+                  element={ENABLE_CLIENT_LOGIN ? <ProfilePage /> : <NotFoundPage />}
                 />
                 <Route
                   path="/manage"
                   element={
-                    BRAND_CONFIG.features.enableAdminPanel ? (
+                    ENABLE_ADMIN_PANEL ? (
                       <ManagementRoute>
                         <ManageCatalogPage />
                       </ManagementRoute>
@@ -258,8 +270,7 @@ function AnimatedAppContent() {
                 <Route
                   path="/records"
                   element={
-                    BRAND_CONFIG.features.enableAdminPanel &&
-                    BRAND_CONFIG.features.enableEnquiriesDashboard ? (
+                    ENABLE_ENQUIRIES_DASHBOARD ? (
                       <ManagementRoute>
                         <ClientRecordsPage />
                       </ManagementRoute>

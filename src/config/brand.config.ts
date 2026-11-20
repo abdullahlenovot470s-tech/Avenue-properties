@@ -33,11 +33,14 @@
  * ============================================================================
  */
 
+export type EnquiryDeliveryMode = 'firestore' | 'server' | 'webhook';
+
 export interface BrandFeatures {
   demoMode: boolean;
   enableGoogleLogin: boolean;
   enableEmailPasswordLogin: boolean;
   enableEnquiryWebhook: boolean;
+  enquiryDelivery: EnquiryDeliveryMode;
   showProjectsPage: boolean;
   showBuyPage: boolean;
   showRentPage: boolean;
@@ -61,6 +64,7 @@ const DEFAULT_FEATURES: BrandFeatures = {
   enableGoogleLogin: true,
   enableEmailPasswordLogin: true,
   enableEnquiryWebhook: true,
+  enquiryDelivery: 'firestore',
   showProjectsPage: true,
   showBuyPage: true,
   showRentPage: true,
@@ -82,6 +86,7 @@ const DEFAULT_FEATURES: BrandFeatures = {
 export const TIER_PRESETS: Record<'plot' | 'villa' | 'estate', BrandFeatures> = {
   plot: {
     ...DEFAULT_FEATURES,
+    enquiryDelivery: 'webhook',
     showProjectsPage: true,
     showBuyPage: false,
     showRentPage: false,
@@ -101,6 +106,7 @@ export const TIER_PRESETS: Record<'plot' | 'villa' | 'estate', BrandFeatures> = 
   },
   villa: {
     ...DEFAULT_FEATURES,
+    enquiryDelivery: 'webhook',
     showProjectsPage: true,
     showBuyPage: true,
     showRentPage: true,
@@ -123,23 +129,50 @@ export const TIER_PRESETS: Record<'plot' | 'villa' | 'estate', BrandFeatures> = 
   },
 };
 
+export function resolveBrandFeatures(rawTier?: string, rawBackendMode?: string): BrandFeatures {
+  const normalizedTier = String(rawTier || '').trim().toLowerCase();
+  const normalizedBackendMode = String(rawBackendMode || 'static').trim().toLowerCase();
+  const defaultEnquiryDelivery: EnquiryDeliveryMode =
+    normalizedBackendMode === 'server' ? 'server' : 'firestore';
+
+  if (normalizedTier === 'plot' || normalizedTier === 'villa') {
+    return {
+      ...TIER_PRESETS[normalizedTier],
+      enquiryDelivery: 'webhook',
+    };
+  }
+  if (normalizedTier === 'estate') {
+    return {
+      ...TIER_PRESETS.estate,
+      enquiryDelivery: defaultEnquiryDelivery,
+    };
+  }
+  return {
+    ...DEFAULT_FEATURES,
+    enquiryDelivery: defaultEnquiryDelivery,
+  };
+}
+
 function resolveTierFeatures(): BrandFeatures {
+  const procEnv = (
+    globalThis as {
+      process?: { env?: Record<string, string | undefined> };
+    }
+  ).process?.env;
   const rawTier =
     (typeof import.meta !== 'undefined' && import.meta.env
       ? import.meta.env.VITE_TIER
       : undefined) ||
-    (
-      globalThis as {
-        process?: { env?: Record<string, string | undefined> };
-      }
-    ).process?.env?.VITE_TIER ||
+    procEnv?.VITE_TIER ||
     '';
+  const rawBackendMode =
+    (typeof import.meta !== 'undefined' && import.meta.env
+      ? import.meta.env.VITE_BACKEND_MODE
+      : undefined) ||
+    procEnv?.VITE_BACKEND_MODE ||
+    'static';
 
-  const normalized = String(rawTier).trim().toLowerCase();
-  if (normalized === 'plot' || normalized === 'villa' || normalized === 'estate') {
-    return TIER_PRESETS[normalized];
-  }
-  return DEFAULT_FEATURES;
+  return resolveBrandFeatures(rawTier, rawBackendMode);
 }
 
 export const BRAND_CONFIG = {

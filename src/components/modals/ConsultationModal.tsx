@@ -80,39 +80,56 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       return;
     }
 
+    const isWebhookOnly = BRAND_CONFIG.features.enquiryDelivery === 'webhook';
     setLoading(true);
-    const res = await submitInquiry({
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      office: 'Private Advisory',
-      subject: service,
-      timeframe: formData.timeframe,
-      message: formData.notes,
-      source: 'Consultation Modal',
-      spamCheck,
-    });
-    setLoading(false);
-
-    if (res.success || (res.unreachable && isEnquiryWebhookConfigured())) {
-      void sendEnquiryToWebhook({
+    try {
+      const res = await submitInquiry({
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
-        city: 'Private Advisory',
-        interest: service,
-        budget: '',
-        message: formData.notes.trim()
-          ? `${formData.notes.trim()} (Timeframe: ${formData.timeframe})`
-          : `Timeframe: ${formData.timeframe}`,
-        source: 'Consultation',
-        website: '',
+        office: 'Private Advisory',
+        subject: service,
+        timeframe: formData.timeframe,
+        message: formData.notes,
+        source: 'Consultation Modal',
+        spamCheck,
       });
-      setSubmitted(true);
-      setSpamChallenge(createSpamChallenge());
-      setChallengeAnswer('');
-    } else {
-      setError(res.error || 'Could not submit consultation request.');
+
+      if (res.success || (!isWebhookOnly && res.unreachable && isEnquiryWebhookConfigured())) {
+        const webhookPayload = {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          city: 'Private Advisory',
+          interest: service,
+          budget: '',
+          message: formData.notes.trim()
+            ? `${formData.notes.trim()} (Timeframe: ${formData.timeframe})`
+            : `Timeframe: ${formData.timeframe}`,
+          source: 'Consultation' as const,
+          website: '',
+        };
+        if (isWebhookOnly) {
+          const webhookRes = await sendEnquiryToWebhook(webhookPayload);
+          if (webhookRes.skipped) {
+            setError(
+              'Online enquiry delivery is not configured right now. Please contact us via WhatsApp or telephone.'
+            );
+            return;
+          }
+        } else {
+          void sendEnquiryToWebhook(webhookPayload);
+        }
+        setSubmitted(true);
+        setSpamChallenge(createSpamChallenge());
+        setChallengeAnswer('');
+      } else {
+        setError(res.error || 'Could not submit consultation request.');
+      }
+    } catch {
+      setError('Could not submit consultation request right now.');
+    } finally {
+      setLoading(false);
     }
   };
 

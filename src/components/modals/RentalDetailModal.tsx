@@ -92,46 +92,68 @@ export const RentalDetailModal: React.FC<RentalDetailModalProps> = ({
       return;
     }
 
+    const isWebhookOnly = BRAND_CONFIG.features.enquiryDelivery === 'webhook';
     setBookingSubmitting(true);
-    const res = await submitInquiry({
-      name: tenantName.trim(),
-      phone: tenantPhone.trim(),
-      office: rental.city,
-      subject: `Rental Inspection: ${rental.title}`,
-      message: `Requested tenant site inspection for ${rental.title} on ${visitDate}.`,
-      source: 'Rental Quick View Modal',
-      propertyTitle: rental.title,
-      preferredDate: visitDate,
-      spamCheck,
-    });
-    setBookingSubmitting(false);
+    try {
+      const res = await submitInquiry({
+        name: tenantName.trim(),
+        phone: tenantPhone.trim(),
+        office: rental.city,
+        subject: `Rental Inspection: ${rental.title}`,
+        message: `Requested tenant site inspection for ${rental.title} on ${visitDate}.`,
+        source: 'Rental Quick View Modal',
+        propertyTitle: rental.title,
+        preferredDate: visitDate,
+        spamCheck,
+      });
 
-    if (!res.success && !(res.unreachable && isEnquiryWebhookConfigured())) {
-      showToast(res.error || 'Could not submit viewing request. Please try again.', 'error');
-      return;
-    }
+      if (!res.success && !(!isWebhookOnly && res.unreachable && isEnquiryWebhookConfigured())) {
+        showToast(res.error || 'Could not submit viewing request. Please try again.', 'error');
+        return;
+      }
 
-    void sendEnquiryToWebhook({
-      name: tenantName.trim(),
-      email: '',
-      phone: tenantPhone.trim(),
-      city: rental.city,
-      interest: `Rent - ${rental.type}`,
-      budget: formatRent(rental.monthlyRent),
-      message: `Property: ${rental.title} | Preferred Date: ${visitDate}`,
-      source: 'Site Visit',
-      website,
-    });
+      const webhookPayload = {
+        name: tenantName.trim(),
+        email: '',
+        phone: tenantPhone.trim(),
+        city: rental.city,
+        interest: `Rent - ${rental.type}`,
+        budget: formatRent(rental.monthlyRent),
+        message: `Property: ${rental.title} | Preferred Date: ${visitDate}`,
+        source: 'Site Visit' as const,
+        website,
+      };
+      let queuedOffline = false;
+      if (isWebhookOnly) {
+        const webhookRes = await sendEnquiryToWebhook(webhookPayload);
+        if (webhookRes.skipped) {
+          showToast(
+            'Online enquiry delivery is not configured right now. Please contact us via WhatsApp or telephone.',
+            'error'
+          );
+          return;
+        }
+        queuedOffline = Boolean(webhookRes.queued);
+      } else {
+        void sendEnquiryToWebhook(webhookPayload);
+      }
 
-    setBookingSubmitted(true);
-    setSpamChallenge(createSpamChallenge());
-    setChallengeAnswer('');
-    showToast(
-      `Viewing request registered for ${rental.title}. A ${BRAND_CONFIG.identity.brandShortName} leasing advisor will contact you.`,
-      'success'
-    );
-    if (onBookViewing) {
-      onBookViewing(rental.title);
+      setBookingSubmitted(true);
+      setSpamChallenge(createSpamChallenge());
+      setChallengeAnswer('');
+      showToast(
+        queuedOffline
+          ? `You appear offline — viewing request for ${rental.title} was queued and will send automatically once connected.`
+          : `Viewing request registered for ${rental.title}. A ${BRAND_CONFIG.identity.brandShortName} leasing advisor will contact you.`,
+        queuedOffline ? 'info' : 'success'
+      );
+      if (onBookViewing) {
+        onBookViewing(rental.title);
+      }
+    } catch {
+      showToast('Could not submit viewing request right now. Please try again.', 'error');
+    } finally {
+      setBookingSubmitting(false);
     }
   };
 

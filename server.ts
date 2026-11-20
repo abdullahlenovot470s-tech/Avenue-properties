@@ -69,10 +69,12 @@ function isManagementEmail(email: string): boolean {
   return (Boolean(MANAGEMENT_EMAIL) && clean === MANAGEMENT_EMAIL) || MANAGEMENT_GOOGLE_EMAILS.has(clean);
 }
 
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const ALLOW_MEMORY_STORAGE = process.env.ALLOW_MEMORY_STORAGE === 'true';
 const ENV_TOKEN_SECRET = (process.env.MANAGEMENT_TOKEN_SECRET || '').trim();
 const TOKEN_SECRET = ENV_TOKEN_SECRET || crypto.randomBytes(32).toString('hex');
 
-if (!ENV_TOKEN_SECRET) {
+if (!ENV_TOKEN_SECRET && !IS_PRODUCTION) {
   console.warn(
     '[Security] MANAGEMENT_TOKEN_SECRET is not set; using an ephemeral per-process secret (sessions will reset on restart).'
   );
@@ -243,6 +245,55 @@ function initFirebaseAdmin(): void {
 }
 
 initFirebaseAdmin();
+
+function validateProductionStartupConfig(): void {
+  if (!IS_PRODUCTION) return;
+
+  const missingSecret = !ENV_TOKEN_SECRET;
+  const missingPersistence = !firestoreDb;
+
+  if (missingSecret) {
+    console.error(
+      '[Startup Error] Missing required production environment variable: MANAGEMENT_TOKEN_SECRET.'
+    );
+  }
+
+  if (missingPersistence) {
+    const serviceAccountRaw = (process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim();
+    const credentialsPath = (process.env.GOOGLE_APPLICATION_CREDENTIALS || '').trim();
+    const useAdc = process.env.FIREBASE_USE_ADC === 'true';
+
+    let reason: string;
+    if (!serviceAccountRaw && !credentialsPath && !useAdc) {
+      reason =
+        'Missing Firebase Admin credentials: set FIREBASE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS (or FIREBASE_USE_ADC=true).';
+    } else if (credentialsPath && !fs.existsSync(credentialsPath)) {
+      reason = `GOOGLE_APPLICATION_CREDENTIALS file not found at "${credentialsPath}", and FIREBASE_SERVICE_ACCOUNT_JSON is not set.`;
+    } else if (serviceAccountRaw) {
+      reason =
+        'FIREBASE_SERVICE_ACCOUNT_JSON is invalid or Firebase Admin failed to initialize (check FIREBASE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS).';
+    } else {
+      reason =
+        'Firebase Admin SDK could not initialize Firestore (check FIREBASE_SERVICE_ACCOUNT_JSON, GOOGLE_APPLICATION_CREDENTIALS, or FIREBASE_USE_ADC).';
+    }
+
+    if (ALLOW_MEMORY_STORAGE) {
+      console.warn(
+        `[Startup WARNING] ALLOW_MEMORY_STORAGE=true is set in production! ${reason} Running with TEMPORARY IN-MEMORY STORAGE — all data will be lost on restart.`
+      );
+    } else {
+      console.error(
+        `[Startup Error] ${reason} Refusing to start with temporary in-memory storage in production (set ALLOW_MEMORY_STORAGE=true to override).`
+      );
+    }
+  }
+
+  if (missingSecret || (missingPersistence && !ALLOW_MEMORY_STORAGE)) {
+    process.exit(1);
+  }
+}
+
+validateProductionStartupConfig();
 
 interface StoredUser {
   id: string;
@@ -605,22 +656,173 @@ async function listUsers(): Promise<StoredUser[]> {
   return data;
 }
 
-async function deleteUserById(id: string): Promise<boolean> {
+function isFirebaseUserNotFoundError(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    String((err as { code?: unknown }).code) === 'auth/user-not-found'
+  );
+}
+
+async function deleteUserById(
+  id: string
+): Promise<{ deleted: boolean; forbidden?: boolean }> {
+  const cleanId = id.trim();
+  if (!cleanId) {
+    return { deleted: false };
+  }
+
+  const candidateEmails = new Set<string>();
+  let memoryKeyToDelete: string | null = null;
+  let authSnap: FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData> | null = null;
+  let emailAuthSnap: FirebaseFirestore.DocumentSnapshot<FirebaseFirestore.DocumentData> | null = null;
+  let userDocSnap: FirebaseFirestore.DocumentSnapshot<FirebaseFirestore.DocumentData> | null = null;
+  let altUserDocSnap: FirebaseFirestore.DocumentSnapshot<FirebaseFirestore.DocumentData> | null = null;
+
   if (!firestoreDb) {
     for (const [key, user] of memoryUsersByEmail.entries()) {
-      if (user.id === id) {
-        memoryUsersByEmail.delete(key);
-        return true;
+      if (user.id === cleanId) {
+        memoryKeyToDelete = key;
+        if (user.email) candidateEmails.add(user.email.trim().toLowerCase());
+        break;
       }
     }
-    return false;
+  } else {
+    authSnap = await firestoreDb
+      .collection('auth_users')
+      .where('id', '==', cleanId)
+      .limit(1)
+      .get();
+    if (!authSnap.empty) {
+      const authUser = authSnap.docs[0].data() as StoredUser;
+      if (authUser?.email) {
+        candidateEmails.add(authUser.email.trim().toLowerCase());
+      }
+    }
+
+    if (!cleanId.includes('/') && cleanId !== '.' && cleanId !== '..') {
+      userDocSnap = await firestoreDb.collection('users').doc(cleanId).get();
+      if (userDocSnap.exists) {
+        const profileData = userDocSnap.data() as Record<string, unknown>;
+        if (typeof profileData?.email === 'string' && profileData.email.trim()) {
+          candidateEmails.add(profileData.email.trim().toLowerCase());
+        }
+      }
+    }
   }
-  const snap = await firestoreDb.collection('auth_users').where('id', '==', id).limit(1).get();
-  if (snap.empty) return false;
-  const deletedUser = snap.docs[0].data() as StoredUser;
-  await snap.docs[0].ref.delete();
-  invalidateUserCaches(deletedUser?.email);
-  return true;
+
+  let fbUserUid: string | null = null;
+  if (adminAuthInstance) {
+    try {
+      const fbUser = await adminAuthInstance.getUser(cleanId);
+      fbUserUid = fbUser.uid;
+      if (fbUser.email) {
+        candidateEmails.add(fbUser.email.trim().toLowerCase());
+      }
+    } catch (err) {
+      if (!isFirebaseUserNotFoundError(err)) {
+        throw err;
+      }
+    }
+
+    if (!fbUserUid && candidateEmails.size > 0) {
+      for (const email of candidateEmails) {
+        try {
+          const fbUser = await adminAuthInstance.getUserByEmail(email);
+          fbUserUid = fbUser.uid;
+          if (fbUser.email) {
+            candidateEmails.add(fbUser.email.trim().toLowerCase());
+          }
+          break;
+        } catch (err) {
+          if (!isFirebaseUserNotFoundError(err)) {
+            throw err;
+          }
+        }
+      }
+    }
+  }
+
+  if (firestoreDb && authSnap && authSnap.empty && candidateEmails.size > 0) {
+    const firstEmail = Array.from(candidateEmails)[0];
+    emailAuthSnap = await firestoreDb.collection('auth_users').doc(emailDocId(firstEmail)).get();
+    if (emailAuthSnap.exists) {
+      const authData = emailAuthSnap.data() as StoredUser;
+      if (authData?.email) {
+        candidateEmails.add(authData.email.trim().toLowerCase());
+      }
+    }
+  }
+
+  if (
+    firestoreDb &&
+    fbUserUid &&
+    fbUserUid !== cleanId &&
+    !fbUserUid.includes('/') &&
+    fbUserUid !== '.' &&
+    fbUserUid !== '..'
+  ) {
+    altUserDocSnap = await firestoreDb.collection('users').doc(fbUserUid).get();
+    if (altUserDocSnap.exists) {
+      const altData = altUserDocSnap.data() as Record<string, unknown>;
+      if (typeof altData?.email === 'string' && altData.email.trim()) {
+        candidateEmails.add(altData.email.trim().toLowerCase());
+      }
+    }
+  }
+
+  if (cleanId === `mgmt_${BRAND_CONFIG.identity.storageKeyPrefix}_admin`) {
+    return { deleted: false, forbidden: true };
+  }
+  for (const email of candidateEmails) {
+    if (isManagementEmail(email)) {
+      return { deleted: false, forbidden: true };
+    }
+  }
+
+  let removed = false;
+
+  if (!firestoreDb && memoryKeyToDelete) {
+    memoryUsersByEmail.delete(memoryKeyToDelete);
+    removed = true;
+  }
+
+  if (authSnap && !authSnap.empty) {
+    const deletedUser = authSnap.docs[0].data() as StoredUser;
+    await authSnap.docs[0].ref.delete();
+    invalidateUserCaches(deletedUser?.email);
+    removed = true;
+  } else if (emailAuthSnap && emailAuthSnap.exists) {
+    const deletedUser = emailAuthSnap.data() as StoredUser;
+    await emailAuthSnap.ref.delete();
+    invalidateUserCaches(deletedUser?.email);
+    removed = true;
+  }
+
+  if (userDocSnap && userDocSnap.exists) {
+    await userDocSnap.ref.delete();
+    removed = true;
+  }
+
+  if (altUserDocSnap && altUserDocSnap.exists) {
+    await altUserDocSnap.ref.delete();
+    removed = true;
+  }
+
+  if (adminAuthInstance && fbUserUid) {
+    try {
+      await adminAuthInstance.revokeRefreshTokens(fbUserUid);
+      await adminAuthInstance.deleteUser(fbUserUid);
+      removed = true;
+    } catch (err) {
+      if (!isFirebaseUserNotFoundError(err)) {
+        throw err;
+      }
+    }
+  }
+
+  return { deleted: removed };
 }
 
 async function listInquiries(): Promise<ContactInquiryRecord[]> {
@@ -1947,6 +2149,10 @@ async function getTransporter(): Promise<{
     return { transporter, fromAddress: smtp.from, isEthereal: false };
   }
 
+  if (IS_PRODUCTION) {
+    throw new Error('Ethereal test inbox is disabled in production.');
+  }
+
   if (!cachedEtherealTransporter || !cachedEtherealAccount) {
     cachedEtherealAccount = await nodemailer.createTestAccount();
     cachedEtherealTransporter = nodemailer.createTransport({
@@ -2061,7 +2267,7 @@ async function sendEmail(params: {
     }
   }
 
-  if (params.allowEthereal === false) {
+  if (IS_PRODUCTION || params.allowEthereal === false) {
     return {
       sent: false,
       provider: 'none',
@@ -2091,7 +2297,7 @@ async function sendEmail(params: {
       text: params.text,
       html: params.html,
     });
-    const previewUrl = nodemailer.getTestMessageUrl(info) || undefined;
+    const previewUrl = (!IS_PRODUCTION && nodemailer.getTestMessageUrl(info)) || undefined;
     return {
       sent: true,
       provider: 'ethereal',
@@ -2209,13 +2415,14 @@ async function dispatchInquiryAlert(
   let previewUrl: string | undefined;
   let deliveryError: string | undefined;
 
-  if (emailMode !== 'none' || options?.allowEtherealPreview) {
+  const allowEtherealPreview = !IS_PRODUCTION && Boolean(options?.allowEtherealPreview);
+  if (emailMode !== 'none' || allowEtherealPreview) {
     const emailResult = await sendEmail({
       to: recipient,
       subject: `[${BRAND_CONFIG.identity.brandShortName}] New Enquiry: ${record.name} (${record.source})`,
       text: buildInquiryAlertEmailText(record),
       html: buildInquiryAlertEmailHtml(record),
-      allowEthereal: Boolean(options?.allowEtherealPreview),
+      allowEthereal: allowEtherealPreview,
     });
     usedEmailProvider = emailResult.provider;
     previewUrl = emailResult.previewUrl;
@@ -2874,6 +3081,33 @@ function checkServerInquiryAntiFlood(
 async function startServer() {
   const app = express();
   app.set('trust proxy', 1);
+
+  // Security headers matching public/_headers.
+  // Report-only CSP first: switch to enforcing (Content-Security-Policy) only after testing
+  // sign-in, enquiry submission, image upload, and maps in a browser with the console open.
+  const CSP_REPORT_ONLY_POLICY = [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+    "script-src 'self' https://apis.google.com https://accounts.google.com https://www.google.com https://www.gstatic.com https://static.cloudflareinsights.com https://www.googletagmanager.com",
+    "style-src 'self' 'unsafe-inline' https://www.gstatic.com",
+    "font-src 'self'",
+    "img-src 'self' data: blob: https://res.cloudinary.com https://firebasestorage.googleapis.com https://*.googleusercontent.com https://www.gstatic.com https://www.google-analytics.com https://www.googletagmanager.com",
+    "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://firebaseinstallations.googleapis.com https://content-firebaseappcheck.googleapis.com https://firebaseappcheck.googleapis.com https://firebase.googleapis.com https://www.googleapis.com https://apis.google.com https://accounts.google.com https://www.google.com https://api.cloudinary.com https://cloudflareinsights.com https://www.google-analytics.com https://*.google-analytics.com https://analytics.google.com https://script.google.com https://script.googleusercontent.com",
+    "frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://www.google.com https://maps.google.com",
+  ].join('; ');
+
+  app.use((_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader('Content-Security-Policy-Report-Only', CSP_REPORT_ONLY_POLICY);
+    next();
+  });
+
   app.use(express.json({ limit: '2mb' }));
   app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     if (
@@ -3271,6 +3505,13 @@ async function startServer() {
         });
       }
 
+      if (IS_PRODUCTION && getServerEmailDeliveryMode() === 'none') {
+        return res.status(503).json({
+          success: false,
+          error: 'Email service is not configured.',
+        });
+      }
+
       const existing = await getUserByEmail(email);
       if (existing && existing.emailVerified) {
         return res.status(409).json({
@@ -3310,10 +3551,13 @@ async function startServer() {
         html: buildVerificationEmailHtml(name, verifyCode, verifyLink),
       });
 
+      if (!IS_PRODUCTION && emailResult.previewUrl) {
+        console.log(`[Email Preview] Signup verification preview URL (${email}): ${emailResult.previewUrl}`);
+      }
+
       return res.json({
         success: true,
         email,
-        previewUrl: emailResult.previewUrl,
         provider: emailResult.provider,
         verificationSessionToken: createPendingVerificationToken(email),
       });
@@ -3329,6 +3573,13 @@ async function startServer() {
   // 2. Resend Verification Email
   app.post('/api/auth/resend-verification', signupLimiter, async (req: Request, res: Response) => {
     try {
+      if (IS_PRODUCTION && getServerEmailDeliveryMode() === 'none') {
+        return res.status(503).json({
+          success: false,
+          error: 'Email service is not configured.',
+        });
+      }
+
       const email = String(req.body?.email || '').trim().toLowerCase();
       const user = await getUserByEmail(email);
 
@@ -3362,9 +3613,12 @@ async function startServer() {
         html: buildVerificationEmailHtml(user.name, verifyCode, verifyLink),
       });
 
+      if (!IS_PRODUCTION && emailResult.previewUrl) {
+        console.log(`[Email Preview] Resend verification preview URL (${email}): ${emailResult.previewUrl}`);
+      }
+
       return res.json({
         success: true,
-        previewUrl: emailResult.previewUrl,
         provider: emailResult.provider,
         verificationSessionToken: createPendingVerificationToken(email),
       });
@@ -3728,7 +3982,24 @@ async function startServer() {
         return res.status(401).json({ success: false, error: 'Invalid or expired authentication token.' });
       }
 
-      const phone = String(req.body?.phone || '').trim();
+      const rawPhone = String(req.body?.phone ?? '').trim();
+      if (rawPhone.length > 32) {
+        return res.status(400).json({
+          success: false,
+          error: 'Phone number must be 32 characters or fewer.',
+        });
+      }
+      const phone = rawPhone.slice(0, 32);
+      if (phone) {
+        const cleanedPhone = phone.replace(/[\s\-().]/g, '');
+        if (!/^\+?\d{7,15}$/.test(cleanedPhone)) {
+          return res.status(400).json({
+            success: false,
+            error: 'Please provide a valid contact phone number.',
+          });
+        }
+      }
+
       let user = await getUserByEmail(verifiedEmail);
       if (!user && verifiedUid) {
         user = {
@@ -3763,6 +4034,13 @@ async function startServer() {
     };
 
     try {
+      if (IS_PRODUCTION && getServerEmailDeliveryMode() === 'none') {
+        return res.status(503).json({
+          success: false,
+          error: 'Email service is not configured.',
+        });
+      }
+
       const email = String(req.body?.email || '').trim().toLowerCase();
       if (!email || isManagementEmail(email)) {
         return res.json(genericResponse);
@@ -3786,7 +4064,7 @@ async function startServer() {
         html: buildResetEmailHtml(user.name, resetCode),
       });
 
-      if (emailResult.previewUrl) {
+      if (!IS_PRODUCTION && emailResult.previewUrl) {
         console.log(`[Email Preview] Password reset preview URL: ${emailResult.previewUrl}`);
       }
 
@@ -3989,15 +4267,17 @@ async function startServer() {
         createdAt: new Date().toISOString(),
       };
       const result = await dispatchInquiryAlert(testRecord, {
-        allowEtherealPreview: true,
+        allowEtherealPreview: !IS_PRODUCTION,
       });
+      if (!IS_PRODUCTION && result.previewUrl) {
+        console.log(`[Email Preview] Management test alert preview URL: ${result.previewUrl}`);
+      }
       return res.json({
         success: result.deliveredToInbox || result.webhookSent,
         deliveredToInbox: result.deliveredToInbox,
         emailProvider: result.emailProvider,
         webhookSent: result.webhookSent,
         alertRecipient: getAlertRecipientEmail(),
-        previewUrl: result.previewUrl,
         error: result.error,
       });
     } catch (err) {
@@ -4065,9 +4345,15 @@ async function startServer() {
 
   app.delete('/api/management/accounts/:id', requireManagement, async (req: Request, res: Response) => {
     try {
-      const id = String(req.params.id || '');
-      const deleted = await deleteUserById(id);
-      if (!deleted) {
+      const id = String(req.params.id || '').trim();
+      if (!id) {
+        return res.status(400).json({ success: false, error: 'Account ID is required.' });
+      }
+      const result = await deleteUserById(id);
+      if (result.forbidden) {
+        return res.status(403).json({ success: false, error: 'Management accounts cannot be deleted.' });
+      }
+      if (!result.deleted) {
         return res.status(404).json({ success: false, error: 'Account not found.' });
       }
       return res.json({ success: true });

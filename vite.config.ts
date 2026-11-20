@@ -1,8 +1,12 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import { defineConfig, type Plugin } from 'vite';
-import { BRAND_CONFIG } from './src/config/brand.config.ts';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
+import {
+  BRAND_CONFIG,
+  resolveBrandFeatures,
+  type BrandFeatures,
+} from './src/config/brand.config.ts';
 
 function escapeHtmlAttr(value: string): string {
   return value
@@ -94,9 +98,37 @@ function brandHtmlPlugin(): Plugin {
   };
 }
 
-export default defineConfig(() => {
+function brandFeatureFlagsPlugin(features: BrandFeatures): Plugin {
+  const entries = Object.entries(features) as [keyof BrandFeatures, BrandFeatures[keyof BrandFeatures]][];
   return {
-    plugins: [react(), tailwindcss(), brandHtmlPlugin()],
+    name: 'brand-feature-flags-pruning',
+    enforce: 'pre',
+    transform(code, id) {
+      const normalizedId = id.replace(/\\/g, '/');
+      if (!normalizedId.includes('/src/') || normalizedId.endsWith('/src/config/brand.config.ts')) {
+        return null;
+      }
+      if (!code.includes('BRAND_CONFIG.features.')) {
+        return null;
+      }
+      let next = code;
+      for (const [key, value] of entries) {
+        const pattern = new RegExp(`BRAND_CONFIG\\.features\\.${key}\\b`, 'g');
+        next = next.replace(pattern, JSON.stringify(value));
+      }
+      return next === code ? null : { code: next, map: null };
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const resolvedTier = process.env.VITE_TIER ?? env.VITE_TIER ?? '';
+  const resolvedBackendMode = process.env.VITE_BACKEND_MODE ?? env.VITE_BACKEND_MODE ?? '';
+  const resolvedFeatures = resolveBrandFeatures(resolvedTier, resolvedBackendMode);
+
+  return {
+    plugins: [brandFeatureFlagsPlugin(resolvedFeatures), react(), tailwindcss(), brandHtmlPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(import.meta.dirname, '.'),

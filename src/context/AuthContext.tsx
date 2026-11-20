@@ -6,17 +6,23 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { UserProfile } from '../types';
 import type { Auth, User as FirebaseUser } from 'firebase/auth';
-import {
-  getAuthAsync,
-  getCurrentFirebaseUser,
-  getDbAsync,
-  getGoogleProviderAsync,
-  handleFirestoreError,
-  isFirestoreQuotaError,
-  OperationType,
-} from '../lib/firebase';
 import { IS_STATIC_MODE, parseApiResponse, SERVER_UNREACHABLE_MESSAGE } from '../lib/http';
 import { BRAND_CONFIG } from '../config/brand.config';
+
+const AUTH_ENABLED =
+  BRAND_CONFIG.features.enableClientLogin || BRAND_CONFIG.features.enableAdminPanel;
+const CLIENT_LOGIN_ENABLED = BRAND_CONFIG.features.enableClientLogin;
+
+let firebaseLibPromise: Promise<typeof import('../lib/firebase')> | null = null;
+function loadFirebaseLib() {
+  if (!AUTH_ENABLED) {
+    return Promise.reject(new Error('Firebase auth is disabled.'));
+  }
+  if (!firebaseLibPromise) {
+    firebaseLibPromise = import('../lib/firebase');
+  }
+  return firebaseLibPromise;
+}
 
 interface AuthActionResult {
   success: boolean;
@@ -270,13 +276,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [managementToken, setManagementToken] = useState<string | null>(() => {
-    if (IS_STATIC_MODE) return null;
+    if (!AUTH_ENABLED || IS_STATIC_MODE) return null;
     const stored = getStoredToken(MANAGEMENT_TOKEN_KEY);
     return isManagementTokenValid(stored) ? stored : null;
   });
-  const authEnabled = Boolean(
-    BRAND_CONFIG.features.enableClientLogin || BRAND_CONFIG.features.enableAdminPanel
-  );
+  const authEnabled = AUTH_ENABLED;
   const [firebaseMgmtSessionValid, setFirebaseMgmtSessionValid] = useState<boolean>(false);
   const [loading, setLoading] = useState(!authEnabled ? false : true);
   const [guestSavedIds, setGuestSavedIds] = useState<string[]>(() => {
@@ -314,7 +318,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const fallbackCreatedAt = (fbUser.metadata.creationTime || new Date().toISOString()).slice(0, 64);
-    if (!fbUser.emailVerified || !fbUser.email) {
+    if (!AUTH_ENABLED || !fbUser.emailVerified || !fbUser.email) {
       return {
         phone: localPhone || undefined,
         savedPropertyIds: localSaved,
@@ -334,8 +338,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
+    const fbLib = await loadFirebaseLib();
     const [db, { doc, getDoc, setDoc, updateDoc }] = await Promise.all([
-      getDbAsync(),
+      fbLib.getDbAsync(),
       import('firebase/firestore'),
     ]);
     const userPath = `users/${uid}`;
@@ -357,7 +362,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           existingData = snap.data() as Record<string, unknown>;
         }
       } catch (err) {
-        if (isFirestoreQuotaError(err)) {
+        if (fbLib.isFirestoreQuotaError(err)) {
           recordSyncTimestamp(USER_SYNC_TS_PREFIX, uid);
           return {
             phone: localPhone || undefined,
@@ -365,7 +370,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             createdAt: fallbackCreatedAt,
           };
         }
-        handleFirestoreError(err, OperationType.GET, userPath);
+        fbLib.handleFirestoreError(err, fbLib.OperationType.GET, userPath);
       }
 
       const firestoreSaved = Array.isArray(existingData?.savedPropertyIds)
@@ -405,8 +410,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           await setDoc(userRef, createPayload);
         } catch (err) {
-          if (!isFirestoreQuotaError(err)) {
-            handleFirestoreError(err, OperationType.CREATE, userPath);
+          if (!fbLib.isFirestoreQuotaError(err)) {
+            fbLib.handleFirestoreError(err, fbLib.OperationType.CREATE, userPath);
           }
         }
       } else {
@@ -423,8 +428,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           await updateDoc(userRef, updatePayload);
         } catch (err) {
-          if (!isFirestoreQuotaError(err)) {
-            handleFirestoreError(err, OperationType.UPDATE, userPath);
+          if (!fbLib.isFirestoreQuotaError(err)) {
+            fbLib.handleFirestoreError(err, fbLib.OperationType.UPDATE, userPath);
           }
         }
       }
@@ -656,14 +661,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const activeMountRef = useRef(true);
 
   const ensureAuthReady = async (): Promise<Auth | null> => {
-    if (!authEnabled) {
+    if (!AUTH_ENABLED) {
       if (activeMountRef.current) setLoading(false);
       return null;
     }
     if (!authInitPromiseRef.current) {
       authInitPromiseRef.current = (async () => {
+        const fbLib = await loadFirebaseLib();
         const [firebaseAuth, { onAuthStateChanged, signOut }] = await Promise.all([
-          getAuthAsync(),
+          fbLib.getAuthAsync(),
           import('firebase/auth'),
         ]);
         if (!firebaseAuth) {
@@ -860,9 +866,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     popupBlocked?: boolean;
     isManagement?: boolean;
   }> => {
+    if (!AUTH_ENABLED || !BRAND_CONFIG.features.enableGoogleLogin) {
+      return { success: false, error: 'Google sign-in is disabled.' };
+    }
+    const fbLib = await loadFirebaseLib();
     const [firebaseAuth, googleProvider, { signInWithPopup }] = await Promise.all([
       ensureAuthReady(),
-      getGoogleProviderAsync(),
+      fbLib.getGoogleProviderAsync(),
       import('firebase/auth'),
     ]);
     if (!firebaseAuth || !googleProvider) {
@@ -949,6 +959,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     password: string,
     rememberMe = true
   ): Promise<AuthActionResult> => {
+    if (!AUTH_ENABLED) {
+      return { success: false, error: 'Account login is disabled.' };
+    }
     const cleanEmail = email.trim().toLowerCase();
 
     if (IS_STATIC_MODE) {
@@ -1161,6 +1174,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string;
     password: string;
   }): Promise<AuthActionResult> => {
+    if (!CLIENT_LOGIN_ENABLED) {
+      return { success: false, error: 'Client registration is disabled.' };
+    }
     const cleanName = data.name.trim();
     const cleanEmail = data.email.trim().toLowerCase();
 
@@ -1241,6 +1257,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 4. Verify Email with 6-digit OTP Code (used when server OTP fallback was issued)
   const verifyEmailWithCode = async (email: string, code: string): Promise<AuthActionResult> => {
+    if (!CLIENT_LOGIN_ENABLED) {
+      return { success: false, error: 'Client registration is disabled.' };
+    }
     if (IS_STATIC_MODE) {
       return {
         success: false,
@@ -1285,6 +1304,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 5. Resend verification email (prefers Firebase auth.currentUser if signed in unverified)
   const resendVerificationEmail = async (email?: string): Promise<AuthActionResult> => {
+    if (!AUTH_ENABLED) {
+      return { success: false, error: 'Account verification is disabled.' };
+    }
     const cleanEmail = email?.trim().toLowerCase();
     const firebaseAuth = await ensureAuthReady();
 
@@ -1347,6 +1369,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 6. Reload & check if email was verified (checks Firebase user first, then server OTP fallback)
   const checkEmailVerified = async (email?: string): Promise<boolean> => {
+    if (!AUTH_ENABLED) return false;
     const cleanEmail = email?.trim().toLowerCase();
     const firebaseAuth = await ensureAuthReady();
 
@@ -1410,6 +1433,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 7. Send password reset email (uses Firebase sendPasswordResetEmail with backend fallback)
   const sendPasswordReset = async (email: string): Promise<AuthActionResult> => {
+    if (!AUTH_ENABLED) {
+      return { success: false, error: 'Password reset is disabled.' };
+    }
     const cleanEmail = email.trim().toLowerCase();
     const uniformMessage =
       'If an account exists for that email address, a password reset link has been sent to your inbox.';
@@ -1481,6 +1507,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     code: string,
     newPassword: string
   ): Promise<AuthActionResult> => {
+    if (!AUTH_ENABLED) {
+      return { success: false, error: 'Password reset is disabled.' };
+    }
     if (IS_STATIC_MODE) {
       return {
         success: false,
@@ -1512,7 +1541,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 9. Update phone number (persisted in Firestore + localStorage + backend)
   const updateUserPhone = (phone: string) => {
-    if (!currentUser) return;
+    if (!AUTH_ENABLED || !currentUser) return;
     const cleanPhone = phone.trim().slice(0, 32);
     const updated = { ...currentUser, phone: cleanPhone || undefined };
     setCurrentUser(updated);
@@ -1524,12 +1553,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     void (async () => {
-      const activeFbUser = getCurrentFirebaseUser();
+      const fbLib = await loadFirebaseLib();
+      const activeFbUser = fbLib.getCurrentFirebaseUser();
       if (activeFbUser && activeFbUser.uid === currentUser.id && activeFbUser.emailVerified) {
         const userPath = `users/${activeFbUser.uid}`;
         try {
           const [db, { doc, updateDoc }] = await Promise.all([
-            getDbAsync(),
+            fbLib.getDbAsync(),
             import('firebase/firestore'),
           ]);
           await updateDoc(doc(db, 'users', activeFbUser.uid), {
@@ -1537,7 +1567,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         } catch (err) {
           try {
-            handleFirestoreError(err, OperationType.UPDATE, userPath);
+            fbLib.handleFirestoreError(err, fbLib.OperationType.UPDATE, userPath);
           } catch {
             // Logged structured Firestore error
           }
@@ -1569,19 +1599,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 10. Logout
   const logout = async () => {
-    try {
-      const currentFb = getCurrentFirebaseUser();
-      if (currentFb) {
-        const [firebaseAuth, { signOut }] = await Promise.all([
-          ensureAuthReady(),
-          import('firebase/auth'),
-        ]);
-        if (firebaseAuth?.currentUser) {
-          await signOut(firebaseAuth);
+    if (AUTH_ENABLED) {
+      try {
+        const { getCurrentFirebaseUser } = await loadFirebaseLib();
+        const currentFb = getCurrentFirebaseUser();
+        if (currentFb) {
+          const [firebaseAuth, { signOut }] = await Promise.all([
+            ensureAuthReady(),
+            import('firebase/auth'),
+          ]);
+          if (firebaseAuth?.currentUser) {
+            await signOut(firebaseAuth);
+          }
         }
+      } catch (e) {
+        console.warn('SignOut error', e);
       }
-    } catch (e) {
-      console.warn('SignOut error', e);
     }
     localStorage.removeItem(EMAIL_SESSION_KEY);
     sessionStorage.removeItem(EMAIL_SESSION_KEY);
@@ -1597,6 +1630,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    if (!AUTH_ENABLED) return;
     const verifyMgmtSessionNotExpired = async () => {
       if (
         !IS_STATIC_MODE &&
@@ -1652,21 +1686,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sessionStorage.setItem(EMAIL_SESSION_KEY, JSON.stringify(updatedProfile));
       }
 
-      const activeFbUser = getCurrentFirebaseUser();
-      if (activeFbUser && activeFbUser.uid === currentUser.id && activeFbUser.emailVerified) {
-        const userPath = `users/${activeFbUser.uid}`;
-        void Promise.all([getDbAsync(), import('firebase/firestore')])
-          .then(([db, { doc, updateDoc }]) =>
-            updateDoc(doc(db, 'users', activeFbUser.uid), {
-              savedPropertyIds: newSavedIds,
-            })
-          )
-          .catch((err) => {
-            try {
-              handleFirestoreError(err, OperationType.UPDATE, userPath);
-            } catch {
-              // Logged structured Firestore error
+      if (AUTH_ENABLED) {
+        void loadFirebaseLib()
+          .then(async (fbLib) => {
+            const activeFbUser = fbLib.getCurrentFirebaseUser();
+            if (activeFbUser && activeFbUser.uid === currentUser.id && activeFbUser.emailVerified) {
+              const userPath = `users/${activeFbUser.uid}`;
+              try {
+                const [db, { doc, updateDoc }] = await Promise.all([
+                  fbLib.getDbAsync(),
+                  import('firebase/firestore'),
+                ]);
+                await updateDoc(doc(db, 'users', activeFbUser.uid), {
+                  savedPropertyIds: newSavedIds,
+                });
+              } catch (err) {
+                try {
+                  fbLib.handleFirestoreError(err, fbLib.OperationType.UPDATE, userPath);
+                } catch {
+                  // Logged structured Firestore error
+                }
+              }
             }
+          })
+          .catch(() => {
+            // Firebase disabled
           });
       }
 

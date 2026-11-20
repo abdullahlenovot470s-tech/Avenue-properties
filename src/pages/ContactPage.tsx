@@ -137,6 +137,7 @@ export const ContactPage: React.FC = () => {
       return;
     }
 
+    const isWebhookOnly = BRAND_CONFIG.features.enquiryDelivery === 'webhook';
     setLoading(true);
     try {
       const res = await submitInquiry({
@@ -150,8 +151,8 @@ export const ContactPage: React.FC = () => {
         spamCheck,
       });
 
-      if (res.success || (res.unreachable && isEnquiryWebhookConfigured())) {
-        void sendEnquiryToWebhook({
+      if (res.success || (!isWebhookOnly && res.unreachable && isEnquiryWebhookConfigured())) {
+        const webhookPayload = {
           name: trimmedName,
           email: trimmedEmail,
           phone: trimmedPhone,
@@ -159,9 +160,30 @@ export const ContactPage: React.FC = () => {
           interest: formData.subject,
           budget: '',
           message: trimmedMessage,
-          source: 'Contact',
+          source: 'Contact' as const,
           website: '',
-        });
+        };
+        if (isWebhookOnly) {
+          const webhookRes = await sendEnquiryToWebhook(webhookPayload);
+          if (webhookRes.skipped) {
+            const msg =
+              'Online enquiry delivery is not configured right now. Please contact us via WhatsApp or telephone.';
+            setFormError(msg);
+            showToast(msg, 'error');
+            return;
+          }
+          setSubmitted(true);
+          setSpamChallenge(createSpamChallenge());
+          setChallengeAnswer('');
+          showToast(
+            webhookRes.queued
+              ? 'You appear offline — message queued and will send automatically once connected.'
+              : 'Your message has been received. Our partner will connect shortly.',
+            webhookRes.queued ? 'info' : 'success'
+          );
+          return;
+        }
+        void sendEnquiryToWebhook(webhookPayload);
         setSubmitted(true);
         setSpamChallenge(createSpamChallenge());
         setChallengeAnswer('');

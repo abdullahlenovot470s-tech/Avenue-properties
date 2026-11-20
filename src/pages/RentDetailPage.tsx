@@ -178,45 +178,70 @@ export const RentDetailPage: React.FC = () => {
       return;
     }
 
+    const isWebhookOnly = BRAND_CONFIG.features.enquiryDelivery === 'webhook';
     setTourSubmitting(true);
-    const res = await submitInquiry({
-      name: tourName.trim(),
-      email: tourEmail.trim(),
-      phone: tourPhone.trim(),
-      office: listing.city,
-      subject: `Rental Viewing: ${listing.title}`,
-      message: tourNotes.trim() || `Requested viewing for ${listing.title} on ${tourDate}.`,
-      source: 'Rent Detail Viewing Form',
-      propertyTitle: listing.title,
-      preferredDate: tourDate,
-      spamCheck,
-    });
-    setTourSubmitting(false);
+    try {
+      const res = await submitInquiry({
+        name: tourName.trim(),
+        email: tourEmail.trim(),
+        phone: tourPhone.trim(),
+        office: listing.city,
+        subject: `Rental Viewing: ${listing.title}`,
+        message: tourNotes.trim() || `Requested viewing for ${listing.title} on ${tourDate}.`,
+        source: 'Rent Detail Viewing Form',
+        propertyTitle: listing.title,
+        preferredDate: tourDate,
+        spamCheck,
+      });
 
-    if (!res.success && !(res.unreachable && isEnquiryWebhookConfigured())) {
-      showToast(res.error || 'Could not submit viewing request. Please try again.', 'error');
-      return;
+      if (!res.success && !(!isWebhookOnly && res.unreachable && isEnquiryWebhookConfigured())) {
+        showToast(res.error || 'Could not submit viewing request. Please try again.', 'error');
+        return;
+      }
+
+      const siteVisitMessage = `Property: ${listing.title} | Preferred Date: ${tourDate}${
+        tourNotes.trim() ? ` | Notes: ${tourNotes.trim()}` : ''
+      }`;
+      const webhookPayload = {
+        name: tourName.trim(),
+        email: tourEmail.trim(),
+        phone: tourPhone.trim(),
+        city: listing.city,
+        interest: `Rent - ${listing.type}`,
+        budget: formatRent(listing.monthlyRent),
+        message: siteVisitMessage,
+        source: 'Site Visit' as const,
+        website: '',
+      };
+      let queuedOffline = false;
+      if (isWebhookOnly) {
+        const webhookRes = await sendEnquiryToWebhook(webhookPayload);
+        if (webhookRes.skipped) {
+          showToast(
+            'Online enquiry delivery is not configured right now. Please contact us via WhatsApp or telephone.',
+            'error'
+          );
+          return;
+        }
+        queuedOffline = Boolean(webhookRes.queued);
+      } else {
+        void sendEnquiryToWebhook(webhookPayload);
+      }
+
+      setTourBooked(true);
+      setSpamChallenge(createSpamChallenge());
+      setChallengeAnswer('');
+      showToast(
+        queuedOffline
+          ? `You appear offline — viewing request for ${listing.title} was queued and will send automatically once connected.`
+          : `Viewing request registered for ${listing.title}. Concierge will contact you.`,
+        queuedOffline ? 'info' : 'success'
+      );
+    } catch {
+      showToast('Could not submit viewing request right now. Please try again.', 'error');
+    } finally {
+      setTourSubmitting(false);
     }
-
-    const siteVisitMessage = `Property: ${listing.title} | Preferred Date: ${tourDate}${
-      tourNotes.trim() ? ` | Notes: ${tourNotes.trim()}` : ''
-    }`;
-    void sendEnquiryToWebhook({
-      name: tourName.trim(),
-      email: tourEmail.trim(),
-      phone: tourPhone.trim(),
-      city: listing.city,
-      interest: `Rent - ${listing.type}`,
-      budget: formatRent(listing.monthlyRent),
-      message: siteVisitMessage,
-      source: 'Site Visit',
-      website: '',
-    });
-
-    setTourBooked(true);
-    setSpamChallenge(createSpamChallenge());
-    setChallengeAnswer('');
-    showToast(`Viewing request registered for ${listing.title}. Concierge will contact you.`, 'success');
   };
 
   const whatsappMessage = encodeURIComponent(

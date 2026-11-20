@@ -226,43 +226,68 @@ export const ProjectDetailPage: React.FC = () => {
       return;
     }
 
+    const isWebhookOnly = BRAND_CONFIG.features.enquiryDelivery === 'webhook';
     setTourSubmitting(true);
-    const res = await submitInquiry({
-      name: tourName.trim(),
-      email: tourEmail.trim(),
-      subject: `Private Site Visit: ${project.name}`,
-      message: tourNotes.trim() || `Requested private site visit for ${project.name} on ${tourDate}.`,
-      source: 'Project Detail Viewing Form',
-      propertyTitle: project.name,
-      preferredDate: tourDate,
-      spamCheck,
-    });
-    setTourSubmitting(false);
+    try {
+      const res = await submitInquiry({
+        name: tourName.trim(),
+        email: tourEmail.trim(),
+        subject: `Private Site Visit: ${project.name}`,
+        message: tourNotes.trim() || `Requested private site visit for ${project.name} on ${tourDate}.`,
+        source: 'Project Detail Viewing Form',
+        propertyTitle: project.name,
+        preferredDate: tourDate,
+        spamCheck,
+      });
 
-    if (!res.success && !(res.unreachable && isEnquiryWebhookConfigured())) {
-      showToast(res.error || 'Could not submit viewing request. Please try again.', 'error');
-      return;
+      if (!res.success && !(!isWebhookOnly && res.unreachable && isEnquiryWebhookConfigured())) {
+        showToast(res.error || 'Could not submit viewing request. Please try again.', 'error');
+        return;
+      }
+
+      const siteVisitMessage = `Property: ${project.name} | Preferred Date: ${tourDate}${
+        tourNotes.trim() ? ` | Notes: ${tourNotes.trim()}` : ''
+      }`;
+      const webhookPayload = {
+        name: tourName.trim(),
+        email: tourEmail.trim(),
+        phone: '',
+        city: project.location,
+        interest: 'Signature Project Site Visit',
+        budget: project.price,
+        message: siteVisitMessage,
+        source: 'Site Visit' as const,
+        website: '',
+      };
+      let queuedOffline = false;
+      if (isWebhookOnly) {
+        const webhookRes = await sendEnquiryToWebhook(webhookPayload);
+        if (webhookRes.skipped) {
+          showToast(
+            'Online enquiry delivery is not configured right now. Please contact us via WhatsApp or telephone.',
+            'error'
+          );
+          return;
+        }
+        queuedOffline = Boolean(webhookRes.queued);
+      } else {
+        void sendEnquiryToWebhook(webhookPayload);
+      }
+
+      setTourBooked(true);
+      setSpamChallenge(createSpamChallenge());
+      setChallengeAnswer('');
+      showToast(
+        queuedOffline
+          ? 'You appear offline — viewing request queued and will send automatically once connected.'
+          : 'Viewing scheduled. Our director will confirm within 2 hours.',
+        queuedOffline ? 'info' : 'success'
+      );
+    } catch {
+      showToast('Could not submit viewing request right now. Please try again.', 'error');
+    } finally {
+      setTourSubmitting(false);
     }
-
-    const siteVisitMessage = `Property: ${project.name} | Preferred Date: ${tourDate}${
-      tourNotes.trim() ? ` | Notes: ${tourNotes.trim()}` : ''
-    }`;
-    void sendEnquiryToWebhook({
-      name: tourName.trim(),
-      email: tourEmail.trim(),
-      phone: '',
-      city: project.location,
-      interest: 'Signature Project Site Visit',
-      budget: project.price,
-      message: siteVisitMessage,
-      source: 'Site Visit',
-      website: '',
-    });
-
-    setTourBooked(true);
-    setSpamChallenge(createSpamChallenge());
-    setChallengeAnswer('');
-    showToast('Viewing scheduled. Our director will confirm within 2 hours.', 'success');
   };
 
   const isSold = project.status === 'Sold';

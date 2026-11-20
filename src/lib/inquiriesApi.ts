@@ -1,5 +1,6 @@
-import { IS_STATIC_MODE, parseApiResponse, SERVER_UNREACHABLE_MESSAGE } from './http';
+import { parseApiResponse, SERVER_UNREACHABLE_MESSAGE } from './http';
 import { isEnquiryWebhookConfigured } from '../services/enquiryWebhook';
+import { BRAND_CONFIG } from '../config/brand.config';
 import {
   checkClientSubmissionRateLimit,
   normalizeInquiryFingerprint,
@@ -8,6 +9,12 @@ import {
   type SpamCheckPayload,
 } from './spamProtection';
 import { trackEvent } from './analytics';
+
+const ENQUIRY_DELIVERY = BRAND_CONFIG.features.enquiryDelivery;
+const FIREBASE_ENABLED =
+  BRAND_CONFIG.features.enableClientLogin ||
+  BRAND_CONFIG.features.enableAdminPanel ||
+  BRAND_CONFIG.features.enableEnquiriesDashboard;
 
 export interface InquiryPayload {
   name: string;
@@ -52,6 +59,13 @@ export interface RegisteredAccountRecord {
 }
 
 async function submitInquiryViaFirestore(payload: InquiryPayload) {
+  if (!FIREBASE_ENABLED) {
+    return {
+      success: false,
+      error:
+        'Online enquiry storage is disabled right now. Please contact us directly via WhatsApp or telephone.',
+    };
+  }
   const { createInquiryFirestore } = await import('./inquiriesFirestore');
   return createInquiryFirestore(payload);
 }
@@ -62,7 +76,7 @@ export async function submitInquiry(
   success: boolean;
   error?: string;
   unreachable?: boolean;
-  storageMode?: 'backend' | 'firestore';
+  storageMode?: 'backend' | 'firestore' | 'webhook';
   inquiry?: ContactInquiryRecord;
 }> {
   const preCheck = validateSpamCheckAndContent({
@@ -100,7 +114,23 @@ export async function submitInquiry(
     };
   }
 
-  if (IS_STATIC_MODE) {
+  if (ENQUIRY_DELIVERY === 'webhook') {
+    if (!isEnquiryWebhookConfigured()) {
+      return {
+        success: false,
+        error:
+          'Online enquiry delivery is not configured right now. Please contact us directly via WhatsApp or telephone.',
+      };
+    }
+    recordClientSubmissionSuccess(fingerprint);
+    trackEvent('enquiry_submit', { source: payload.source, mode: 'webhook' });
+    return {
+      success: true,
+      storageMode: 'webhook',
+    };
+  }
+
+  if (ENQUIRY_DELIVERY === 'firestore') {
     const fsResult = await submitInquiryViaFirestore(payload);
     if (fsResult.success) {
       recordClientSubmissionSuccess(fingerprint);
@@ -134,20 +164,10 @@ export async function submitInquiry(
     }>(res);
 
     if (parsed.unreachable || !parsed.data) {
-      const fsResult = await submitInquiryViaFirestore(payload);
-      if (fsResult.success) {
-        recordClientSubmissionSuccess(fingerprint);
-        trackEvent('enquiry_submit', { source: payload.source, mode: 'firestore' });
-        return {
-          success: true,
-          inquiry: fsResult.inquiry,
-          storageMode: 'firestore',
-        };
-      }
       return {
         success: false,
         unreachable: true,
-        error: fsResult.error || SERVER_UNREACHABLE_MESSAGE,
+        error: SERVER_UNREACHABLE_MESSAGE,
       };
     }
 
@@ -161,20 +181,10 @@ export async function submitInquiry(
     trackEvent('enquiry_submit', { source: payload.source, mode: 'backend' });
     return { success: true, inquiry: parsed.data.inquiry, storageMode: 'backend' };
   } catch {
-    const fsResult = await submitInquiryViaFirestore(payload);
-    if (fsResult.success) {
-      recordClientSubmissionSuccess(fingerprint);
-      trackEvent('enquiry_submit', { source: payload.source, mode: 'firestore' });
-      return {
-        success: true,
-        inquiry: fsResult.inquiry,
-        storageMode: 'firestore',
-      };
-    }
     return {
       success: false,
       unreachable: true,
-      error: fsResult.error || SERVER_UNREACHABLE_MESSAGE,
+      error: SERVER_UNREACHABLE_MESSAGE,
     };
   }
 }
