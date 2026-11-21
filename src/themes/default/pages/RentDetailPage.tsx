@@ -1,18 +1,18 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { formatRent } from '../data/rentalsData';
-import { useCatalog } from '../context/CatalogContext';
-import { SafeImage } from '../components/common/SafeImage';
-import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
-import { submitInquiry } from '../lib/inquiriesApi';
+import { formatRent } from '../../../data/rentalsData';
+import { useCatalog } from '../../../context/CatalogContext';
+import { SafeImage } from '../../../components/common/SafeImage';
+import { useAuth } from '../../../context/AuthContext';
+import { useToast } from '../../../context/ToastContext';
+import { submitInquiry } from '../../../lib/inquiriesApi';
 import {
   buildSpamCheckPayload,
   createSpamChallenge,
   validateSpamCheckAndContent,
-} from '../lib/spamProtection';
-import { SpamChallengeField } from '../components/common/SpamChallengeField';
-import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../services/enquiryWebhook';
+} from '../../../lib/spamProtection';
+import { SpamChallengeField } from '../../../components/common/SpamChallengeField';
+import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../../../services/enquiryWebhook';
 import {
   Heart,
   MapPin,
@@ -31,13 +31,13 @@ import {
   FileText,
   Key,
 } from 'lucide-react';
-import { BRAND_CONFIG } from '../config/brand.config';
-import { handleDemoContactClick } from '../config/siteConfig';
-import { buildPropertyListingJsonLd, usePageMeta } from '../lib/seo';
-import { trackEvent } from '../lib/analytics';
-import { LazyLocationMapEmbed } from '../components/common/LazyLocationMapEmbed';
-import { useLanguage } from '../context/LanguageContext';
-import { URGLISH_COPY } from '../data/urglishTranslations';
+import { BRAND_CONFIG } from '../../../config/brand.config';
+import { handleDemoContactClick } from '../../../config/siteConfig';
+import { buildPropertyListingJsonLd, usePageMeta } from '../../../lib/seo';
+import { trackEvent } from '../../../lib/analytics';
+import { LazyLocationMapEmbed } from '../../../components/common/LazyLocationMapEmbed';
+import { useLanguage } from '../../../context/LanguageContext';
+import { URGLISH_COPY } from '../../../data/urglishTranslations';
 
 export const RentDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();

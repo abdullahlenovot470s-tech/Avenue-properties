@@ -1,4 +1,5 @@
 import React, { useId } from 'react';
+import { BRAND_CONFIG } from '../../../config/brand.config';
 
 export type AvatarVariant = 'male' | 'female' | 'hijab';
 
@@ -25,14 +26,14 @@ export const AvatarPlaceholder: React.FC<AvatarPlaceholderProps> = ({
       >
         <defs>
           <linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" style={{ stopColor: 'var(--color-surface, #E6ECF5)' }} />
-            <stop offset="100%" stopColor="#FFFFFF" />
+            <stop offset="0%" style={{ stopColor: `var(--color-surface, ${BRAND_CONFIG.theme.surface})` }} />
+            <stop offset="100%" style={{ stopColor: `var(--color-brand-contrast, ${BRAND_CONFIG.theme.glassPanel})` }} />
           </linearGradient>
         </defs>
 
         <rect width="100" height="100" fill={`url(#${gradientId})`} />
 
-        <g style={{ fill: 'var(--color-accent, #2F4B73)' }} fillOpacity="0.85">
+        <g style={{ fill: `var(--color-accent, ${BRAND_CONFIG.theme.accent})` }} fillOpacity="0.85">
           {variant === 'male' && (
             <>
               <path d="M 15 100 C 15 82 28 73 40 68 L 40 52 L 60 52 L 60 68 C 72 73 85 82 85 100 Z" />

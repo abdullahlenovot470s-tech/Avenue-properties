@@ -67,6 +67,65 @@ export function getContrastTextHex(bgHex: string): string {
   return whiteContrast >= darkContrast ? '#FFFFFF' : '#0F172A';
 }
 
+const BUNDLED_FONT_LOADERS: Record<string, () => Promise<unknown[]>> = {
+  manrope: () =>
+    Promise.all([
+      import('@fontsource/manrope/latin-300.css'),
+      import('@fontsource/manrope/latin-400.css'),
+      import('@fontsource/manrope/latin-500.css'),
+      import('@fontsource/manrope/latin-600.css'),
+    ]),
+  unbounded: () =>
+    Promise.all([
+      import('@fontsource/unbounded/latin-500.css'),
+      import('@fontsource/unbounded/latin-600.css'),
+      import('@fontsource/unbounded/latin-700.css'),
+      import('@fontsource/unbounded/latin-800.css'),
+      import('@fontsource/unbounded/latin-900.css'),
+    ]),
+};
+
+/**
+ * Loads font assets driven by BRAND_CONFIG.fonts:
+ * - Uses bundled self-hosted @fontsource packages when matching displayFont/bodyFont
+ * - Injects googleFontsUrl stylesheet when configured for custom client fonts
+ */
+export function loadBrandFonts(config = BRAND_CONFIG): Promise<void> {
+  if (typeof document === 'undefined') return Promise.resolve();
+
+  const { displayFont, bodyFont, googleFontsUrl } = config.fonts;
+  const tasks: Promise<unknown>[] = [];
+
+  const cleanGoogleUrl = String(googleFontsUrl || '').trim();
+  if (cleanGoogleUrl) {
+    const existing = document.querySelector('link[data-brand-fonts="true"]') as HTMLLinkElement | null;
+    if (!existing) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = cleanGoogleUrl;
+      link.setAttribute('data-brand-fonts', 'true');
+      document.head.appendChild(link);
+    } else if (existing.href !== cleanGoogleUrl) {
+      existing.href = cleanGoogleUrl;
+    }
+  }
+
+  const families = new Set(
+    [displayFont, bodyFont]
+      .map((fontName) => String(fontName || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  for (const family of families) {
+    const loader = BUNDLED_FONT_LOADERS[family];
+    if (loader) {
+      tasks.push(loader());
+    }
+  }
+
+  return Promise.all(tasks).then(() => undefined);
+}
+
 /**
  * Applies all theme colors, computed contrast tokens, glass rgba effects,
  * Google Fonts, favicon, and metadata from BRAND_CONFIG to the DOM at startup.

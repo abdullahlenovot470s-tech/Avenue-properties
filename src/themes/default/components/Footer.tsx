@@ -1,13 +1,13 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, MapPin, Phone, Instagram, Linkedin, Twitter } from 'lucide-react';
-import { SITE_CONFIG, getWhatsAppUrl, handleDemoContactClick } from '../config/siteConfig';
-import { BRAND_CONFIG } from '../config/brand.config';
-import { useAuth } from '../context/AuthContext';
-import { useLanguage } from '../context/LanguageContext';
-import { useToast } from '../context/ToastContext';
-import { URGLISH_COPY } from '../data/urglishTranslations';
-import { trackEvent } from '../lib/analytics';
+import { SITE_CONFIG, getWhatsAppUrl, handleDemoContactClick } from '../../../config/siteConfig';
+import { BRAND_CONFIG } from '../../../config/brand.config';
+import { useAuth } from '../../../context/AuthContext';
+import { useLanguage } from '../../../context/LanguageContext';
+import { useToast } from '../../../context/ToastContext';
+import { URGLISH_COPY } from '../../../data/urglishTranslations';
+import { trackEvent } from '../../../lib/analytics';
 
 export const Footer: React.FC = () => {
   const { isManagement } = useAuth();

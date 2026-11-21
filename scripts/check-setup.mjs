@@ -92,11 +92,10 @@ function main() {
   if (warnings.length > 0) {
     console.warn('');
     console.warn('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-    console.warn('WARNING: MASTER DEMO CONFIGURATION DETECTED');
+    console.warn('WARNING: This build still uses the DEMO Firebase project / admin email. Replace them before delivering to a client.');
     for (const msg of warnings) {
       console.warn(`  - ${msg}`);
     }
-    console.warn('Replace these demo values before deploying a client site.');
     console.warn('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
     console.warn('');
 

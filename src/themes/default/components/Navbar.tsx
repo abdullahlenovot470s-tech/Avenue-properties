@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, Link, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, User, Heart, LogOut, ChevronDown, SlidersHorizontal, Users } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
-import { PillButton } from './common/PillButton';
-import { BRAND_CONFIG } from '../config/brand.config';
+import { useAuth } from '../../../context/AuthContext';
+import { useToast } from '../../../context/ToastContext';
+import { PillButton } from '../../../components/common/PillButton';
+import { BRAND_CONFIG } from '../../../config/brand.config';
 
 interface NavbarProps {
   mobileMenuOpen?: boolean;

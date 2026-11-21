@@ -1,8 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, ArrowLeft } from 'lucide-react';
-import { BRAND_CONFIG } from '../config/brand.config';
-import { usePageMeta } from '../lib/seo';
+import { BRAND_CONFIG } from '../../../config/brand.config';
+import { usePageMeta } from '../../../lib/seo';
 
 export const NotFoundPage: React.FC = () => {
   usePageMeta({

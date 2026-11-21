@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { ArrowUpRight } from 'lucide-react';
-import { BRAND_CONFIG } from '../config/brand.config';
-import { SafeImage } from './common/SafeImage';
-import { useLanguage } from '../context/LanguageContext';
-import { URGLISH_COPY } from '../data/urglishTranslations';
+import { BRAND_CONFIG } from '../../../config/brand.config';
+import { SafeImage } from '../../../components/common/SafeImage';
+import { useLanguage } from '../../../context/LanguageContext';
+import { URGLISH_COPY } from '../../../data/urglishTranslations';
 
 interface ServicesSectionProps {
   onOpenConsultation: (serviceTitle?: string) => void;

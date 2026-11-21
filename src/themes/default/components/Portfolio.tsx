@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { useCatalog } from '../context/CatalogContext';
-import { PortfolioProject } from '../types';
-import { BRAND_CONFIG } from '../config/brand.config';
-import { SafeImage } from './common/SafeImage';
-import { PillButton } from './common/PillButton';
+import { useCatalog } from '../../../context/CatalogContext';
+import { PortfolioProject } from '../../../types';
+import { BRAND_CONFIG } from '../../../config/brand.config';
+import { SafeImage } from '../../../components/common/SafeImage';
+import { PillButton } from '../../../components/common/PillButton';
 import { ArrowLeft, ArrowRight, MapPin, Maximize2, Calendar, CheckCircle2, ArrowUpRight } from 'lucide-react';
-import { useLanguage } from '../context/LanguageContext';
-import { URGLISH_COPY } from '../data/urglishTranslations';
+import { useLanguage } from '../../../context/LanguageContext';
+import { URGLISH_COPY } from '../../../data/urglishTranslations';
 
 interface PortfolioProps {
   onSelectProject: (project: PortfolioProject) => void;

@@ -2,18 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, CheckCircle2, ShieldCheck, Clock, User, Mail, Phone } from 'lucide-react';
-import { PillButton } from '../common/PillButton';
-import { BRAND_CONFIG } from '../../config/brand.config';
-import { submitInquiry } from '../../lib/inquiriesApi';
+import { PillButton } from '../../../../components/common/PillButton';
+import { BRAND_CONFIG } from '../../../../config/brand.config';
+import { submitInquiry } from '../../../../lib/inquiriesApi';
 import {
   buildSpamCheckPayload,
   createSpamChallenge,
   validateSpamCheckAndContent,
-} from '../../lib/spamProtection';
-import { SpamChallengeField } from '../common/SpamChallengeField';
-import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../../services/enquiryWebhook';
-import { useLanguage } from '../../context/LanguageContext';
-import { URGLISH_COPY } from '../../data/urglishTranslations';
+} from '../../../../lib/spamProtection';
+import { SpamChallengeField } from '../../../../components/common/SpamChallengeField';
+import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../../../../services/enquiryWebhook';
+import { useLanguage } from '../../../../context/LanguageContext';
+import { URGLISH_COPY } from '../../../../data/urglishTranslations';
 
 interface ConsultationModalProps {
   isOpen: boolean;

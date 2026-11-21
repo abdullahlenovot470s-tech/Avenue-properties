@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { PropertyListing, PortfolioProject } from '../../types';
-import { SafeImage } from '../common/SafeImage';
-import { PillButton } from '../common/PillButton';
+import { PropertyListing, PortfolioProject } from '../../../../types';
+import { SafeImage } from '../../../../components/common/SafeImage';
+import { PillButton } from '../../../../components/common/PillButton';
 import { X, MapPin, Bed, Bath, Maximize2, ShieldCheck, CheckCircle2 } from 'lucide-react';
-import { useLanguage } from '../../context/LanguageContext';
-import { URGLISH_COPY } from '../../data/urglishTranslations';
-import { useRevealFallback } from '../../lib/useAnimationFallback';
+import { useLanguage } from '../../../../context/LanguageContext';
+import { URGLISH_COPY } from '../../../../data/urglishTranslations';
+import { useRevealFallback } from '../../../../lib/useAnimationFallback';
 
 interface PropertyDetailModalProps {
   property: PropertyListing | PortfolioProject | null;

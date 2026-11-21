@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useId } from 'react';
 import { Star, ArrowLeft, ArrowRight, Quote } from 'lucide-react';
-import { BRAND_CONFIG } from '../config/brand.config';
-import { useCatalog } from '../context/CatalogContext';
-import type { ClientReview } from '../types';
+import { BRAND_CONFIG } from '../../../config/brand.config';
+import { useCatalog } from '../../../context/CatalogContext';
+import type { ClientReview } from '../../../types';
 
 const STAR_PATH =
   'M12 2.25l2.92 5.92 6.53.95-4.72 4.6 1.11 6.5L12 17.15l-5.84 3.07 1.11-6.5-4.72-4.6 6.53-.95L12 2.25z';
@@ -167,15 +167,15 @@ export const ReviewsSection: React.FC = () => {
                 </defs>
                 <path
                   d={STAR_PATH}
-                  fill="#E2E8F0"
-                  stroke="#94A3B8"
+                  fill={BRAND_CONFIG.theme.starTrackFill}
+                  stroke={BRAND_CONFIG.theme.starTrackStroke}
                   strokeWidth="1.1"
                   strokeLinejoin="round"
                 />
                 <path
                   d={STAR_PATH}
-                  fill="#F59E0B"
-                  stroke="#D97706"
+                  fill={BRAND_CONFIG.theme.starFill}
+                  stroke={BRAND_CONFIG.theme.starStroke}
                   strokeWidth="0.9"
                   strokeLinejoin="round"
                   clipPath={`url(#${starClipId})`}

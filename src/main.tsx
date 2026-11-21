@@ -1,15 +1,6 @@
 import { createRoot } from 'react-dom/client';
-import '@fontsource/manrope/latin-300.css';
-import '@fontsource/manrope/latin-400.css';
-import '@fontsource/manrope/latin-500.css';
-import '@fontsource/manrope/latin-600.css';
-import '@fontsource/unbounded/latin-500.css';
-import '@fontsource/unbounded/latin-600.css';
-import '@fontsource/unbounded/latin-700.css';
-import '@fontsource/unbounded/latin-800.css';
-import '@fontsource/unbounded/latin-900.css';
 import App from './App.tsx';
-import { applyTheme } from './theme/applyTheme';
+import { applyTheme, loadBrandFonts } from './theme/applyTheme';
 import { ErrorBoundary, ErrorFallbackPage } from './components/common/ErrorBoundary';
 import './index.css';
 
@@ -25,6 +16,7 @@ if (rootElement) {
   const root = createRoot(rootElement);
   try {
     applyTheme();
+    void loadBrandFonts();
     root.render(
       <ErrorBoundary fullViewport>
         <App />

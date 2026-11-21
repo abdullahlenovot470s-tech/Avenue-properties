@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { HelpCircle, ChevronDown } from 'lucide-react';
-import { BRAND_CONFIG } from '../config/brand.config';
-import { useCatalog } from '../context/CatalogContext';
-import { useLanguage } from '../context/LanguageContext';
-import { URGLISH_COPY } from '../data/urglishTranslations';
+import { BRAND_CONFIG } from '../../../config/brand.config';
+import { useCatalog } from '../../../context/CatalogContext';
+import { useLanguage } from '../../../context/LanguageContext';
+import { URGLISH_COPY } from '../../../data/urglishTranslations';
 
 export const ContactFaqSection: React.FC = () => {
   const { faqs } = useCatalog();

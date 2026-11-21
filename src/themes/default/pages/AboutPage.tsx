@@ -1,15 +1,15 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { TEAM_MEMBERS, HERO_ASSETS, HERO_STATS } from '../data/realEstateData';
-import { SafeImage } from '../components/common/SafeImage';
-import { AvatarPlaceholder } from '../components/common/AvatarPlaceholder';
-import { PillButton } from '../components/common/PillButton';
+import { TEAM_MEMBERS, HERO_ASSETS, HERO_STATS } from '../../../data/realEstateData';
+import { SafeImage } from '../../../components/common/SafeImage';
+import { AvatarPlaceholder } from '../components/AvatarPlaceholder';
+import { PillButton } from '../../../components/common/PillButton';
 import { Award, Compass, ShieldCheck, Landmark, Check } from 'lucide-react';
-import { BRAND_CONFIG } from '../config/brand.config';
-import { useLanguage } from '../context/LanguageContext';
-import { URGLISH_COPY } from '../data/urglishTranslations';
-import { buildRealEstateAgentJsonLd, usePageSeo } from '../lib/seo';
+import { BRAND_CONFIG } from '../../../config/brand.config';
+import { useLanguage } from '../../../context/LanguageContext';
+import { URGLISH_COPY } from '../../../data/urglishTranslations';
+import { buildRealEstateAgentJsonLd, usePageSeo } from '../../../lib/seo';
 
 interface AboutPageProps {
   onOpenConsultation: (service?: string) => void;
@@ -28,9 +28,9 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
   });
 
   return (
-    <div className="min-h-[100svh] pt-20 md:pt-24 pb-6 md:pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-4 md:space-y-6">
+    <div className="min-h-[100svh] pt-20 md:pt-24 pb-6 md:pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-4 md:space-y-6">
       {/* Hero Narrative Card with Ghost Watermark */}
-      <section className="relative w-full bg-white rounded-2xl md:rounded-[32px] overflow-hidden p-5 md:p-14 shadow-xl border border-slate-100">
+      <section className="relative w-full bg-white rounded-2xl md:rounded-[32px] overflow-hidden p-4 sm:p-5 md:p-14 shadow-xl border border-slate-100">
         <div className="absolute top-4 right-0 pointer-events-none select-none overflow-hidden max-w-full z-0">
           <span
             className="font-display font-black leading-none uppercase tracking-tighter text-watermark/30 select-none"
@@ -54,7 +54,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
             )}
           </p>
 
-          <div className="pt-2 flex items-center gap-4">
+          <div className="pt-2 flex flex-wrap items-center gap-3 sm:gap-4">
             <PillButton
               variant="dark"
               size="md"
@@ -75,9 +75,9 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
       </section>
 
       {/* Two-Column Story & Architectural Walkway Section */}
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8 items-stretch">
-        <div className="lg:col-span-7 min-w-0 w-full bg-brand text-brand-contrast rounded-2xl md:rounded-[36px] p-5 md:p-14 shadow-xl flex flex-col justify-between">
-          <div className="space-y-4 md:space-y-6">
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 md:gap-8 items-stretch">
+        <div className="lg:col-span-7 min-w-0 w-full bg-brand text-brand-contrast rounded-2xl md:rounded-[36px] p-4 sm:p-5 md:p-14 shadow-xl flex flex-col justify-between">
+          <div className="space-y-3 sm:space-y-4 md:space-y-6">
             <span className="text-[10px] font-display uppercase tracking-widest text-brand-contrast/60 block">
               Core Principles
             </span>
@@ -91,9 +91,9 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
               )}
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-brand-contrast/10 text-xs">
-              <div className="flex items-start gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-4 pt-3 sm:pt-4 border-t border-brand-contrast/10 text-[11px] sm:text-xs">
+              <div className="flex items-start gap-1.5 sm:gap-2.5 min-w-0">
+                <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <span>
                   {t(
                     '100% verified society transfers and clean possession',
@@ -101,8 +101,8 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
                   )}
                 </span>
               </div>
-              <div className="flex items-start gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-1.5 sm:gap-2.5 min-w-0">
+                <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <span>
                   {t(
                     'Direct consultation with PCATP-registered architects',
@@ -110,8 +110,8 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
                   )}
                 </span>
               </div>
-              <div className="flex items-start gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-1.5 sm:gap-2.5 min-w-0">
+                <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <span>
                   {t(
                     `Assistance for overseas ${BRAND_CONFIG.locale.nationalityAdjective} clients with power of attorney`,
@@ -119,8 +119,8 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
                   )}
                 </span>
               </div>
-              <div className="flex items-start gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-1.5 sm:gap-2.5 min-w-0">
+                <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <span>
                   {t(
                     'Load-shedding-proof solar microgrid & generator inspection',
@@ -131,11 +131,11 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
             </div>
           </div>
 
-          <div className="pt-8 flex items-center justify-between border-t border-brand-contrast/10 mt-8">
+          <div className="pt-4 sm:pt-8 mt-4 sm:mt-8 flex items-center sm:justify-between gap-4 sm:gap-6 overflow-x-auto sm:overflow-visible snap-x sm:snap-none snap-mandatory no-scrollbar border-t border-brand-contrast/10 min-w-0">
             {HERO_STATS.map((s) => (
-              <div key={s.value}>
-                <div className="font-display font-bold text-2xl text-brand-contrast">{s.value}</div>
-                <div className="text-[11px] text-brand-contrast/60 font-display uppercase tracking-wider">
+              <div key={s.value} className="shrink-0 snap-start min-w-[130px] sm:min-w-0">
+                <div className="font-display font-bold text-xl sm:text-2xl text-brand-contrast">{s.value}</div>
+                <div className="text-[10px] sm:text-[11px] text-brand-contrast/60 font-display uppercase tracking-wider">
                   {s.label}
                 </div>
               </div>
@@ -151,7 +151,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
             height={675}
             className="w-full h-full object-cover object-center md:group-hover:scale-105 transition-transform duration-700"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-brand/80 via-transparent to-transparent flex items-end p-5 md:p-8">
+          <div className="absolute inset-0 bg-gradient-to-t from-brand/80 via-transparent to-transparent flex items-end p-4 sm:p-5 md:p-8">
             <div className="max-md:!bg-transparent max-md:!backdrop-blur-none max-md:!border-x-0 max-md:!border-b-0 max-md:!border-t max-md:!border-white/25 max-md:rounded-none max-md:p-0 max-md:pt-3 glass-panel p-5 rounded-2xl text-white w-full">
               <span className="text-[10px] uppercase font-display tracking-widest text-white/70 block">
                 {BRAND_CONFIG.identity.brandShortName} Archive #094
@@ -165,8 +165,8 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
       </section>
 
       {/* Leadership & Founding Partners */}
-      <section className="bg-white rounded-2xl md:rounded-[36px] p-5 md:p-16 shadow-xl border border-slate-100">
-        <div className="mb-5 md:mb-10">
+      <section className="bg-white rounded-2xl md:rounded-[36px] p-4 sm:p-5 md:p-16 shadow-xl border border-slate-100">
+        <div className="mb-3 sm:mb-5 md:mb-10">
           <span className="text-[11px] font-display uppercase tracking-widest text-accent font-bold block mb-1">
             Executive Leadership
           </span>
@@ -181,13 +181,13 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
           </p>
         </div>
 
-        {/* 1. Mobile 2x2 Team Grid (< md) */}
-        <div className="md:hidden space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+        {/* 1. Mobile Team Horizontal Snap Carousel (< sm) & 2-col grid (sm) */}
+        <div className="md:hidden space-y-3 sm:space-y-4">
+          <div className="flex sm:grid sm:grid-cols-2 overflow-x-auto sm:overflow-visible snap-x sm:snap-none snap-mandatory no-scrollbar gap-3 pb-1 sm:pb-0 -mx-1 px-1 sm:mx-0 sm:px-0">
             {TEAM_MEMBERS.map((member) => (
               <div
                 key={member.name}
-                className="bg-slate-50/80 rounded-2xl p-3 border border-slate-100 flex flex-col gap-2.5 min-w-0"
+                className="w-[78%] sm:w-auto shrink-0 snap-start bg-slate-50/80 rounded-2xl p-3 border border-slate-100 flex flex-col gap-2.5 min-w-0"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="relative w-14 h-14 rounded-xl overflow-hidden border border-slate-200/80 bg-brand shadow-xs shrink-0">
@@ -269,8 +269,8 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
       </section>
 
       {/* CTA Block */}
-      <section className="bg-accent rounded-2xl md:rounded-[36px] p-5 md:p-14 text-accent-contrast text-center shadow-xl relative overflow-hidden">
-        <div className="relative z-10 max-w-2xl mx-auto space-y-4">
+      <section className="bg-accent rounded-2xl md:rounded-[36px] p-4 sm:p-5 md:p-14 text-accent-contrast text-center shadow-xl relative overflow-hidden">
+        <div className="relative z-10 max-w-2xl mx-auto space-y-3 sm:space-y-4">
           <h3 className="font-display font-bold md:font-black text-[clamp(1.05rem,3.6vw,1.25rem)] md:text-4xl uppercase tracking-tight">
             DISCUSS AN ACQUISITION WITH {BRAND_CONFIG.identity.brandShortName.toUpperCase()}
           </h3>

@@ -1,19 +1,19 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { useCatalog } from '../context/CatalogContext';
-import { SafeImage } from '../components/common/SafeImage';
-import { PillButton } from '../components/common/PillButton';
-import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
-import { submitInquiry } from '../lib/inquiriesApi';
+import { useCatalog } from '../../../context/CatalogContext';
+import { SafeImage } from '../../../components/common/SafeImage';
+import { PillButton } from '../../../components/common/PillButton';
+import { useAuth } from '../../../context/AuthContext';
+import { useToast } from '../../../context/ToastContext';
+import { submitInquiry } from '../../../lib/inquiriesApi';
 import {
   buildSpamCheckPayload,
   createSpamChallenge,
   validateSpamCheckAndContent,
-} from '../lib/spamProtection';
-import { SpamChallengeField } from '../components/common/SpamChallengeField';
-import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../services/enquiryWebhook';
+} from '../../../lib/spamProtection';
+import { SpamChallengeField } from '../../../components/common/SpamChallengeField';
+import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../../../services/enquiryWebhook';
 import {
   Heart,
   MapPin,
@@ -30,13 +30,13 @@ import {
   MessageCircle,
   ChevronRight,
 } from 'lucide-react';
-import { BRAND_CONFIG } from '../config/brand.config';
-import { handleDemoContactClick } from '../config/siteConfig';
-import { buildPropertyListingJsonLd, usePageMeta } from '../lib/seo';
-import { trackEvent } from '../lib/analytics';
-import { InstallmentCalculator } from '../components/property/InstallmentCalculator';
-import { useLanguage } from '../context/LanguageContext';
-import { URGLISH_COPY } from '../data/urglishTranslations';
+import { BRAND_CONFIG } from '../../../config/brand.config';
+import { handleDemoContactClick } from '../../../config/siteConfig';
+import { buildPropertyListingJsonLd, usePageMeta } from '../../../lib/seo';
+import { trackEvent } from '../../../lib/analytics';
+import { InstallmentCalculator } from '../components/InstallmentCalculator';
+import { useLanguage } from '../../../context/LanguageContext';
+import { URGLISH_COPY } from '../../../data/urglishTranslations';
 
 export const ProjectDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -77,7 +77,7 @@ export const ProjectDetailPage: React.FC = () => {
         extendedStory: listing.extendedStory,
         architect: listing.architect,
         yearBuilt: listing.yearBuilt,
-        lotSize: listing.lotSize || '2 Kanal Plot',
+        lotSize: listing.lotSize || BRAND_CONFIG.locale.defaultLotSize,
         amenities: listing.amenities,
         images: [listing.exteriorImage, ...(listing.interiorImages || [])].filter(Boolean),
         status: listing.status,
@@ -87,9 +87,14 @@ export const ProjectDetailPage: React.FC = () => {
     const portfolio = portfolioProjects.find((p) => p.id === id);
     if (portfolio) {
       let num = 385000000;
-      if (portfolio.valuation.includes('Crore')) {
+      const matchedUnit = BRAND_CONFIG.locale.currencyCompactUnits.find((unit) =>
+        portfolio.valuation.includes(unit.suffix)
+      );
+      if (matchedUnit) {
         const val = parseFloat(portfolio.valuation.replace(/[^0-9.]/g, ''));
-        num = val * 10000000;
+        if (!Number.isNaN(val)) {
+          num = val * matchedUnit.divisor;
+        }
       }
       return {
         id: portfolio.id,

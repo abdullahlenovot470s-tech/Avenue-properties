@@ -4,9 +4,9 @@ import { LanguageToggleBar } from '../components/LanguageToggleBar';
 import { ServicesSection } from '../components/ServicesSection';
 import { Portfolio } from '../components/Portfolio';
 import { ContactCta } from '../components/ContactCta';
-import { PropertyListing, PortfolioProject } from '../types';
-import { BRAND_CONFIG } from '../config/brand.config';
-import { buildRealEstateAgentJsonLd, usePageSeo } from '../lib/seo';
+import { PropertyListing, PortfolioProject } from '../../../types';
+import { BRAND_CONFIG } from '../../../config/brand.config';
+import { buildRealEstateAgentJsonLd, usePageSeo } from '../../../lib/seo';
 
 const ReviewsSection = lazy(() =>
   import('../components/ReviewsSection').then((m) => ({ default: m.ReviewsSection }))

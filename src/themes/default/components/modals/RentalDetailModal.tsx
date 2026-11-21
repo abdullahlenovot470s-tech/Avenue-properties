@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { RentalListing } from '../../types';
-import { SafeImage } from '../common/SafeImage';
-import { useToast } from '../../context/ToastContext';
-import { submitInquiry } from '../../lib/inquiriesApi';
+import { RentalListing } from '../../../../types';
+import { SafeImage } from '../../../../components/common/SafeImage';
+import { useToast } from '../../../../context/ToastContext';
+import { submitInquiry } from '../../../../lib/inquiriesApi';
 import {
   buildSpamCheckPayload,
   createSpamChallenge,
   validateSpamCheckAndContent,
-} from '../../lib/spamProtection';
-import { SpamChallengeField } from '../common/SpamChallengeField';
-import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../../services/enquiryWebhook';
-import { BRAND_CONFIG } from '../../config/brand.config';
-import { useLanguage } from '../../context/LanguageContext';
-import { URGLISH_COPY } from '../../data/urglishTranslations';
-import { useRevealFallback } from '../../lib/useAnimationFallback';
+} from '../../../../lib/spamProtection';
+import { SpamChallengeField } from '../../../../components/common/SpamChallengeField';
+import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../../../../services/enquiryWebhook';
+import { BRAND_CONFIG } from '../../../../config/brand.config';
+import { useLanguage } from '../../../../context/LanguageContext';
+import { URGLISH_COPY } from '../../../../data/urglishTranslations';
+import { useRevealFallback } from '../../../../lib/useAnimationFallback';
 import {
   X,
   MapPin,
@@ -27,7 +27,7 @@ import {
   FileText,
   Send,
 } from 'lucide-react';
-import { formatRent } from '../../data/rentalsData';
+import { formatRent } from '../../../../data/rentalsData';
 
 interface RentalDetailModalProps {
   isOpen: boolean;

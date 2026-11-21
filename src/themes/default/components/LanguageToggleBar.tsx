@@ -1,7 +1,7 @@
 import React from 'react';
 import { Languages } from 'lucide-react';
-import { BRAND_CONFIG } from '../config/brand.config';
-import { useLanguage } from '../context/LanguageContext';
+import { BRAND_CONFIG } from '../../../config/brand.config';
+import { useLanguage } from '../../../context/LanguageContext';
 
 export const LanguageToggleBar: React.FC = () => {
   const { language, setLanguage, isUrglish } = useLanguage();

@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useCatalog } from '../context/CatalogContext';
-import { SafeImage } from '../components/common/SafeImage';
-import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
+import { useCatalog } from '../../../context/CatalogContext';
+import { SafeImage } from '../../../components/common/SafeImage';
+import { useAuth } from '../../../context/AuthContext';
+import { useToast } from '../../../context/ToastContext';
 import {
   Search,
   Heart,
@@ -17,12 +17,12 @@ import {
   X,
   RotateCcw,
 } from 'lucide-react';
-import type { ProjectStatus } from '../types';
-import { BRAND_CONFIG } from '../config/brand.config';
-import { getWhatsAppUrl } from '../config/siteConfig';
-import { useLanguage } from '../context/LanguageContext';
-import { URGLISH_COPY } from '../data/urglishTranslations';
-import { usePageSeo } from '../lib/seo';
+import type { ProjectStatus } from '../../../types';
+import { BRAND_CONFIG } from '../../../config/brand.config';
+import { getWhatsAppUrl } from '../../../config/siteConfig';
+import { useLanguage } from '../../../context/LanguageContext';
+import { URGLISH_COPY } from '../../../data/urglishTranslations';
+import { usePageSeo } from '../../../lib/seo';
 
 const getStatusBadgeStyle = (status?: ProjectStatus) =>
   status === 'Sold'
@@ -78,9 +78,14 @@ export const ProjectsPage: React.FC = () => {
 
     const listB: UnifiedProject[] = portfolioProjects.map((p) => {
       let num = p.numericValuation || 350000000;
-      if (!p.numericValuation && p.valuation.includes('Crore')) {
-        const val = parseFloat(p.valuation.replace(/[^0-9.]/g, ''));
-        if (!Number.isNaN(val)) num = val * 10000000;
+      if (!p.numericValuation) {
+        const matchedUnit = BRAND_CONFIG.locale.currencyCompactUnits.find((unit) =>
+          p.valuation.includes(unit.suffix)
+        );
+        if (matchedUnit) {
+          const val = parseFloat(p.valuation.replace(/[^0-9.]/g, ''));
+          if (!Number.isNaN(val)) num = val * matchedUnit.divisor;
+        }
       }
       return {
         id: p.id,

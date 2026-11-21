@@ -649,7 +649,7 @@ const createDefaultProjForm = () => ({
   location: '',
   category: BRAND_CONFIG.locale.defaultCity as CityOption,
   valuation: '',
-  size: '1 Kanal',
+  size: BRAND_CONFIG.locale.defaultSizes.project,
   beds: '5',
   baths: '6',
   projectDelivered: String(new Date().getFullYear()),
@@ -665,7 +665,7 @@ const createDefaultBuyForm = () => ({
   location: '',
   type: 'House' as 'House' | 'Apartment' | 'Plot',
   price: '',
-  area: '10 Marla',
+  area: BRAND_CONFIG.locale.defaultSizes.buy,
   beds: '4',
   baths: '4',
   possession: 'Ready to Move',
@@ -684,7 +684,7 @@ const createDefaultRentForm = () => ({
   monthlyRent: '',
   beds: '3',
   baths: '3',
-  sizeOrFloor: '10 Marla',
+  sizeOrFloor: BRAND_CONFIG.locale.defaultSizes.rent,
   furnished: 'Unfurnished' as 'Furnished' | 'Unfurnished',
   availableFrom: 'Immediate',
   securityDeposit: "2 months' rent",
@@ -1111,7 +1111,7 @@ export const ManageCatalogPage: React.FC = () => {
       monthlyRent: String(item.monthlyRent || ''),
       beds: String(item.beds ?? 1),
       baths: String(item.baths ?? 1),
-      sizeOrFloor: item.sizeOrFloor || '10 Marla',
+      sizeOrFloor: item.sizeOrFloor || BRAND_CONFIG.locale.defaultSizes.rent,
       furnished: item.furnished || 'Unfurnished',
       availableFrom: item.availableFrom || 'Immediate',
       securityDeposit: item.securityDeposit || "2 months' rent",
@@ -1954,7 +1954,7 @@ export const ManageCatalogPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    placeholder={`e.g. ${BRAND_CONFIG.locale.currencyCode} 12.5 Crore`}
+                    placeholder={BRAND_CONFIG.locale.adminPlaceholders.projectValuation}
                     value={projForm.valuation}
                     onChange={(e) => {
                       setProjForm({ ...projForm, valuation: e.target.value });
@@ -2009,7 +2009,7 @@ export const ManageCatalogPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    placeholder="1 Kanal"
+                    placeholder={BRAND_CONFIG.locale.defaultSizes.project}
                     value={projForm.size}
                     onChange={(e) => setProjForm({ ...projForm, size: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none"
@@ -2224,7 +2224,7 @@ export const ManageCatalogPage: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. 1 Kanal Modern Bungalow, DHA Phase 6"
+                  placeholder={BRAND_CONFIG.locale.adminPlaceholders.buyTitle}
                   value={buyForm.title}
                   onChange={(e) => {
                     setBuyForm({ ...buyForm, title: e.target.value });
@@ -2304,7 +2304,7 @@ export const ManageCatalogPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    placeholder={`e.g. ${BRAND_CONFIG.locale.currencyCode} 8.5 Crore`}
+                    placeholder={BRAND_CONFIG.locale.adminPlaceholders.buyPrice}
                     value={buyForm.price}
                     onChange={(e) => {
                       setBuyForm({ ...buyForm, price: e.target.value });
@@ -2328,7 +2328,7 @@ export const ManageCatalogPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. 1 Kanal"
+                    placeholder={BRAND_CONFIG.locale.adminPlaceholders.buyArea}
                     value={buyForm.area}
                     onChange={(e) => setBuyForm({ ...buyForm, area: e.target.value })}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none"
@@ -2737,7 +2737,7 @@ export const ManageCatalogPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    placeholder="10 Marla"
+                    placeholder={BRAND_CONFIG.locale.defaultSizes.rent}
                     value={rentForm.sizeOrFloor}
                     onChange={(e) => setRentForm({ ...rentForm, sizeOrFloor: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none"
@@ -3303,7 +3303,7 @@ export const ManageCatalogPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. 1 Kanal Villa · DHA Phase 6"
+                    placeholder={BRAND_CONFIG.locale.adminPlaceholders.reviewPropertyContext}
                     value={reviewForm.propertyContext}
                     onChange={(e) =>
                       setReviewForm({ ...reviewForm, propertyContext: e.target.value })

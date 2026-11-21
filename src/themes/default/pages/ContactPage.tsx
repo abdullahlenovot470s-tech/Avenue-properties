@@ -1,28 +1,28 @@
 import React, { useState, Suspense, lazy } from 'react';
 import { Link } from 'react-router-dom';
-import { REGIONAL_OFFICES } from '../data/realEstateData';
-import { useToast } from '../context/ToastContext';
+import { REGIONAL_OFFICES } from '../../../data/realEstateData';
+import { useToast } from '../../../context/ToastContext';
 import {
   SITE_CONFIG,
   getWhatsAppUrl,
   handleDemoContactClick,
   isValidContactPhone,
   isValidContactEmail,
-} from '../config/siteConfig';
-import { BRAND_CONFIG } from '../config/brand.config';
-import { submitInquiry } from '../lib/inquiriesApi';
+} from '../../../config/siteConfig';
+import { BRAND_CONFIG } from '../../../config/brand.config';
+import { submitInquiry } from '../../../lib/inquiriesApi';
 import {
   buildSpamCheckPayload,
   createSpamChallenge,
   validateSpamCheckAndContent,
-} from '../lib/spamProtection';
-import { SpamChallengeField } from '../components/common/SpamChallengeField';
-import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../services/enquiryWebhook';
-import { useCatalog } from '../context/CatalogContext';
-import { useLanguage } from '../context/LanguageContext';
-import { URGLISH_COPY } from '../data/urglishTranslations';
-import { usePageMeta } from '../lib/seo';
-import { trackEvent } from '../lib/analytics';
+} from '../../../lib/spamProtection';
+import { SpamChallengeField } from '../../../components/common/SpamChallengeField';
+import { sendEnquiryToWebhook, isEnquiryWebhookConfigured } from '../../../services/enquiryWebhook';
+import { useCatalog } from '../../../context/CatalogContext';
+import { useLanguage } from '../../../context/LanguageContext';
+import { URGLISH_COPY } from '../../../data/urglishTranslations';
+import { usePageMeta } from '../../../lib/seo';
+import { trackEvent } from '../../../lib/analytics';
 import {
   MapPin,
   Phone,
@@ -203,19 +203,19 @@ export const ContactPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-[100svh] pt-20 md:pt-24 pb-6 md:pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-4 md:space-y-6">
+    <div className="min-h-[100svh] pt-20 md:pt-24 pb-6 md:pb-12 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-3 md:space-y-4">
       {/* Header Card with Ghost Watermark */}
-      <section className="relative w-full bg-white rounded-2xl md:rounded-[32px] overflow-hidden p-5 md:p-14 shadow-xl border border-slate-100">
-        <div className="absolute top-4 right-0 pointer-events-none select-none overflow-hidden max-w-full z-0">
+      <section className="relative w-full bg-white rounded-2xl md:rounded-[32px] overflow-hidden p-4 md:p-8 shadow-xl border border-slate-100">
+        <div className="absolute top-2 right-2 pointer-events-none select-none overflow-hidden max-w-full z-0">
           <span
             className="font-display font-black leading-none uppercase tracking-tighter text-watermark/30 select-none"
-            style={{ fontSize: 'clamp(4rem, 12vw, 7.5rem)' }}
+            style={{ fontSize: 'clamp(2.5rem, 8vw, 5rem)' }}
           >
             CONTACT
           </span>
         </div>
 
-        <div className="relative z-10 max-w-3xl space-y-3 md:space-y-4">
+        <div className="relative z-10 max-w-3xl space-y-2 md:space-y-3">
           <span className="text-[11px] font-display uppercase tracking-widest text-accent font-bold block">
             Direct Principal Access
           </span>
@@ -232,12 +232,12 @@ export const ContactPage: React.FC = () => {
       </section>
 
       {/* Regional Offices Showcase Grid */}
-      <section className="below-fold-section space-y-4 md:space-y-6">
+      <section className="below-fold-section space-y-3 md:space-y-4">
         <div className="px-2">
           <h2 className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-3xl text-brand uppercase tracking-tight">
             REGIONAL OFFICES & ADVISORY DESKS
           </h2>
-          <p className="text-xs text-slate-500 font-body mt-1">
+          <p className="text-xs text-slate-500 font-body mt-0.5">
             {t(
               `Private consultation available Monday to Saturday, 9:00 AM to 6:00 PM ${BRAND_CONFIG.locale.timezoneLabel}.`,
               URGLISH_COPY.contactPage.officeHoursSubtitle
@@ -245,23 +245,23 @@ export const ContactPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-4 overflow-x-auto sm:overflow-visible snap-x sm:snap-none snap-mandatory no-scrollbar gap-3 sm:gap-4 pb-1 sm:pb-0 -mx-1 px-1 sm:mx-0 sm:px-0 min-w-0">
           {REGIONAL_OFFICES.map((office) => (
             <div
               key={office.city}
-              className="relative bg-gradient-to-br from-brand to-accent rounded-2xl md:rounded-3xl p-5 md:p-6 text-brand-contrast overflow-hidden shadow-lg border border-white/10 flex flex-col justify-between group hover:shadow-2xl transition-all duration-300"
+              className="w-[80%] sm:w-auto shrink-0 snap-start min-w-0 relative bg-gradient-to-br from-brand to-accent rounded-2xl md:rounded-3xl p-4 text-brand-contrast overflow-hidden shadow-lg border border-white/10 flex flex-col justify-between group hover:shadow-2xl transition-all duration-300"
             >
               {/* Faded watermark word of the city name */}
               <div className="absolute -bottom-3 -right-2 pointer-events-none select-none overflow-hidden max-w-full z-0 opacity-15">
                 <span
                   className="font-display font-black leading-none uppercase tracking-tighter text-brand-contrast select-none block"
-                  style={{ fontSize: 'clamp(2.5rem, 5vw, 4.5rem)' }}
+                  style={{ fontSize: 'clamp(2rem, 4vw, 3.5rem)' }}
                 >
                   {office.city}
                 </span>
               </div>
 
-              <div className="relative z-10 space-y-4">
+              <div className="relative z-10 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-display uppercase tracking-widest text-emerald-400 font-bold px-2.5 py-1 rounded-full bg-white/10 border border-white/10">
                     {office.city.endsWith('Desk') ? office.city : `${office.city} Desk`}
@@ -280,8 +280,8 @@ export const ContactPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="space-y-2.5 text-xs text-brand-contrast/85 font-body pt-1">
-                  <div className="flex items-start gap-2.5">
+                <div className="space-y-1.5 text-xs text-brand-contrast/85 font-body pt-0.5">
+                  <div className="flex items-start gap-2">
                     <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                     <span className="leading-relaxed">
                       {office.city === 'Overseas Desk'
@@ -289,7 +289,7 @@ export const ContactPage: React.FC = () => {
                         : office.address}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2">
                     <Phone className="w-4 h-4 text-emerald-400 shrink-0" />
                     <a
                       href={`tel:${office.phone.replace(/[^0-9+]/g, '')}`}
@@ -302,7 +302,7 @@ export const ContactPage: React.FC = () => {
                       {office.phone}
                     </a>
                   </div>
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2">
                     <Mail className="w-4 h-4 text-emerald-400 shrink-0" />
                     <a
                       href={`mailto:${office.email}`}
@@ -315,7 +315,7 @@ export const ContactPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="relative z-10 pt-4 mt-4 border-t border-white/15">
+              <div className="relative z-10 pt-3 mt-3 border-t border-white/15">
                 <div className="flex items-center justify-between">
                   <a
                     href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(office.address)}`}
@@ -349,13 +349,13 @@ export const ContactPage: React.FC = () => {
       )}
 
       {/* Appointment & Inquiry Form Section */}
-      <section className="bg-brand rounded-2xl md:rounded-[36px] p-5 md:p-16 text-brand-contrast shadow-2xl relative overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 items-center">
-          <div className="lg:col-span-5 min-w-0 space-y-4 md:space-y-5">
+      <section className="bg-brand rounded-2xl md:rounded-3xl p-4 md:p-8 text-brand-contrast shadow-2xl relative overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8 items-center">
+          <div className="lg:col-span-5 min-w-0 space-y-3">
             <span className="text-[10px] font-display uppercase tracking-widest text-brand-contrast/60 block">
               Confidential Representation
             </span>
-            <h2 className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-4xl uppercase tracking-tight">
+            <h2 className="font-display font-bold md:font-extrabold text-[clamp(1.25rem,4.5vw,1.625rem)] md:text-3xl uppercase tracking-tight">
               COMMENCE A PRIVATE DIALOGUE
             </h2>
             <p className="font-body text-xs sm:text-sm text-brand-contrast/80 leading-relaxed font-light">
@@ -365,9 +365,9 @@ export const ContactPage: React.FC = () => {
               )}
             </p>
 
-            <div className="max-md:!bg-transparent max-md:!backdrop-blur-none max-md:!border-x-0 max-md:!border-b-0 max-md:!border-t max-md:!border-white/20 max-md:rounded-none max-md:p-0 max-md:pt-3 p-4 rounded-2xl glass-card-subtle space-y-2 text-xs text-brand-contrast/90">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-emerald-400 shrink-0" />
+            <div className="max-md:!bg-transparent max-md:!backdrop-blur-none max-md:!border-x-0 max-md:!border-b-0 max-md:!border-t max-md:!border-white/20 max-md:rounded-none max-md:p-0 max-md:pt-2.5 p-3 rounded-2xl bg-white/10 border border-white/15 grid grid-cols-2 sm:grid-cols-1 gap-2.5 sm:gap-1.5 text-[11px] sm:text-xs text-brand-contrast/90">
+              <div className="flex items-start sm:items-center gap-1.5 sm:gap-2 min-w-0">
+                <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0 mt-0.5 sm:mt-0" />
                 <span>
                   {t(
                     `Response window: Within 2 business hours (${BRAND_CONFIG.locale.timezoneLabel})`,
@@ -375,15 +375,15 @@ export const ContactPage: React.FC = () => {
                   )}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+              <div className="flex items-start sm:items-center gap-1.5 sm:gap-2 min-w-0">
+                <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0 mt-0.5 sm:mt-0" />
                 <span>
                   {t('Direct partner representation guaranteed', URGLISH_COPY.contactPage.directRep)}
                 </span>
               </div>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-1">
               <a
                 href={getWhatsAppUrl(BRAND_CONFIG.contact.whatsappGreetings.generalFooter)}
                 target="_blank"
@@ -400,11 +400,11 @@ export const ContactPage: React.FC = () => {
           </div>
 
           <div className="lg:col-span-7 min-w-0">
-            <div className="max-md:!bg-transparent max-md:!backdrop-blur-none max-md:!border-x-0 max-md:!border-b-0 max-md:!border-t max-md:!border-white/20 max-md:rounded-none max-md:shadow-none max-md:p-0 max-md:pt-5 glass-panel rounded-3xl p-5 md:p-10 border border-white/20 shadow-2xl">
+            <div className="max-md:!bg-transparent max-md:!border-x-0 max-md:!border-b-0 max-md:!border-t max-md:!border-white/20 max-md:rounded-none max-md:shadow-none max-md:p-0 max-md:pt-4 bg-white/10 rounded-3xl p-4 md:p-6 border border-white/20 shadow-lg">
               {submitted ? (
-                <div className="py-12 text-center space-y-4">
-                  <div className="w-16 h-16 bg-emerald-500/20 border border-emerald-400 rounded-full flex items-center justify-center mx-auto text-emerald-300">
-                    <CheckCircle2 className="w-9 h-9" />
+                <div className="py-8 text-center space-y-3">
+                  <div className="w-14 h-14 bg-emerald-500/20 border border-emerald-400 rounded-full flex items-center justify-center mx-auto text-emerald-300">
+                    <CheckCircle2 className="w-8 h-8" />
                   </div>
                   <h3 className="font-display font-bold md:font-extrabold text-[clamp(1.05rem,3.6vw,1.25rem)] md:text-2xl uppercase tracking-tight text-white">
                     Inquiry Confirmed
@@ -438,13 +438,13 @@ export const ContactPage: React.FC = () => {
                         message: '',
                       });
                     }}
-                    className="text-xs font-display uppercase tracking-wider text-white/80 hover:text-white underline underline-offset-4 pt-2 cursor-pointer"
+                    className="text-xs font-display uppercase tracking-wider text-white/80 hover:text-white underline underline-offset-4 pt-1 cursor-pointer"
                   >
                     Submit another inquiry
                   </button>
                 </div>
               ) : (
-                <form onSubmit={handleSubmit} noValidate className="space-y-4">
+                <form onSubmit={handleSubmit} noValidate className="space-y-3">
                   <input
                     type="text"
                     name="contact_hp_ref"
@@ -457,8 +457,8 @@ export const ContactPage: React.FC = () => {
                     aria-hidden="true"
                     className="absolute -left-[9999px] w-px h-px overflow-hidden opacity-0 pointer-events-none"
                   />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
+                  <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                    <div className="min-w-0">
                       <label className="block text-[11px] font-display uppercase tracking-wider text-white/80 mb-1">
                         Full Name
                       </label>
@@ -471,11 +471,11 @@ export const ContactPage: React.FC = () => {
                           setFormError('');
                           setFormData({ ...formData, name: e.target.value });
                         }}
-                        className="w-full px-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs sm:text-sm focus:outline-none focus:border-white/50"
+                        className="w-full min-w-0 min-h-[42px] px-3 sm:px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs sm:text-sm focus:outline-none focus:border-white/50"
                       />
                     </div>
 
-                    <div>
+                    <div className="min-w-0">
                       <label className="block text-[11px] font-display uppercase tracking-wider text-white/80 mb-1">
                         Email Address
                       </label>
@@ -488,13 +488,13 @@ export const ContactPage: React.FC = () => {
                           setFormError('');
                           setFormData({ ...formData, email: e.target.value });
                         }}
-                        className="w-full px-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs sm:text-sm focus:outline-none focus:border-white/50"
+                        className="w-full min-w-0 min-h-[42px] px-3 sm:px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs sm:text-sm focus:outline-none focus:border-white/50"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-3">
+                    <div className="col-span-2 md:col-span-1 min-w-0">
                       <label className="block text-[11px] font-display uppercase tracking-wider text-white/80 mb-1">
                         Telephone
                       </label>
@@ -507,18 +507,18 @@ export const ContactPage: React.FC = () => {
                           setFormError('');
                           setFormData({ ...formData, phone: e.target.value });
                         }}
-                        className="w-full px-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs sm:text-sm focus:outline-none focus:border-white/50"
+                        className="w-full min-w-0 min-h-[42px] px-3 sm:px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs sm:text-sm focus:outline-none focus:border-white/50"
                       />
                     </div>
 
-                    <div>
+                    <div className="min-w-0">
                       <label className="block text-[11px] font-display uppercase tracking-wider text-white/80 mb-1">
                         Regional Office
                       </label>
                       <select
                         value={formData.office}
                         onChange={(e) => setFormData({ ...formData, office: e.target.value })}
-                        className="w-full px-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs sm:text-sm focus:outline-none focus:border-white/50"
+                        className="w-full min-w-0 min-h-[42px] px-2.5 sm:px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs sm:text-sm focus:outline-none focus:border-white/50"
                       >
                         {REGIONAL_OFFICES.map((office) => (
                           <option key={office.city} value={office.city} className="bg-brand text-brand-contrast">
@@ -528,14 +528,14 @@ export const ContactPage: React.FC = () => {
                       </select>
                     </div>
 
-                    <div>
+                    <div className="min-w-0">
                       <label className="block text-[11px] font-display uppercase tracking-wider text-white/80 mb-1">
                         Interest
                       </label>
                       <select
                         value={formData.subject}
                         onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                        className="w-full px-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs sm:text-sm focus:outline-none focus:border-white/50"
+                        className="w-full min-w-0 min-h-[42px] px-2.5 sm:px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs sm:text-sm focus:outline-none focus:border-white/50"
                       >
                         <option value="Buying" className="bg-brand text-brand-contrast">Buying</option>
                         <option value="Renting" className="bg-brand text-brand-contrast">Renting</option>
@@ -551,44 +551,46 @@ export const ContactPage: React.FC = () => {
                       Brief Message or Property Reference
                     </label>
                     <textarea
-                      rows={3}
+                      rows={2}
                       placeholder={BRAND_CONFIG.locale.placeholderNames.consultationNotes}
                       value={formData.message}
                       onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs sm:text-sm focus:outline-none focus:border-white/50"
+                      className="w-full px-3.5 py-2 rounded-xl bg-white/10 border border-white/20 text-white text-xs sm:text-sm focus:outline-none focus:border-white/50"
                     />
                   </div>
 
-                  <SpamChallengeField
-                    challenge={spamChallenge}
-                    answer={challengeAnswer}
-                    onAnswerChange={(val) => {
-                      setFormError('');
-                      setChallengeAnswer(val);
-                    }}
-                    onRefresh={() => {
-                      setFormError('');
-                      setSpamChallenge(createSpamChallenge());
-                      setChallengeAnswer('');
-                    }}
-                    variant="dark"
-                  />
+                  <div className="[&>div]:flex-nowrap [&>div]:px-3 [&>div]:py-2 [&>div]:gap-2">
+                    <SpamChallengeField
+                      challenge={spamChallenge}
+                      answer={challengeAnswer}
+                      onAnswerChange={(val) => {
+                        setFormError('');
+                        setChallengeAnswer(val);
+                      }}
+                      onRefresh={() => {
+                        setFormError('');
+                        setSpamChallenge(createSpamChallenge());
+                        setChallengeAnswer('');
+                      }}
+                      variant="dark"
+                    />
+                  </div>
 
                   {formError && (
                     <p
                       role="alert"
-                      className="flex items-center gap-2 text-xs text-rose-200 bg-rose-500/20 border border-rose-400/40 px-3.5 py-2.5 rounded-xl"
+                      className="flex items-center gap-2 text-xs text-rose-200 bg-rose-500/20 border border-rose-400/40 px-3.5 py-2 rounded-xl"
                     >
                       <AlertCircle className="w-4 h-4 text-rose-300 shrink-0" />
                       <span>{formError}</span>
                     </p>
                   )}
 
-                  <div className="pt-2 space-y-2.5">
+                  <div className="pt-1 space-y-2">
                     <button
                       type="submit"
                       disabled={loading}
-                      className="w-full py-3.5 px-6 rounded-full bg-white text-brand font-display font-bold text-xs uppercase tracking-widest hover:bg-surface transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                      className="w-full min-h-[42px] py-3 px-6 rounded-full bg-white text-brand font-display font-bold text-xs uppercase tracking-widest hover:bg-surface transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                     >
                       {loading ? (
                         <span>Connecting...</span>

@@ -124,25 +124,38 @@ function main() {
     '',
   ];
 
-  const robotsTxt = [
-    'User-agent: *',
-    'Allow: /',
-    'Disallow: /manage',
-    'Disallow: /records',
-    'Disallow: /profile',
-    'Disallow: /login',
-    'Disallow: /signup',
-    '',
-    `Sitemap: ${siteUrl}/sitemap.xml`,
-    '',
-  ].join('\n');
+  const robotsPath = path.join(ROOT_DIR, 'public/robots.txt');
+  const sitemapLine = `Sitemap: ${siteUrl}/sitemap.xml`;
+  let robotsTxt;
+  if (fs.existsSync(robotsPath)) {
+    const existingRobots = fs.readFileSync(robotsPath, 'utf8');
+    if (/^Sitemap:.*$/im.test(existingRobots)) {
+      robotsTxt = existingRobots.replace(/^Sitemap:.*$/im, sitemapLine);
+    } else {
+      const sep = existingRobots.endsWith('\n') ? '' : '\n';
+      robotsTxt = `${existingRobots}${sep}${sitemapLine}\n`;
+    }
+  } else {
+    robotsTxt = [
+      'User-agent: *',
+      'Allow: /',
+      'Disallow: /manage',
+      'Disallow: /records',
+      'Disallow: /profile',
+      'Disallow: /login',
+      'Disallow: /signup',
+      '',
+      sitemapLine,
+      '',
+    ].join('\n');
+  }
 
   fs.mkdirSync(path.join(ROOT_DIR, 'public'), { recursive: true });
   fs.writeFileSync(path.join(ROOT_DIR, 'public/sitemap.xml'), xmlLines.join('\n'), 'utf8');
-  fs.writeFileSync(path.join(ROOT_DIR, 'public/robots.txt'), robotsTxt, 'utf8');
+  fs.writeFileSync(robotsPath, robotsTxt, 'utf8');
 
   console.log(
-    `Generated public/sitemap.xml (${entries.length} URLs) and public/robots.txt for ${siteUrl}`
+    `Generated public/sitemap.xml (${entries.length} URLs) and updated Sitemap in public/robots.txt for ${siteUrl}`
   );
 }
 

@@ -175,7 +175,35 @@ function resolveTierFeatures(): BrandFeatures {
   return resolveBrandFeatures(rawTier, rawBackendMode);
 }
 
+const DEFAULT_THEME_NAME = 'default';
+
+export function resolveThemeName(rawTheme?: string): string {
+  const normalized = String(rawTheme || DEFAULT_THEME_NAME).trim().toLowerCase();
+  return normalized || DEFAULT_THEME_NAME;
+}
+
+function resolveActiveThemeName(): string {
+  const procEnv = (
+    globalThis as {
+      process?: { env?: Record<string, string | undefined> };
+    }
+  ).process?.env;
+  const rawTheme =
+    (typeof import.meta !== 'undefined' && import.meta.env
+      ? import.meta.env.VITE_THEME
+      : undefined) ||
+    procEnv?.VITE_THEME ||
+    DEFAULT_THEME_NAME;
+
+  return resolveThemeName(rawTheme);
+}
+
 export const BRAND_CONFIG = {
+  // --------------------------------------------------------------------------
+  // 0. ACTIVE DESIGN THEME (overridable via VITE_THEME)
+  // --------------------------------------------------------------------------
+  activeTheme: resolveActiveThemeName(),
+
   // --------------------------------------------------------------------------
   // 1. IDENTITY
   // --------------------------------------------------------------------------
@@ -218,6 +246,10 @@ export const BRAND_CONFIG = {
     glassCardSubtle: '#FFFFFF', // Subtle frosted badge base hex (alpha 0.08 / 0.14 border)
     success: '#10B981',      // Positive badges / verification
     error: '#F43F5E',        // Validation errors & danger states
+    starTrackFill: '#E2E8F0', // Empty rating star fill
+    starTrackStroke: '#94A3B8', // Empty rating star outline
+    starFill: '#F59E0B',     // Filled rating star fill
+    starStroke: '#D97706',   // Filled rating star outline
   },
 
   // --------------------------------------------------------------------------
@@ -404,6 +436,10 @@ export const BRAND_CONFIG = {
     currencyCode: 'PKR',
     currencySymbol: 'PKR',
     currencyLocale: 'en-PK',
+    currencyCompactUnits: [
+      { threshold: 10_000_000, divisor: 10_000_000, suffix: 'Crore', decimals: 2 },
+      { threshold: 100_000, divisor: 100_000, suffix: 'Lakh', decimals: 2 },
+    ] as readonly { threshold: number; divisor: number; suffix: string; decimals: number }[],
     timezoneIana: 'Asia/Karachi',
     timezoneLabel: 'PKT',
     dailyReportLabel: '8 PM PKT report',
@@ -412,6 +448,38 @@ export const BRAND_CONFIG = {
     defaultCity: 'Lahore',
     areaUnits: ['Marla', 'Kanal', 'Sq. Yards', 'Sq. Ft'],
     areaFilterOptions: ['All Sizes', 'Up to 5 Marla', '10 Marla', '1 Kanal', '2 Kanal+'] as const,
+    buyAreaFilterCategories: ['Up to 5 Marla', '10 Marla', '1 Kanal', '2 Kanal+'] as const,
+    buyPriceFilters: [
+      { label: 'Under 5 Crore', maxExclusive: 50_000_000 },
+      { label: '5 - 10 Crore', minInclusive: 50_000_000, maxInclusive: 100_000_000 },
+      { label: '10 - 20 Crore', minExclusive: 100_000_000, maxInclusive: 200_000_000 },
+      { label: '20 Crore+', minExclusive: 200_000_000 },
+    ] as readonly {
+      label: string;
+      minInclusive?: number;
+      minExclusive?: number;
+      maxInclusive?: number;
+      maxExclusive?: number;
+    }[],
+    defaultLotSize: '2 Kanal Plot' as string,
+    defaultSizes: {
+      project: '1 Kanal',
+      buy: '10 Marla',
+      rent: '10 Marla',
+    } as { project: string; buy: string; rent: string },
+    adminPlaceholders: {
+      projectValuation: 'e.g. PKR 12.5 Crore',
+      buyTitle: 'e.g. 1 Kanal Modern Bungalow, DHA Phase 6',
+      buyPrice: 'e.g. PKR 8.5 Crore',
+      buyArea: 'e.g. 1 Kanal',
+      reviewPropertyContext: 'e.g. 1 Kanal Villa · DHA Phase 6',
+    } as {
+      projectValuation: string;
+      buyTitle: string;
+      buyPrice: string;
+      buyArea: string;
+      reviewPropertyContext: string;
+    },
     priceFilterOptions: ['All Prices', 'Under 1 Cr', '1-3 Cr', '3-7 Cr', '7 Cr+'] as const,
     buyTypeOptions: ['All Types', 'House', 'Apartment', 'Plot'] as const,
     rentTypeOptions: ['All Types', 'House', 'Apartment', 'Upper Portion', 'Lower Portion'] as const,
@@ -765,6 +833,12 @@ export const BRAND_CONFIG = {
   finance: {
     // PLACEHOLDER: default annual markup / financing rate (%) used by the Buy installment estimator
     defaultAnnualRate: 14.5,
+    currencyCode: 'PKR',
+    currencyLocale: 'en-PK',
+    compactUnits: [
+      { threshold: 10_000_000, divisor: 10_000_000, label: 'Crore', decimals: 2 },
+      { threshold: 100_000, divisor: 100_000, label: 'Lakh', decimals: 2 },
+    ] as readonly { threshold: number; divisor: number; label: string; decimals: number }[],
   },
 
   // --------------------------------------------------------------------------

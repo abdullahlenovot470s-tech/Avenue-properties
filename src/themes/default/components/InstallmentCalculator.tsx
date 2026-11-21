@@ -1,24 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { Calculator } from 'lucide-react';
-import { BRAND_CONFIG } from '../../config/brand.config';
-import { useLanguage } from '../../context/LanguageContext';
-import { URGLISH_COPY } from '../../data/urglishTranslations';
+import { BRAND_CONFIG } from '../../../config/brand.config';
+import { useLanguage } from '../../../context/LanguageContext';
+import { URGLISH_COPY } from '../../../data/urglishTranslations';
 
 interface InstallmentCalculatorProps {
   defaultPrice: number;
 }
 
-function formatPKRSummary(amount: number): string {
+function formatCurrencySummary(amount: number): string {
+  const { currencyCode, currencyLocale, compactUnits } = BRAND_CONFIG.finance;
   if (!Number.isFinite(amount) || amount <= 0) {
-    return `${BRAND_CONFIG.locale.currencyCode} 0`;
+    return `${currencyCode} 0`;
   }
-  if (amount >= 10000000) {
-    return `${BRAND_CONFIG.locale.currencyCode} ${(amount / 10000000).toFixed(2)} Crore`;
+  for (const unit of compactUnits) {
+    if (amount >= unit.threshold) {
+      return `${currencyCode} ${(amount / unit.divisor).toFixed(unit.decimals)} ${unit.label}`;
+    }
   }
-  if (amount >= 100000) {
-    return `${BRAND_CONFIG.locale.currencyCode} ${(amount / 100000).toFixed(2)} Lakh`;
-  }
-  return `${BRAND_CONFIG.locale.currencyCode} ${Math.round(amount).toLocaleString('en-PK')}`;
+  return `${currencyCode} ${Math.round(amount).toLocaleString(currencyLocale)}`;
 }
 
 export const InstallmentCalculator: React.FC<InstallmentCalculatorProps> = ({
@@ -82,7 +82,7 @@ export const InstallmentCalculator: React.FC<InstallmentCalculatorProps> = ({
             htmlFor="calc-price"
             className="block text-[10px] uppercase font-display tracking-wider text-brand-contrast/70 mb-1.5"
           >
-            Property Price ({BRAND_CONFIG.locale.currencyCode})
+            Property Price ({BRAND_CONFIG.finance.currencyCode})
           </label>
           <input
             id="calc-price"
@@ -94,7 +94,7 @@ export const InstallmentCalculator: React.FC<InstallmentCalculatorProps> = ({
             className="w-full px-3.5 py-2 rounded-xl bg-white/10 border border-white/20 text-brand-contrast font-display font-bold text-sm focus:outline-none focus:border-white/50"
           />
           <span className="block text-[11px] text-brand-contrast/70 mt-1">
-            {formatPKRSummary(safePrice)}
+            {formatCurrencySummary(safePrice)}
           </span>
         </div>
 
@@ -106,7 +106,7 @@ export const InstallmentCalculator: React.FC<InstallmentCalculatorProps> = ({
             Down Payment ({safeDownPct}%)
           </label>
           <div className="font-display font-bold text-base text-emerald-300">
-            {formatPKRSummary(downPaymentAmount)}
+            {formatCurrencySummary(downPaymentAmount)}
           </div>
           <input
             id="calc-downpayment"
@@ -171,7 +171,7 @@ export const InstallmentCalculator: React.FC<InstallmentCalculatorProps> = ({
             Estimated Monthly Installment
           </span>
           <div className="font-display font-bold text-xl sm:text-2xl text-amber-200 mt-1">
-            {formatPKRSummary(monthlyInstallment)}
+            {formatCurrencySummary(monthlyInstallment)}
             <span className="text-xs text-brand-contrast/70 font-body font-normal"> / mo</span>
           </div>
         </div>
@@ -181,7 +181,7 @@ export const InstallmentCalculator: React.FC<InstallmentCalculatorProps> = ({
             Total Payable (Down Payment + Installments)
           </span>
           <div className="font-display font-bold text-xl sm:text-2xl text-emerald-300 mt-1">
-            {formatPKRSummary(totalPayable)}
+            {formatCurrencySummary(totalPayable)}
           </div>
         </div>
       </div>

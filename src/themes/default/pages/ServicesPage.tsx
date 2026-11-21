@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { SERVICES_OFFERED, HERO_ASSETS } from '../data/realEstateData';
-import { SafeImage } from '../components/common/SafeImage';
-import { PillButton } from '../components/common/PillButton';
-import { BRAND_CONFIG } from '../config/brand.config';
+import { SERVICES_OFFERED, HERO_ASSETS } from '../../../data/realEstateData';
+import { SafeImage } from '../../../components/common/SafeImage';
+import { PillButton } from '../../../components/common/PillButton';
+import { BRAND_CONFIG } from '../../../config/brand.config';
 import { Check, ShieldCheck, Layers, FileCheck, Landmark } from 'lucide-react';
-import { useLanguage } from '../context/LanguageContext';
-import { URGLISH_COPY } from '../data/urglishTranslations';
-import { buildRealEstateAgentJsonLd, usePageSeo } from '../lib/seo';
+import { useLanguage } from '../../../context/LanguageContext';
+import { URGLISH_COPY } from '../../../data/urglishTranslations';
+import { buildRealEstateAgentJsonLd, usePageSeo } from '../../../lib/seo';
 
 interface ServicesPageProps {
   onOpenConsultation: (serviceTitle?: string) => void;
@@ -30,9 +30,9 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
   });
 
   return (
-    <div className="min-h-[100svh] pt-20 md:pt-24 pb-6 md:pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-4 md:space-y-6">
+    <div className="min-h-[100svh] pt-20 md:pt-24 pb-6 md:pb-16 px-3 sm:px-6 md:px-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-4 md:space-y-6">
       {/* Header Banner */}
-      <section className="relative w-full bg-white rounded-2xl md:rounded-[32px] overflow-hidden p-5 md:p-14 shadow-xl border border-slate-100">
+      <section className="relative w-full bg-white rounded-2xl md:rounded-[32px] overflow-hidden p-4 sm:p-5 md:p-14 shadow-xl border border-slate-100">
         <div className="absolute top-4 right-0 pointer-events-none select-none overflow-hidden max-w-full z-0">
           <span
             className="font-display font-black leading-none uppercase tracking-tighter text-watermark/30 select-none"
@@ -42,7 +42,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
           </span>
         </div>
 
-        <div className="relative z-10 max-w-3xl space-y-3 md:space-y-4">
+        <div className="relative z-10 max-w-3xl space-y-2.5 sm:space-y-3 md:space-y-4">
           <span className="text-[11px] font-display uppercase tracking-widest text-accent font-bold block">
             End-To-End Advisory Practice
           </span>
@@ -59,14 +59,14 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
       </section>
 
       {/* Interactive 3-Pillar Explorer */}
-      <section className="bg-accent rounded-2xl md:rounded-[36px] p-5 md:p-16 text-accent-contrast shadow-2xl relative overflow-hidden">
+      <section className="bg-accent rounded-2xl md:rounded-[36px] p-4 sm:p-5 md:p-16 text-accent-contrast shadow-2xl relative overflow-hidden">
         {/* Navigation Tabs for Services */}
-        <div className="flex flex-wrap gap-2 pb-5 md:pb-8 border-b border-white/15">
+        <div className="flex overflow-x-auto sm:flex-wrap no-scrollbar gap-2 pb-4 sm:pb-5 md:pb-8 border-b border-white/15 min-w-0">
           {SERVICES_OFFERED.map((s) => (
             <button
               key={s.id}
               onClick={() => setActiveTab(s.id)}
-              className={`px-4 py-2 md:px-5 md:py-2.5 rounded-full font-display text-xs uppercase tracking-wider font-semibold transition-all cursor-pointer max-w-full whitespace-normal text-center md:whitespace-nowrap ${
+              className={`shrink-0 whitespace-nowrap sm:whitespace-normal px-3.5 py-2 sm:px-4 md:px-5 md:py-2.5 rounded-full font-display text-xs uppercase tracking-wider font-semibold transition-all cursor-pointer max-w-full text-center md:whitespace-nowrap ${
                 activeTab === s.id
                   ? 'bg-white text-brand shadow-md md:scale-102'
                   : 'glass-card-subtle text-accent-contrast/80 hover:text-accent-contrast hover:bg-white/15'
@@ -78,8 +78,8 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
         </div>
 
         {/* Active Service Detailed Presentation */}
-        <div className="pt-5 md:pt-10 grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 items-start">
-          <div className="lg:col-span-7 min-w-0 space-y-4 md:space-y-6">
+        <div className="pt-4 sm:pt-5 md:pt-10 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 md:gap-10 items-start">
+          <div className="lg:col-span-7 min-w-0 space-y-3 sm:space-y-4 md:space-y-6">
             <span className="text-[10px] font-display uppercase tracking-widest text-accent-contrast/60 block">
               Pillar {selectedService.number}
             </span>
@@ -91,14 +91,14 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
             </p>
 
             {/* Scope Details */}
-            <div className="space-y-3 pt-2">
+            <div className="space-y-2.5 sm:space-y-3 pt-1 sm:pt-2">
               <h4 className="text-xs font-display uppercase tracking-wider text-accent-contrast/90">
                 Core Engagement Scope:
               </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
                 {localizedService.expandedDetails.map((item, idx) => (
-                  <div key={idx} className="flex items-start gap-2.5 text-xs text-accent-contrast/80">
-                    <Check className="w-4 h-4 text-emerald-300 shrink-0 mt-0.5" />
+                  <div key={idx} className="flex items-start gap-1.5 sm:gap-2.5 text-[11px] sm:text-xs text-accent-contrast/80 min-w-0">
+                    <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-300 shrink-0 mt-0.5" />
                     <span>{item}</span>
                   </div>
                 ))}
@@ -158,8 +158,8 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
       </section>
 
       {/* Additional Specialized Services Grid */}
-      <section className="bg-white rounded-2xl md:rounded-[36px] p-5 md:p-16 shadow-xl border border-slate-100">
-        <div className="mb-5 md:mb-10">
+      <section className="bg-white rounded-2xl md:rounded-[36px] p-4 sm:p-5 md:p-16 shadow-xl border border-slate-100">
+        <div className="mb-3 sm:mb-5 md:mb-10">
           <span className="text-[11px] font-display uppercase tracking-widest text-accent font-bold block mb-1">
             Specialised Capabilities
           </span>
@@ -174,8 +174,8 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-          <div className="p-5 md:p-6 rounded-2xl md:rounded-3xl bg-slate-50 border border-slate-100 space-y-3">
+        <div className="flex sm:grid sm:grid-cols-1 md:grid-cols-3 overflow-x-auto sm:overflow-visible snap-x sm:snap-none snap-mandatory no-scrollbar gap-3 sm:gap-4 md:gap-6 pb-1 sm:pb-0 -mx-1 px-1 sm:mx-0 sm:px-0 min-w-0">
+          <div className="w-[80%] sm:w-auto shrink-0 snap-start p-4 sm:p-5 md:p-6 rounded-2xl md:rounded-3xl bg-slate-50 border border-slate-100 space-y-2.5 sm:space-y-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-brand text-brand-contrast flex items-center justify-center">
               <Landmark className="w-5 h-5" />
             </div>
@@ -190,7 +190,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
             </p>
           </div>
 
-          <div className="p-5 md:p-6 rounded-2xl md:rounded-3xl bg-slate-50 border border-slate-100 space-y-3">
+          <div className="w-[80%] sm:w-auto shrink-0 snap-start p-4 sm:p-5 md:p-6 rounded-2xl md:rounded-3xl bg-slate-50 border border-slate-100 space-y-2.5 sm:space-y-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-brand text-brand-contrast flex items-center justify-center">
               <Layers className="w-5 h-5" />
             </div>
@@ -205,7 +205,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenConsultation }
             </p>
           </div>
 
-          <div className="p-5 md:p-6 rounded-2xl md:rounded-3xl bg-slate-50 border border-slate-100 space-y-3">
+          <div className="w-[80%] sm:w-auto shrink-0 snap-start p-4 sm:p-5 md:p-6 rounded-2xl md:rounded-3xl bg-slate-50 border border-slate-100 space-y-2.5 sm:space-y-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-brand text-brand-contrast flex items-center justify-center">
               <ShieldCheck className="w-5 h-5" />
             </div>

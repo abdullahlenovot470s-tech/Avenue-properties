@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useCatalog } from '../context/CatalogContext';
-import { computeAreaCategory } from '../data/buyPropertiesData';
-import { SafeImage } from '../components/common/SafeImage';
-import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
+import { useCatalog } from '../../../context/CatalogContext';
+import { computeAreaCategory } from '../../../data/buyPropertiesData';
+import { SafeImage } from '../../../components/common/SafeImage';
+import { useAuth } from '../../../context/AuthContext';
+import { useToast } from '../../../context/ToastContext';
 import {
   Search,
   Heart,
@@ -19,11 +19,11 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react';
-import { BRAND_CONFIG } from '../config/brand.config';
-import { getWhatsAppUrl } from '../config/siteConfig';
-import { useLanguage } from '../context/LanguageContext';
-import { URGLISH_COPY } from '../data/urglishTranslations';
-import { usePageSeo } from '../lib/seo';
+import { BRAND_CONFIG } from '../../../config/brand.config';
+import { getWhatsAppUrl } from '../../../config/siteConfig';
+import { useLanguage } from '../../../context/LanguageContext';
+import { URGLISH_COPY } from '../../../data/urglishTranslations';
+import { usePageSeo } from '../../../lib/seo';
 
 const getStatusBadgeStyle = (status?: string) =>
   status === 'Sold'
@@ -59,8 +59,8 @@ export const BuyPage: React.FC = () => {
 
   const cities = ['All', ...BRAND_CONFIG.locale.mainCities];
   const types = ['All', 'House', 'Plot', 'Apartment'];
-  const priceOptions = ['All', 'Under 5 Crore', '5 - 10 Crore', '10 - 20 Crore', '20 Crore+'];
-  const areaOptions = ['All', 'Up to 5 Marla', '10 Marla', '1 Kanal', '2 Kanal+'];
+  const priceOptions = ['All', ...BRAND_CONFIG.locale.buyPriceFilters.map((f) => f.label)];
+  const areaOptions = ['All', ...BRAND_CONFIG.locale.buyAreaFilterCategories];
 
   const filteredProperties = useMemo(() => {
     return buyProperties.filter((prop) => {
@@ -68,10 +68,25 @@ export const BuyPage: React.FC = () => {
       const matchType = selectedType === 'All' || prop.type === selectedType;
 
       let matchPrice = true;
-      if (selectedPrice === 'Under 5 Crore') matchPrice = prop.numericPrice < 50000000;
-      else if (selectedPrice === '5 - 10 Crore') matchPrice = prop.numericPrice >= 50000000 && prop.numericPrice <= 100000000;
-      else if (selectedPrice === '10 - 20 Crore') matchPrice = prop.numericPrice > 100000000 && prop.numericPrice <= 200000000;
-      else if (selectedPrice === '20 Crore+') matchPrice = prop.numericPrice > 200000000;
+      if (selectedPrice !== 'All') {
+        const bracket = BRAND_CONFIG.locale.buyPriceFilters.find(
+          (f) => f.label === selectedPrice
+        );
+        if (bracket) {
+          if (bracket.minInclusive !== undefined && prop.numericPrice < bracket.minInclusive) {
+            matchPrice = false;
+          }
+          if (bracket.minExclusive !== undefined && prop.numericPrice <= bracket.minExclusive) {
+            matchPrice = false;
+          }
+          if (bracket.maxInclusive !== undefined && prop.numericPrice > bracket.maxInclusive) {
+            matchPrice = false;
+          }
+          if (bracket.maxExclusive !== undefined && prop.numericPrice >= bracket.maxExclusive) {
+            matchPrice = false;
+          }
+        }
+      }
 
       let matchArea = true;
       if (selectedArea !== 'All') {

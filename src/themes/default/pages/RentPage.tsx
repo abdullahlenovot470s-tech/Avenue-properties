@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { formatRent } from '../data/rentalsData';
-import { useCatalog } from '../context/CatalogContext';
-import { SafeImage } from '../components/common/SafeImage';
-import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
+import { formatRent } from '../../../data/rentalsData';
+import { useCatalog } from '../../../context/CatalogContext';
+import { SafeImage } from '../../../components/common/SafeImage';
+import { useAuth } from '../../../context/AuthContext';
+import { useToast } from '../../../context/ToastContext';
 import {
   Search,
   Heart,
@@ -19,11 +19,11 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react';
-import { BRAND_CONFIG } from '../config/brand.config';
-import { getWhatsAppUrl } from '../config/siteConfig';
-import { useLanguage } from '../context/LanguageContext';
-import { URGLISH_COPY } from '../data/urglishTranslations';
-import { usePageSeo } from '../lib/seo';
+import { BRAND_CONFIG } from '../../../config/brand.config';
+import { getWhatsAppUrl } from '../../../config/siteConfig';
+import { useLanguage } from '../../../context/LanguageContext';
+import { URGLISH_COPY } from '../../../data/urglishTranslations';
+import { usePageSeo } from '../../../lib/seo';
 
 export const RentPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
